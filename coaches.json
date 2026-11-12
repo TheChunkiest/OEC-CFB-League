@@ -2,61 +2,97 @@
   {
     "id": "angel",
     "name": "Angel",
-    "discord": ""
+    "discord": "",
+    "role": "coach",
+    "isCommissioner": false,
+    "pin": "3333"
   },
   {
     "id": "beech",
     "name": "Beech",
-    "discord": ""
+    "discord": "",
+    "role": "coach",
+    "isCommissioner": false,
+    "pin": "5555"
   },
   {
     "id": "boss",
     "name": "Boss",
-    "discord": ""
+    "discord": "",
+    "role": "coach",
+    "isCommissioner": false,
+    "pin": "1234"
   },
   {
     "id": "chunky",
     "name": "Chunky",
-    "discord": ""
+    "discord": "TheChunkiest",
+    "role": "commissioner",
+    "isCommissioner": true,
+    "pin": "0000"
   },
   {
     "id": "clay",
     "name": "Clay",
-    "discord": ""
+    "discord": "",
+    "role": "coach",
+    "isCommissioner": false,
+    "pin": "1111"
   },
   {
     "id": "dayce",
     "name": "Dayce",
-    "discord": ""
+    "discord": "",
+    "role": "coach",
+    "isCommissioner": false,
+    "pin": "9999"
   },
   {
     "id": "ethan",
     "name": "Ethan",
-    "discord": ""
+    "discord": "",
+    "role": "coach",
+    "isCommissioner": false,
+    "pin": "4321"
   },
   {
     "id": "kahuna",
     "name": "Kahuna",
-    "discord": ""
+    "discord": "",
+    "role": "coach",
+    "isCommissioner": false,
+    "pin": "4444"
   },
   {
     "id": "matt",
     "name": "Matt",
-    "discord": ""
+    "discord": "",
+    "role": "coach",
+    "isCommissioner": false,
+    "pin": "6666"
   },
   {
     "id": "nut",
     "name": "Nut",
-    "discord": ""
+    "discord": "",
+    "role": "coach",
+    "isCommissioner": false,
+    "pin": "8888"
   },
   {
     "id": "skippa",
     "name": "Skippa",
-    "discord": ""
+    "discord": "",
+    "role": "coach",
+    "isCommissioner": false,
+    "pin": "2222"
   },
   {
     "id": "winders",
     "name": "Winders",
-    "discord": ""
+    "discord": "",
+    "role": "coach",
+    "isCommissioner": false,
+    "pin": "7777"
   }
 ]

@@ -3,21 +3,72 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OEC CFB League</title>
+<title>OEC CFB League Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="top">
-  <div class="brand">
-    <h1 id="leagueName">OEC CFB League</h1>
-    <p id="leagueTag" class="muted"></p>
+<div class="utility-bar">
+  <div class="utility-inner">
+    <div class="social-links">
+      <a class="social-btn yt" href="https://youtube.com/@originalentertainingcrackers?si=JC4T0FpEoN2hmdrk" target="_blank" rel="noopener">
+        <span>▶ YouTube</span>
+      </a>
+      <a class="social-btn tt" href="https://www.tiktok.com/@the.oec?_r=1&_t=ZP-9BLXw6LDKm6" target="_blank" rel="noopener">
+        <span>♪ TikTok</span>
+      </a>
+    </div>
+    <div class="auth-bar" id="authArea"></div>
   </div>
-  <div class="status" id="statusPill"></div>
-</header>
+</div>
+
+<div class="top-wrap">
+  <header class="top">
+    <div class="brand-row">
+      <img class="league-logo" src="logo.jpg" alt="OEC CFB League Logo">
+      <div>
+        <h1 id="leagueName">OEC CFB League Hub</h1>
+        <div class="title-badge-row">
+          <span class="mac-pill">🏈 All-User MAC Conference Dynasty</span>
+          <span id="leagueTag" class="muted">College Football 27 Dynasty</span>
+        </div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="season-week-graphic" id="statusPill">
+        <div class="sw-block season-blk">
+          <span class="sw-label">Current Season</span>
+          <span class="sw-val" id="hdrSeasonVal">SEASON 3</span>
+        </div>
+        <div class="sw-block week-blk">
+          <span class="sw-label">Current Week</span>
+          <span class="sw-val gold" id="hdrWeekVal">WEEK 9</span>
+        </div>
+        <div class="sw-block phase-blk">
+          <span class="sw-label">MAC Status</span>
+          <span class="sw-val" id="hdrPhaseVal" style="font-size:12px">REGULAR SEASON</span>
+        </div>
+      </div>
+    </div>
+  </header>
+</div>
+
 <nav id="nav"></nav>
-<main id="view"><p class="muted">Loading…</p></main>
+<main id="view"><p class="muted">Loading OEC CFB League Hub…</p></main>
+
+<div class="modal-backdrop" id="appModal">
+  <div class="modal-card" id="appModalBody"></div>
+</div>
+<div class="toast-box" id="toastContainer"></div>
+
 <footer>
-  <span>College Football 27 Dynasty Hub</span> · <a href="admin.html">Commissioner</a><span id="discord"></span>
+  <div class="row" style="justify-content:center;margin-bottom:12px">
+    <a class="social-btn yt" href="https://youtube.com/@originalentertainingcrackers?si=JC4T0FpEoN2hmdrk" target="_blank" rel="noopener">▶ Official OEC YouTube</a>
+    <a class="social-btn tt" href="https://www.tiktok.com/@the.oec?_r=1&_t=ZP-9BLXw6LDKm6" target="_blank" rel="noopener">♪ Official OEC TikTok</a>
+  </div>
+  <div><b>OEC CFB League Hub</b> · Original Entertaining Crackers · Mid-American Conference (MAC) Dynasty</div>
 </footer>
 <script src="app.js"></script>
 </body>
