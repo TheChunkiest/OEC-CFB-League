@@ -1,0 +1,176 @@
+[
+  {
+    "season": 1,
+    "year": 2026,
+    "teams": {
+      "angel": "Delaware",
+      "boss": "East Carolina",
+      "chunky": "UAB",
+      "clay": "Kennesaw State",
+      "dayce": "North Texas",
+      "kahuna": "FIU",
+      "nut": "Louisiana Tech",
+      "skippa": "Georgia State"
+    },
+    "divisions": null,
+    "awards": {
+      "mvp": {
+        "name": "J. White, UNT RB",
+        "coach": "dayce"
+      },
+      "opoy": {
+        "name": "J. White, UNT RB",
+        "coach": "dayce"
+      },
+      "dpoy": {
+        "name": "B. Hopson, KENN MIKE",
+        "coach": "clay"
+      },
+      "bestOff": {
+        "name": "Delaware",
+        "coach": "angel"
+      },
+      "bestDef": {
+        "name": "FIU",
+        "coach": "kahuna"
+      },
+      "gameOfYear": "2026 MAC Championship"
+    },
+    "moments": [
+      "Entire MAC Championship game",
+      "Clay @ Chunky, pt. 1",
+      "UAB walking off North Texas for champ berth",
+      "Delaware one-handed INT off of UAB DB back",
+      "Kennesaw's pick 6 on a speed option vs. GA State",
+      "FIU's 27 point comeback @ LA Tech"
+    ],
+    "powerRankings": {
+      "label": "Final",
+      "ranks": [
+        "chunky",
+        "clay",
+        "skippa",
+        "angel",
+        "kahuna",
+        "dayce",
+        "nut",
+        "boss"
+      ],
+      "previous": []
+    }
+  },
+  {
+    "season": 2,
+    "year": 2027,
+    "teams": {
+      "angel": "Delaware",
+      "beech": "Appalachian State",
+      "boss": "East Carolina",
+      "chunky": "Purdue",
+      "clay": "Kennesaw State",
+      "dayce": "North Texas",
+      "kahuna": "FIU",
+      "nut": "Louisiana Tech",
+      "skippa": "Liberty"
+    },
+    "divisions": null,
+    "awards": {
+      "mvp": {
+        "name": "A. Carlisle, FIU QB",
+        "coach": "kahuna"
+      },
+      "opoy": {
+        "name": "J. Gibson, PUR RB",
+        "coach": "chunky"
+      },
+      "dpoy": {
+        "name": "L. Lagafuaina, UNT EDGE",
+        "coach": "dayce"
+      },
+      "bestOff": {
+        "name": "Kennesaw State",
+        "coach": "clay"
+      },
+      "bestDef": {
+        "name": "Kennesaw State",
+        "coach": "clay"
+      },
+      "gameOfYear": "ECU @ APP"
+    },
+    "moments": [
+      "Boss's (almost) win vs. Beech",
+      "Austin Carlisle, all year",
+      "Purdue's special teams in the first couple weeks",
+      "Nut knocking off Clay and then essentially winning nothing else",
+      "Kennesaw's dominance all year long"
+    ],
+    "powerRankings": {
+      "label": "Final",
+      "ranks": [
+        "clay",
+        "skippa",
+        "chunky",
+        "kahuna",
+        "angel",
+        "nut",
+        "dayce",
+        "beech",
+        "boss"
+      ],
+      "previous": []
+    }
+  },
+  {
+    "season": 3,
+    "year": 2028,
+    "teams": {
+      "angel": "Delaware",
+      "beech": "Boston College",
+      "boss": "North Carolina",
+      "chunky": "Purdue",
+      "clay": "Kennesaw State",
+      "dayce": "West Virginia",
+      "ethan": "Wyoming",
+      "kahuna": "FIU",
+      "matt": "UCF",
+      "nut": "Louisiana Tech",
+      "skippa": "Liberty",
+      "winders": "Kentucky"
+    },
+    "divisions": {
+      "title": "MAC Divisions",
+      "groups": {
+        "Catholics": [
+          "angel",
+          "boss",
+          "chunky",
+          "clay",
+          "nut",
+          "winders"
+        ],
+        "Convicts": [
+          "beech",
+          "dayce",
+          "ethan",
+          "kahuna",
+          "matt",
+          "skippa"
+        ]
+      }
+    },
+    "awards": {
+      "mvp": null,
+      "opoy": null,
+      "dpoy": null,
+      "bestOff": null,
+      "bestDef": null,
+      "gameOfYear": ""
+    },
+    "moments": [],
+    "powerRankings": {
+      "label": "",
+      "ranks": [],
+      "previous": []
+    }
+  }
+]

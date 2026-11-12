@@ -1,20 +1,10 @@
 {
-  "name": "Sample Dynasty League",
-  "tagline": "Replace this with your league slogan",
-  "season": 2026,
-  "week": 11,
+  "name": "OEC CFB League",
+  "tagline": "College Football 27 Dynasty",
+  "season": 3,
+  "week": 9,
   "phase": "Regular Season",
-  "announcement": "Welcome to the hub! Replace this message each week with deadlines, advance times, and reminders.\n(All teams, scores, and news here are SAMPLE data.)",
-  "rules": [
-    "Advance happens every week at the commissioner's posted time.",
-    "Complete your recruiting and game plan before the advance deadline.",
-    "No roster/depth chart exploits. Commissioner has final say on disputes.",
-    "Coach vs. coach games must be played (or sim'd by commissioner) before advance."
-  ],
-  "links": [
-    {
-      "label": "League Discord",
-      "url": "https://discord.com"
-    }
-  ]
+  "announcement": "Welcome to the new league hub! Seasons 1–3 are loaded: scores, standings, all-time records, and history.\nThe commissioner posts weekly updates here.",
+  "rules": [],
+  "links": []
 }

@@ -44,3 +44,11 @@ label{display:block;margin:8px 0 4px;color:var(--muted);font-size:13px}
 input.score{width:70px;text-align:center}
 ul.clean{margin:0;padding-left:20px}
 .empty{color:var(--muted);text-align:center;padding:24px}
+.matrix td,.matrix th{padding:6px 7px;text-align:center;font-size:13px}
+.matrix td:first-child,.matrix th:first-child{text-align:left;position:sticky;left:0;background:var(--card)}
+.cpu{font-size:10px;font-weight:700;background:#2a3452;color:var(--muted);padding:1px 6px;border-radius:999px;margin-left:4px}
+.team{color:var(--muted);font-size:12px;margin-left:4px}
+.champ{color:var(--gold)}
+ul.moments li{margin:4px 0}
+.bar{height:5px;background:#26304a;border-radius:3px;margin-bottom:3px;min-width:56px;overflow:hidden}
+.bar span{display:block;height:100%;background:var(--gold)}
