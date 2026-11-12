@@ -28,24 +28,36 @@ service cloud.firestore {
       allow delete: if isCommish();
     }
 
-    // Wagers: a linked coach may bet on an unplayed game in the current week, at the posted line.
-    function validWager(d) {
-      let g = gameOf(d.gameId);
-      let L = league();
+    // Wagers: a linked coach may bet on an unplayed game in the current week at the posted line,
+    // or on the League Champion future at the posted odds during the regular season.
+    function baseWager(d, L) {
       return d.uid == request.auth.uid && d.status == 'open' && d.payout == 0
         && d.stake is int && d.stake >= 1 && d.stake <= 100000
-        && L.bettingOpen == true && d.season == L.season && d.week == L.week
-        && g.season == L.season && g.week == L.week && g.homeScore == null
+        && L.bettingOpen == true && d.season == L.season && d.week == L.week;
+    }
+    function validGameWager(d) {
+      let g = gameOf(d.gameId);
+      return g.season == league().season && g.week == league().week && g.homeScore == null
         && ((d.market == 'ml' && ((d.pick == 'home' && d.odds == g.lines.mlHome) || (d.pick == 'away' && d.odds == g.lines.mlAway)))
           || (d.market == 'spread' && d.odds == -110 && d.line == g.lines.spread && (d.pick == 'home' || d.pick == 'away'))
           || (d.market == 'total' && d.odds == -110 && d.line == g.lines.total && (d.pick == 'over' || d.pick == 'under')));
+    }
+    function validFuture(d, L) {
+      return L.phase == 'Regular Season' && L.futures.season == L.season && L.futures.open == true
+        && d.pick in L.futures.odds && d.odds is int && d.odds == L.futures.odds[d.pick];
+    }
+    function validWager(d) {
+      let L = league();
+      return baseWager(d, L) && ((d.market == 'future' && validFuture(d, L)) || (d.market != 'future' && validGameWager(d)));
     }
     match /wagers/{id} {
       allow read: if true;
       allow create: if isCoach() && validWager(request.resource.data);
       allow update: if isCommish();
       allow delete: if isCommish() || (signedIn() && resource.data.uid == request.auth.uid && resource.data.status == 'open'
-        && league().bettingOpen == true && gameOf(resource.data.gameId).homeScore == null);
+        && league().bettingOpen == true
+        && ((resource.data.market == 'future' && league().phase == 'Regular Season')
+          || (resource.data.market != 'future' && gameOf(resource.data.gameId).homeScore == null)));
     }
 
     // Game of the Week votes: cast during week N for a game in week N+1. Doc id = season_week_uid.
