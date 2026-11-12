@@ -30,9 +30,9 @@
    "coach": "Angel",
    "uid": "",
    "color": "",
-   "ovr": 80,
-   "off": 80,
-   "def": 80
+   "ovr": 82,
+   "off": 84,
+   "def": 81
   },
   {
    "id": "boston-college",
@@ -43,9 +43,9 @@
    "coach": "Beech",
    "uid": "",
    "color": "",
-   "ovr": 80,
-   "off": 80,
-   "def": 80
+   "ovr": 79,
+   "off": 79,
+   "def": 81
   },
   {
    "id": "north-carolina",
@@ -56,9 +56,9 @@
    "coach": "Boss",
    "uid": "",
    "color": "",
-   "ovr": 80,
-   "off": 80,
-   "def": 80
+   "ovr": 78,
+   "off": 76,
+   "def": 81
   },
   {
    "id": "purdue",
@@ -70,8 +70,8 @@
    "uid": "",
    "color": "",
    "ovr": 80,
-   "off": 80,
-   "def": 80
+   "off": 81,
+   "def": 79
   },
   {
    "id": "kennesaw-state",
@@ -82,9 +82,9 @@
    "coach": "Clay",
    "uid": "",
    "color": "",
-   "ovr": 80,
-   "off": 80,
-   "def": 80
+   "ovr": 76,
+   "off": 76,
+   "def": 76
   },
   {
    "id": "west-virginia",
@@ -95,9 +95,9 @@
    "coach": "Dayce",
    "uid": "",
    "color": "",
-   "ovr": 80,
-   "off": 80,
-   "def": 80
+   "ovr": 67,
+   "off": 66,
+   "def": 69
   },
   {
    "id": "wyoming",
@@ -108,9 +108,9 @@
    "coach": "Ethan",
    "uid": "",
    "color": "",
-   "ovr": 80,
-   "off": 80,
-   "def": 80
+   "ovr": 68,
+   "off": 66,
+   "def": 71
   },
   {
    "id": "fiu",
@@ -121,9 +121,9 @@
    "coach": "Kahuna",
    "uid": "",
    "color": "",
-   "ovr": 80,
-   "off": 80,
-   "def": 80
+   "ovr": 74,
+   "off": 76,
+   "def": 71
   },
   {
    "id": "ucf",
@@ -134,9 +134,9 @@
    "coach": "Matt",
    "uid": "",
    "color": "",
-   "ovr": 80,
-   "off": 80,
-   "def": 80
+   "ovr": 74,
+   "off": 74,
+   "def": 74
   },
   {
    "id": "louisiana-tech",
@@ -147,9 +147,9 @@
    "coach": "Nut",
    "uid": "",
    "color": "",
-   "ovr": 80,
-   "off": 80,
-   "def": 80
+   "ovr": 74,
+   "off": 74,
+   "def": 74
   },
   {
    "id": "liberty",
@@ -160,9 +160,9 @@
    "coach": "Skippa",
    "uid": "",
    "color": "",
-   "ovr": 80,
-   "off": 80,
-   "def": 80
+   "ovr": 82,
+   "off": 84,
+   "def": 81
   },
   {
    "id": "kentucky",
@@ -173,9 +173,9 @@
    "coach": "Winders",
    "uid": "",
    "color": "",
-   "ovr": 80,
-   "off": 80,
-   "def": 80
+   "ovr": 76,
+   "off": 76,
+   "def": 76
   },
   {
    "id": "uab",
