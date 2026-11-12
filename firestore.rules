@@ -1,0 +1,74 @@
+rules_version = '2';
+// OEC CFB League Hub — paste this into Firebase console → Firestore Database → Rules → Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function userDoc() { return get(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function hasProfile() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)); }
+    function isCommish() { return hasProfile() && userDoc().data.role == 'commish'; }
+    function isCoach() { return hasProfile() && userDoc().data.teamId != ''; }
+    function league() { return get(/databases/$(database)/documents/meta/league).data; }
+    function gameOf(id) { return get(/databases/$(database)/documents/games/$(id)).data; }
+
+    // League data: everyone can read, only the commissioner can change it.
+    match /meta/{doc} { allow read: if true; allow write: if isCommish(); }
+    match /teams/{id} { allow read: if true; allow write: if isCommish(); }
+    match /games/{id} { allow read: if true; allow write: if isCommish(); }
+    match /history/{id} { allow read: if true; allow write: if isCommish(); }
+
+    // Coach profiles. New sign-ups start unlinked; only the commissioner links teams or grants roles.
+    match /users/{uid} {
+      allow read: if true;
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['name', 'teamId', 'role'])
+        && request.resource.data.role == 'coach' && request.resource.data.teamId == ''
+        && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 40;
+      allow update: if isCommish() || (signedIn() && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']));
+      allow delete: if isCommish();
+    }
+
+    // Wagers: a linked coach may bet on an unplayed game in the current week, at the posted line.
+    function validWager(d) {
+      let g = gameOf(d.gameId);
+      let L = league();
+      return d.uid == request.auth.uid && d.status == 'open' && d.payout == 0
+        && d.stake is int && d.stake >= 1 && d.stake <= 100000
+        && L.bettingOpen == true && d.season == L.season && d.week == L.week
+        && g.season == L.season && g.week == L.week && g.homeScore == null
+        && ((d.market == 'ml' && ((d.pick == 'home' && d.odds == g.lines.mlHome) || (d.pick == 'away' && d.odds == g.lines.mlAway)))
+          || (d.market == 'spread' && d.odds == -110 && d.line == g.lines.spread && (d.pick == 'home' || d.pick == 'away'))
+          || (d.market == 'total' && d.odds == -110 && d.line == g.lines.total && (d.pick == 'over' || d.pick == 'under')));
+    }
+    match /wagers/{id} {
+      allow read: if true;
+      allow create: if isCoach() && validWager(request.resource.data);
+      allow update: if isCommish();
+      allow delete: if isCommish() || (signedIn() && resource.data.uid == request.auth.uid && resource.data.status == 'open'
+        && league().bettingOpen == true && gameOf(resource.data.gameId).homeScore == null);
+    }
+
+    // Game of the Week votes: cast during week N for a game in week N+1. Doc id = season_week_uid.
+    match /gotw/{id} {
+      allow read: if true;
+      allow create, update: if isCoach()
+        && id == string(request.resource.data.season) + '_' + string(request.resource.data.week) + '_' + request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.season == league().season
+        && request.resource.data.week == league().week + 1
+        && gameOf(request.resource.data.gameId).week == request.resource.data.week;
+      allow delete: if isCommish();
+    }
+
+    // Awards ballots: private to the voter and the commissioner. Doc id = season_uid.
+    match /ballots/{id} {
+      allow read: if isCommish() || (signedIn() && id.matches('.*_' + request.auth.uid));
+      allow create, update: if isCoach()
+        && id == string(league().season) + '_' + request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.season == league().season
+        && league().awards.open == true;
+      allow delete: if isCommish();
+    }
+  }
+}
