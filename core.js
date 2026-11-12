@@ -359,7 +359,34 @@ export function bankroll(uid, season = D.league.season) {
   });
   return b;
 }
+// League-champion futures: odds from the title simulation, with a bookmaker's margin.
+export function futuresOdds(p) {
+  if (!(p >= 0.004)) return null;
+  const q = clamp(p * 1.15 + 0.01, 0.01, 0.97);
+  if (q >= 0.5) return -Math.max(100, round5(100 * q / (1 - q)));
+  const v = 100 * (1 - q) / q;
+  return Math.max(100, v >= 1000 ? Math.round(v / 50) * 50 : v >= 300 ? Math.round(v / 10) * 10 : round5(v));
+}
+export function futuresOpen() { const L = D.league; return L.phase === PHASES.REG && L.bettingOpen; }
+export function futuresBoard() {
+  const L = D.league; if (L.phase !== PHASES.REG) return [];
+  const sim = simulate(L.season, L.week), F = L.futures, posted = F && F.season === L.season && F.odds ? F.odds : null;
+  return leagueTeams().map(t => ({ id: t.id, p: sim[t.id]?.titlePct || 0, odds: posted ? (posted[t.id] ?? null) : futuresOdds(sim[t.id]?.titlePct || 0), posted: !!posted }))
+    .sort((a, b) => b.p - a.p || a.id.localeCompare(b.id));
+}
+export function futuresSnapshot() {
+  const L = D.league, sim = simulate(L.season, L.week), odds = {};
+  leagueTeams().forEach(t => odds[t.id] = futuresOdds(sim[t.id]?.titlePct || 0));
+  return { season: L.season, week: L.week, open: true, odds };
+}
+export function settleFuturesOps(season, champId) {
+  return D.wagers.filter(w => w.market === 'future' && w.season === season && w.status === 'open').map(w => {
+    const st = !champId ? 'void' : w.pick === champId ? 'won' : 'lost';
+    return { op: 'set', col: 'wagers', id: w.id, data: { status: st, payout: st === 'won' ? profit(w.stake, w.odds) : st === 'lost' ? -w.stake : 0 } };
+  });
+}
 export function wagerLabel(w) {
+  if (w.market === 'future') return `${team(w.pick).name} to win Season ${seasonNum(w.season)} title (${fmtOdds(w.odds)})`;
   const g = D.games.find(x => x.id === w.gameId) || {}, side = w.pick === 'home' ? g.home : g.away;
   if (w.market === 'ml') return `${team(side).name} ML ${fmtOdds(w.odds)}`;
   if (w.market === 'spread') return `${team(side).name} ${fmtLine(w.pick === 'home' ? w.line : -w.line)} (${fmtOdds(w.odds)})`;

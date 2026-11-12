@@ -1,8 +1,8 @@
 import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
-  orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague
-} from './core.js?v=6';
+  orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps
+} from './core.js?v=7';
 import { lookupColor } from './teamcolors.js';
 
 const TABS = [['advance', 'Advance'], ['preseason', 'Preseason'], ['games', 'Games'], ['ratings', 'Ratings'], ['coaches', 'Coaches & Accounts'], ['betting', 'Betting'], ['awards', 'Awards'], ['recruiting', 'Recruiting'], ['settings', 'Settings & History']];
@@ -48,7 +48,10 @@ function readScores(games) {
   return { ops, missing };
 }
 function lineOps(week, season = L().season) {
-  return D.games.filter(g => g.season === season && g.week === week && !played(g)).map(g => ({ op: 'set', col: 'games', id: g.id, data: { lines: freshLine(g) } }));
+  const ops = D.games.filter(g => g.season === season && g.week === week && !played(g)).map(g => ({ op: 'set', col: 'games', id: g.id, data: { lines: freshLine(g) } }));
+  // Re-post League Champion futures whenever this season's current-week lines are posted.
+  if (season === L().season && week === L().week && L().phase === PHASES.REG) ops.push({ op: 'set', col: 'meta', id: 'league', data: { futures: futuresSnapshot() } });
+  return ops;
 }
 async function saveScoresAndSettle(games) {
   const { ops, missing } = readScores(games);
@@ -236,7 +239,7 @@ const ACT = {
     await saveScoresAndSettle(games);
     const desk = deskValue();
     if (W >= lg.finalWeek) {
-      await put('meta', 'league', { week: W + 1, phase: PHASES.CCG, bettingOpen: false, desk, awards: { open: false, season: lg.season, categories: lg.awards?.season === lg.season ? (lg.awards.categories || []) : [] } });
+      await put('meta', 'league', { week: W + 1, phase: PHASES.CCG, bettingOpen: false, desk, futures: { ...(lg.futures || {}), open: false }, awards: { open: false, season: lg.season, categories: lg.awards?.season === lg.season ? (lg.awards.categories || []) : [] } });
       ST.desk = 'no'; flash('Regular season complete. Set up the championship game and awards ballot below.');
     } else {
       await put('meta', 'league', { week: W + 1, bettingOpen: true, desk });
@@ -260,6 +263,8 @@ const ACT = {
     const { missing } = readScores(games);
     if (missing.find(g => g.id === ccg.id)) return alert('Enter the championship score first.');
     await saveScoresAndSettle(games);
+    const fin = D.games.find(g => g.id === ccg.id);
+    await batch(settleFuturesOps(lg.season, +fin.homeScore > +fin.awayScore ? fin.home : fin.away));
     await loadBallots(true);
     const t = tally();
     await put('meta', 'league', { phase: PHASES.POST, bettingOpen: false, desk: deskValue(), awards: { ...lg.awards, open: false, results: t.results, moments: t.moments } });
@@ -282,6 +287,7 @@ const ACT = {
     }
     if (!confirm(`Finalize ${s}? This writes ${s} to History and moves the league to the offseason.`)) return;
     await put('history', String(s), H, false);
+    await batch(settleFuturesOps(s, ccg ? H.champTeam : null));
     await put('meta', 'league', { phase: PHASES.PRE, bettingOpen: false, desk: deskValue() });
     ST.desk = 'no'; ST.tab = 'preseason'; flash(`${s} is in the books. Set up next season below.`);
   },
