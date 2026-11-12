@@ -5,7 +5,7 @@ import {
 } from './core.js';
 import { lookupColor } from './teamcolors.js';
 
-const TABS = [['advance', 'Advance'], ['preseason', 'Preseason'], ['games', 'Games'], ['coaches', 'Coaches & Accounts'], ['betting', 'Betting'], ['awards', 'Awards'], ['recruiting', 'Recruiting'], ['settings', 'Settings & History']];
+const TABS = [['advance', 'Advance'], ['preseason', 'Preseason'], ['games', 'Games'], ['ratings', 'Ratings'], ['coaches', 'Coaches & Accounts'], ['betting', 'Betting'], ['awards', 'Awards'], ['recruiting', 'Recruiting'], ['settings', 'Settings & History']];
 const ST = { tab: 'advance', desk: 'no', gamesWeek: null, msg: '' };
 const DEFAULT_AWARDS = ['MVP', 'Offensive Player of the Year', 'Defensive Player of the Year', 'Best Offense', 'Best Defense', 'Game of the Year'];
 
@@ -112,7 +112,7 @@ const views = {
       <div class="card"><h3 style="margin-top:0">Teams, coaches & ratings</h3><p class="muted small">Every user team belongs in the league conference (${esc(lg.conference)}). Add any non-conference opponents as "Non-Conf" so they can be scheduled. OVR/OFF/DEF drive the odds. Division is optional (e.g. East/West).</p>
         <div class="tablewrap"><table id="teamTbl"><tr><th>Team</th><th>Abbr</th><th>Conf</th><th>Div</th><th>Coach</th><th>Account</th><th>Color</th><th>OVR</th><th>OFF</th><th>DEF</th><th></th></tr>
         ${ts.map(t => teamRow(t)).join('')}</table></div>
-        <div class="row" style="margin-top:10px"><button class="ghost sm" data-act="addTeam">+ Add team</button><button data-act="saveTeams">Save teams</button></div></div>
+        <div class="row" style="margin-top:10px"><button class="ghost sm" data-act="addTeam">+ Add team</button><button data-act="saveTeams">Save teams</button><button class="ghost sm" data-act="seedRatings">Apply ratings from league-data.json</button></div></div>
       <div class="card"><h3 style="margin-top:0">${next} schedule (${sg.length} games)</h3><p class="muted small">Add user-vs-user games and each user team's games vs CPU teams.</p>
         <div class="row"><input id="sgW" type="number" value="0" style="width:70px" title="Week"><select id="sgA">${teamOpts('', 'Away')}</select> @ <select id="sgH">${teamOpts('', 'Home')}</select><label class="row" style="margin:0"><input type="checkbox" id="sgN" style="width:auto"> Neutral</label><button class="ghost" data-act="addSched">Add game</button></div>
         <label>Bulk add — one game per line: <code>week, away team, home team</code> (add <code>, neutral</code> if needed). Team name or abbreviation.</label><textarea id="bulk" rows="4" placeholder="0, Liberty, Kennesaw State&#10;1, KENN, Ohio"></textarea><button class="ghost sm" data-act="bulkSched" style="margin-top:6px">Add these games</button> <span id="bulkMsg" class="muted"></span>
@@ -129,6 +129,15 @@ const views = {
       ${scoreRows(games)}${games.length ? `<div class="card row"><button data-act="saveGames">Save scores</button> ${games.map(g => `<button class="sm danger" data-delgame="${esc(g.id)}">✕ ${esc(team(g.away).abbr)} @ ${esc(team(g.home).abbr)}</button>`).join('')}</div>` : ''}
       <div class="card"><h3 style="margin-top:0">Add a game to week ${wk}</h3><div class="row"><select id="gA">${teamOpts('', 'Away')}</select> @ <select id="gH">${teamOpts('', 'Home')}</select>
         <select id="gT"><option value="reg">Regular season</option><option value="ccg">League Championship</option><option value="bowl">Postseason</option></select><label class="row" style="margin:0"><input type="checkbox" id="gN" style="width:auto"> Neutral</label><button data-act="addGame">Add</button></div></div>`;
+  },
+
+  ratings() {
+    const ts = leagueTeams().slice().sort((a, b) => a.name.localeCompare(b.name));
+    return `<div class="card"><h2>Team Ratings</h2><p class="muted small">Update OVR / OFF / DEF whenever rosters change. Saving re-posts this week's lines and updates odds and power rankings right away. Wagers already placed keep their line.</p>
+      ${ts.map(t => `<div class="row" data-rate="${esc(t.id)}" style="padding:8px 0;border-bottom:1px solid var(--line)">
+        <div style="flex:1 1 100%"><i class="sw" style="background:${esc(teamColor(t))};margin-right:6px"></i><b>${esc(t.name)}</b> <span class="muted small">${esc(t.coach || 'CPU')}</span></div>
+        ${['ovr', 'off', 'def'].map(k => `<label style="margin:0;font-size:11px;text-align:center">${k.toUpperCase()}<br><input class="score" type="number" inputmode="numeric" min="40" max="99" data-k="${k}" value="${t[k] ?? ''}" style="width:64px"></label>`).join('')}</div>`).join('')}
+      <div class="row" style="margin-top:12px"><button data-act="saveRatings">Save ratings</button></div></div>`;
   },
 
   coaches() {
@@ -372,6 +381,18 @@ const ACT = {
     const old = D.history.find(h => h.id === String(s)) || {};
     await put('history', String(s), { ...old, season: s, champTeam: $('#hCT').value, champCoach: $('#hCC').value.trim(), champScore: +$('#hCS').value, runnerTeam: $('#hRT').value, runnerCoach: $('#hRC').value.trim(), runnerScore: +$('#hRS').value, awards: old.awards || [], moments: old.moments || [] }, false);
     flash(`Saved ${s}.`);
+  },
+  async saveRatings() {
+    const ops = $$('[data-rate]').map(r => { const v = k => +r.querySelector(`[data-k="${k}"]`).value || null; return { op: 'set', col: 'teams', id: r.dataset.rate, data: { ovr: v('ovr'), off: v('off'), def: v('def') } }; });
+    if (ops.some(o => [o.data.ovr, o.data.off, o.data.def].some(x => x != null && (x < 40 || x > 99)))) return alert('Ratings should be between 40 and 99.');
+    await batch(ops);
+    if (L().phase !== PHASES.PRE) await batch(lineOps(L().week));
+    flash(`Saved ratings for ${ops.length} teams.${L().phase !== PHASES.PRE ? ' This week\'s lines were re-posted.' : ''}`);
+  },
+  async seedRatings() {
+    const r = await fetch('league-data.json?v=' + Date.now()); if (!r.ok) return alert('league-data.json not found on the site.');
+    const d = await r.json(), ops = d.teams.filter(t => t.ovr && D.teams.find(x => x.id === t.id)).map(t => ({ op: 'set', col: 'teams', id: t.id, data: { ovr: t.ovr, off: t.off, def: t.def } }));
+    await batch(ops); ST.clear = true; await loadAll(); await batch(lineOps(L().week)); flash(`Updated OVR/OFF/DEF for ${ops.length} teams. Week ${L().week} lines were re-posted from the new ratings.`);
   },
   async importSeed() {
     if (D.games.length && !confirm('This overwrites teams, games, history and league settings with league-data.json. Wagers, votes and accounts are kept. Continue?')) return;
