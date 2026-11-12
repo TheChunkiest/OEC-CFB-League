@@ -16,7 +16,14 @@
    "season": 2028,
    "categories": []
   },
-  "rules": [],
+  "rules": [
+   "Cloud dynasty with active rosters and cross-play",
+   "All-American difficulty with custom sliders",
+   "10-minute quarters with 17-second accelerated clock",
+   "League advances every 3 days; 24 hours can be added for user games if needed",
+   "League commissioner is Chunky and league admin is Clay",
+   "All communication happens in the league Discord"
+  ],
   "links": [],
   "firstSeason": 2026
  },

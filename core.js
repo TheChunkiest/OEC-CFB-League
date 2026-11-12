@@ -411,7 +411,7 @@ export function storylines() {
     const info = wk.map(g => { const l = (g.lines && g.lines.spread != null) ? lineOf(g) : lineFrom(R, g); const hw = +g.homeScore > +g.awayScore; return { g, l, hw, w: hw ? g.home : g.away, lo: hw ? g.away : g.home, ws: Math.max(+g.homeScore, +g.awayScore), ls: Math.min(+g.homeScore, +g.awayScore), pw: l ? (hw ? l.pHome : 1 - l.pHome) : 0.5, surprise: l ? Math.abs((+g.homeScore - +g.awayScore) + l.spread) : 0 }; });
     info.filter(x => isUserTeam(team(x.g.home)) && isUserTeam(team(x.g.away))).forEach(x => {
       const cover = x.l ? (x.pw < 0.5 ? ' as the underdog' : '') : '';
-      out.push({ tag: 'Coach vs Coach', title: `${team(x.w).coach} over ${team(x.lo).coach}`, body: `${name(x.w)} beat ${name(x.lo)} ${x.ws}-${x.ls}${cover} in Week ${lw}.` });
+      out.push({ tag: 'User Game', title: `${team(x.w).coach} over ${team(x.lo).coach}`, body: `${name(x.w)} beat ${name(x.lo)} ${x.ws}-${x.ls}${cover} in Week ${lw}.` });
     });
     const upset = info.filter(x => userGame(x.g) && x.pw < 0.42).sort((a, b) => a.pw - b.pw)[0];
     if (upset) out.push({ tag: 'Upset', title: `Upset: ${team(upset.w).name} stuns ${team(upset.lo).name}`, body: `${name(upset.w)} entered with only a ${pctStr(upset.pw)} win probability (${fmtOdds(upset.w === upset.g.home ? upset.l.mlHome : upset.l.mlAway)}) and won ${upset.ws}-${upset.ls}.` });

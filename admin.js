@@ -2,13 +2,14 @@ import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague
-} from './core.js';
+} from './core.js?v=6';
 import { lookupColor } from './teamcolors.js';
 
 const TABS = [['advance', 'Advance'], ['preseason', 'Preseason'], ['games', 'Games'], ['ratings', 'Ratings'], ['coaches', 'Coaches & Accounts'], ['betting', 'Betting'], ['awards', 'Awards'], ['recruiting', 'Recruiting'], ['settings', 'Settings & History']];
 const ST = { tab: 'advance', desk: 'no', gamesWeek: null, msg: '' };
 const DEFAULT_AWARDS = ['MVP', 'Offensive Player of the Year', 'Defensive Player of the Year', 'Best Offense', 'Best Defense', 'Game of the Year'];
 
+const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const L = () => D.league;
 const teamOpts = (sel, blank, filter = () => true) => (blank ? `<option value="">${blank === true ? '—' : esc(blank)}</option>` : '') +
   D.teams.filter(filter).slice().sort((a, b) => a.name.localeCompare(b.name)).map(t => `<option value="${esc(t.id)}" ${t.id === sel ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
@@ -116,7 +117,7 @@ const views = {
       <div class="card"><h3 style="margin-top:0">${next} schedule (${sg.length} games)</h3><p class="muted small">Add user-vs-user games and each user team's games vs CPU teams.</p>
         <div class="row"><input id="sgW" type="number" value="0" style="width:70px" title="Week"><select id="sgA">${teamOpts('', 'Away')}</select> @ <select id="sgH">${teamOpts('', 'Home')}</select><label class="row" style="margin:0"><input type="checkbox" id="sgN" style="width:auto"> Neutral</label><button class="ghost" data-act="addSched">Add game</button></div>
         <label>Bulk add — one game per line: <code>week, away team, home team</code> (add <code>, neutral</code> if needed). Team name or abbreviation.</label><textarea id="bulk" rows="4" placeholder="0, Liberty, Kennesaw State&#10;1, KENN, Ohio"></textarea><button class="ghost sm" data-act="bulkSched" style="margin-top:6px">Add these games</button> <span id="bulkMsg" class="muted"></span>
-        <div class="tablewrap" style="margin-top:10px"><table>${sg.map(g => `<tr><td>Wk ${g.week}</td><td>${esc(team(g.away).name)} ${g.neutral ? 'vs' : '@'} ${esc(team(g.home).name)}${isUserTeam(team(g.home)) && isUserTeam(team(g.away)) ? ' <span class="h2h">CvC</span>' : ''}</td><td class="num">${played(g) ? g.awayScore + '-' + g.homeScore : ''}</td><td class="num"><button class="sm danger" data-delgame="${esc(g.id)}">✕</button></td></tr>`).join('')}</table></div></div>
+        <div class="tablewrap" style="margin-top:10px"><table>${sg.map(g => `<tr><td>Wk ${g.week}</td><td>${esc(team(g.away).name)} ${g.neutral ? 'vs' : '@'} ${esc(team(g.home).name)}${isUserTeam(team(g.home)) && isUserTeam(team(g.away)) ? ' <span class="h2h">USER GAME</span>' : ''}</td><td class="num">${played(g) ? g.awayScore + '-' + g.homeScore : ''}</td><td class="num"><button class="sm danger" data-delgame="${esc(g.id)}">✕</button></td></tr>`).join('')}</table></div></div>
       ${deskBlock()}
       <div class="card"><button class="gold" data-act="publish">Publish ${next} season → open Week ${sg.length ? Math.min(...sg.map(g => g.week)) : 0}</button>
         <p class="muted small">Publishing sets the current season and week, posts preseason odds and Week ${sg.length ? Math.min(...sg.map(g => g.week)) : 0} lines, opens betting (every coach starts with 1,000 credits) and starts a fresh odds chart. Save teams first.</p></div>`;
@@ -180,7 +181,7 @@ const views = {
   settings() {
     const lg = L(), H = D.history.slice().sort((a, b) => b.season - a.season);
     return `<div class="card"><h2>League Settings</h2><label>League name</label><input id="stName" value="${esc(lg.name)}" style="width:100%">
-      <label>Rules (one per line)</label><textarea id="stRules" rows="6">${esc((lg.rules || []).join('\n'))}</textarea>
+      <label>Rules (one per line)</label><textarea id="stRules" rows="6">${esc((lg.rules && lg.rules.length ? lg.rules : DEFAULT_RULES).join('\n'))}</textarea>
       <label>Extra links on the Rules page (one per line: <code>Label | https://…</code>)</label><textarea id="stLinks" rows="3">${esc((lg.links || []).map(l => l.label + ' | ' + l.url).join('\n'))}</textarea>
       <div class="row" style="margin-top:10px"><button data-act="saveSettings">Save settings</button></div></div>
       <div class="card"><h2>League History</h2><p class="muted small">Seasons are added automatically when you finalize a season. Use this to back-fill past seasons or fix one. Champion line shows as "Coach over Coach — Team 41, Team 27".</p>

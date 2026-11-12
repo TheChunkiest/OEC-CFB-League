@@ -3,8 +3,9 @@ import {
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
   gotwTally, coachStats, storylines, seasonNum
-} from './core.js';
+} from './core.js?v=6';
 
+const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['odds', 'Odds'], ['betting', 'Betting'],
   ['rankings', 'Power Rankings'], ['teams', 'Teams'], ['vote', 'Vote'], ['recruiting', 'Recruiting'], ['history', 'History'], ['rules', 'Rules']];
 const UI = { stSort: { key: 'place', dir: 1 }, prSort: { key: 'rank', dir: 1 }, prUsers: false, oddsSort: { key: 'titlePct', dir: -1 }, metric: 'titlePct', acct: 'login', slip: null, msg: '' };
@@ -20,7 +21,7 @@ function gameCard(g, opts = {}) {
   const h = team(g.home), a = team(g.away), done = played(g);
   const hw = done && +g.homeScore > +g.awayScore, aw = done && !hw;
   const tags = [];
-  if (isUserTeam(h) && isUserTeam(a)) tags.push('<span class="h2h">COACH vs COACH</span>');
+  if (isUserTeam(h) && isUserTeam(a)) tags.push('<span class="h2h">USER GAME</span>');
   if (g.type === 'ccg') tags.push('<span class="tag gold">League Championship</span>');
   if (g.type === 'bowl') tags.push('<span class="tag">Postseason</span>');
   if (opts.gotw) tags.push('<span class="tag gold">Game of the Week</span>');
@@ -207,7 +208,7 @@ const PAGES = {
     if (L.phase !== PHASES.REG || !next.length) html += `<div class="card empty">Game of the Week voting opens during the regular season for the following week's games.</div>`;
     else html += `<div class="card"><p class="muted small" style="margin-top:0">Vote during ${esc(weekLabel())} for next week's featured game. The winner shows on the Home page once we advance to Week ${nw}.</p>
       ${next.map(g => `<label class="vote-opt ${mine && mine.gameId === g.id ? 'on' : ''}"><input type="radio" name="gotw" value="${esc(g.id)}" ${mine && mine.gameId === g.id ? 'checked' : ''} ${canVote ? '' : 'disabled'}>
-        <span style="flex:1">${chip(g.away)} @ ${chip(g.home)} ${isUserTeam(team(g.home)) && isUserTeam(team(g.away)) ? '<span class="h2h">COACH vs COACH</span>' : ''}</span><span class="muted small">${tally.counts[g.id] || 0} vote${tally.counts[g.id] === 1 ? '' : 's'}</span></label>`).join('')}
+        <span style="flex:1">${chip(g.away)} @ ${chip(g.home)} ${isUserTeam(team(g.home)) && isUserTeam(team(g.away)) ? '<span class="h2h">USER GAME</span>' : ''}</span><span class="muted small">${tally.counts[g.id] || 0} vote${tally.counts[g.id] === 1 ? '' : 's'}</span></label>`).join('')}
       ${canVote ? `<button data-act="gotw" style="margin-top:8px">${mine ? 'Change vote' : 'Submit vote'}</button>` : ''}</div>`;
     // Season awards
     const A = L.awards || {};
@@ -246,7 +247,7 @@ const PAGES = {
 
   rules() {
     const L = D.league;
-    return `<h2>League Rules</h2><div class="card"><ul class="clean">${(L.rules || []).map(r => `<li>${esc(r)}</li>`).join('') || '<li class="muted">No rules posted.</li>'}</ul></div>
+    return `<h2>League Rules</h2><div class="card"><ul class="clean">${((L.rules && L.rules.length) ? L.rules : DEFAULT_RULES).map(r => `<li>${esc(r)}</li>`).join('') || '<li class="muted">No rules posted.</li>'}</ul></div>
       <h2>How Betting Works</h2><div class="card"><ul class="clean"><li>Every linked coach starts each season with ${START_CREDITS.toLocaleString()} credits. Credits don't carry over.</li>
       <li>Lines post for the current week when we advance. Spreads and totals pay −110; moneylines pay the listed +/− odds.</li>
       <li>Each advance re-rates every team from the results, so lines for all later weeks move too.</li>
@@ -276,7 +277,7 @@ function betRows(g) {
   const l = lineOf(g); if (!l) return '';
   const a = team(g.away), h = team(g.home);
   const b = (market, pick, top, odds) => `<button class="pick" data-bet="${esc(g.id)}|${market}|${pick}">${top} <b>${fmtOdds(odds)}</b></button>`;
-  return `<div class="tm" style="padding-top:8px">${chip(a.id)}<br>${g.neutral ? 'vs' : '@'} ${chip(h.id)}${isUserTeam(a) && isUserTeam(h) ? ' <span class="h2h">CvC</span>' : ''}</div>
+  return `<div class="tm" style="padding-top:8px">${chip(a.id)}<br>${g.neutral ? 'vs' : '@'} ${chip(h.id)}${isUserTeam(a) && isUserTeam(h) ? ' <span class="h2h">USER GAME</span>' : ''}</div>
     <div style="display:grid;gap:4px">${b('spread', 'away', esc(a.abbr) + ' ' + fmtLine(-l.spread), -110)}${b('spread', 'home', esc(h.abbr) + ' ' + fmtLine(l.spread), -110)}</div>
     <div style="display:grid;gap:4px">${b('ml', 'away', esc(a.abbr), l.mlAway)}${b('ml', 'home', esc(h.abbr), l.mlHome)}</div>
     <div style="display:grid;gap:4px">${b('total', 'over', 'O ' + l.total, -110)}${b('total', 'under', 'U ' + l.total, -110)}</div>`;
