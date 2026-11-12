@@ -1,0 +1,110 @@
+[
+  {
+    "id": "bama",
+    "name": "Alabama",
+    "abbr": "ALAB",
+    "conference": "East",
+    "coach": "Coach One",
+    "color": "#9e1b32",
+    "discord": ""
+  },
+  {
+    "id": "uga",
+    "name": "Georgia",
+    "abbr": "GEOR",
+    "conference": "East",
+    "coach": "Coach Two",
+    "color": "#ba0c2f",
+    "discord": ""
+  },
+  {
+    "id": "osu",
+    "name": "Ohio State",
+    "abbr": "OHIO",
+    "conference": "East",
+    "coach": "Coach Three",
+    "color": "#bb0000",
+    "discord": ""
+  },
+  {
+    "id": "mich",
+    "name": "Michigan",
+    "abbr": "MICH",
+    "conference": "East",
+    "coach": "CPU",
+    "color": "#00274c",
+    "discord": ""
+  },
+  {
+    "id": "fsu",
+    "name": "Florida State",
+    "abbr": "FLOR",
+    "conference": "East",
+    "coach": "Coach Four",
+    "color": "#782f40",
+    "discord": ""
+  },
+  {
+    "id": "clem",
+    "name": "Clemson",
+    "abbr": "CLEM",
+    "conference": "East",
+    "coach": "CPU",
+    "color": "#f56600",
+    "discord": ""
+  },
+  {
+    "id": "tex",
+    "name": "Texas",
+    "abbr": "TEXA",
+    "conference": "West",
+    "coach": "Coach Five",
+    "color": "#bf5700",
+    "discord": ""
+  },
+  {
+    "id": "ore",
+    "name": "Oregon",
+    "abbr": "OREG",
+    "conference": "West",
+    "coach": "Coach Six",
+    "color": "#154733",
+    "discord": ""
+  },
+  {
+    "id": "usc",
+    "name": "USC",
+    "abbr": "USC",
+    "conference": "West",
+    "coach": "Coach Seven",
+    "color": "#990000",
+    "discord": ""
+  },
+  {
+    "id": "nd",
+    "name": "Notre Dame",
+    "abbr": "NOTR",
+    "conference": "West",
+    "coach": "CPU",
+    "color": "#0c2340",
+    "discord": ""
+  },
+  {
+    "id": "lsu",
+    "name": "LSU",
+    "abbr": "LSU",
+    "conference": "West",
+    "coach": "Coach Eight",
+    "color": "#461d7c",
+    "discord": ""
+  },
+  {
+    "id": "okla",
+    "name": "Oklahoma",
+    "abbr": "OKLA",
+    "conference": "West",
+    "coach": "CPU",
+    "color": "#841617",
+    "discord": ""
+  }
+]

@@ -1,0 +1,101 @@
+{
+  "class": 2027,
+  "rows": [
+    {
+      "team": "mich",
+      "commits": 21,
+      "five": 2,
+      "four": 2,
+      "three": 7,
+      "points": 270
+    },
+    {
+      "team": "uga",
+      "commits": 14,
+      "five": 2,
+      "four": 3,
+      "three": 8,
+      "points": 277
+    },
+    {
+      "team": "ore",
+      "commits": 17,
+      "five": 2,
+      "four": 4,
+      "three": 11,
+      "points": 196
+    },
+    {
+      "team": "nd",
+      "commits": 19,
+      "five": 0,
+      "four": 3,
+      "three": 6,
+      "points": 200
+    },
+    {
+      "team": "usc",
+      "commits": 18,
+      "five": 0,
+      "four": 3,
+      "three": 12,
+      "points": 302
+    },
+    {
+      "team": "clem",
+      "commits": 15,
+      "five": 0,
+      "four": 6,
+      "three": 10,
+      "points": 251
+    },
+    {
+      "team": "tex",
+      "commits": 14,
+      "five": 2,
+      "four": 5,
+      "three": 7,
+      "points": 259
+    },
+    {
+      "team": "bama",
+      "commits": 22,
+      "five": 1,
+      "four": 3,
+      "three": 11,
+      "points": 257
+    },
+    {
+      "team": "lsu",
+      "commits": 24,
+      "five": 0,
+      "four": 6,
+      "three": 7,
+      "points": 265
+    },
+    {
+      "team": "okla",
+      "commits": 23,
+      "five": 2,
+      "four": 2,
+      "three": 8,
+      "points": 211
+    },
+    {
+      "team": "osu",
+      "commits": 21,
+      "five": 2,
+      "four": 6,
+      "three": 6,
+      "points": 242
+    },
+    {
+      "team": "fsu",
+      "commits": 20,
+      "five": 1,
+      "four": 4,
+      "three": 5,
+      "points": 212
+    }
+  ]
+}

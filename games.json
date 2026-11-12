@@ -1,0 +1,596 @@
+[
+  {
+    "season": 2026,
+    "week": 1,
+    "home": "okla",
+    "away": "bama",
+    "homeScore": 45,
+    "awayScore": 31,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 1,
+    "home": "uga",
+    "away": "lsu",
+    "homeScore": 24,
+    "awayScore": 21,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 1,
+    "home": "nd",
+    "away": "osu",
+    "homeScore": 20,
+    "awayScore": 10,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 1,
+    "home": "mich",
+    "away": "usc",
+    "homeScore": 14,
+    "awayScore": 21,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 1,
+    "home": "ore",
+    "away": "fsu",
+    "homeScore": 38,
+    "awayScore": 24,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 1,
+    "home": "clem",
+    "away": "tex",
+    "homeScore": 27,
+    "awayScore": 24,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 2,
+    "home": "bama",
+    "away": "lsu",
+    "homeScore": 31,
+    "awayScore": 13,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 2,
+    "home": "nd",
+    "away": "okla",
+    "homeScore": 20,
+    "awayScore": 17,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 2,
+    "home": "uga",
+    "away": "usc",
+    "homeScore": 34,
+    "awayScore": 10,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 2,
+    "home": "ore",
+    "away": "osu",
+    "homeScore": 45,
+    "awayScore": 42,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 2,
+    "home": "mich",
+    "away": "tex",
+    "homeScore": 45,
+    "awayScore": 10,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 2,
+    "home": "clem",
+    "away": "fsu",
+    "homeScore": 41,
+    "awayScore": 28,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 3,
+    "home": "nd",
+    "away": "bama",
+    "homeScore": 31,
+    "awayScore": 7,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 3,
+    "home": "lsu",
+    "away": "usc",
+    "homeScore": 45,
+    "awayScore": 31,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 3,
+    "home": "ore",
+    "away": "okla",
+    "homeScore": 27,
+    "awayScore": 7,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 3,
+    "home": "uga",
+    "away": "tex",
+    "homeScore": 45,
+    "awayScore": 31,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 3,
+    "home": "clem",
+    "away": "osu",
+    "homeScore": 24,
+    "awayScore": 13,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 3,
+    "home": "mich",
+    "away": "fsu",
+    "homeScore": 41,
+    "awayScore": 24,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 4,
+    "home": "bama",
+    "away": "usc",
+    "homeScore": 41,
+    "awayScore": 17,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 4,
+    "home": "ore",
+    "away": "nd",
+    "homeScore": 38,
+    "awayScore": 13,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 4,
+    "home": "lsu",
+    "away": "tex",
+    "homeScore": 14,
+    "awayScore": 28,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 4,
+    "home": "clem",
+    "away": "okla",
+    "homeScore": 24,
+    "awayScore": 7,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 4,
+    "home": "uga",
+    "away": "fsu",
+    "homeScore": 45,
+    "awayScore": 35,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 4,
+    "home": "mich",
+    "away": "osu",
+    "homeScore": 14,
+    "awayScore": 13,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 5,
+    "home": "ore",
+    "away": "bama",
+    "homeScore": 34,
+    "awayScore": 13,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 5,
+    "home": "usc",
+    "away": "tex",
+    "homeScore": 24,
+    "awayScore": 35,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 5,
+    "home": "clem",
+    "away": "nd",
+    "homeScore": 10,
+    "awayScore": 13,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 5,
+    "home": "lsu",
+    "away": "fsu",
+    "homeScore": 45,
+    "awayScore": 7,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 5,
+    "home": "mich",
+    "away": "okla",
+    "homeScore": 34,
+    "awayScore": 13,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 5,
+    "home": "uga",
+    "away": "osu",
+    "homeScore": 27,
+    "awayScore": 42,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 6,
+    "home": "bama",
+    "away": "tex",
+    "homeScore": 41,
+    "awayScore": 28,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 6,
+    "home": "clem",
+    "away": "ore",
+    "homeScore": 14,
+    "awayScore": 21,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 6,
+    "home": "usc",
+    "away": "fsu",
+    "homeScore": 34,
+    "awayScore": 31,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 6,
+    "home": "mich",
+    "away": "nd",
+    "homeScore": 27,
+    "awayScore": 7,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 6,
+    "home": "lsu",
+    "away": "osu",
+    "homeScore": 27,
+    "awayScore": 13,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 6,
+    "home": "uga",
+    "away": "okla",
+    "homeScore": 24,
+    "awayScore": 13,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 7,
+    "home": "clem",
+    "away": "bama",
+    "homeScore": 34,
+    "awayScore": 24,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 7,
+    "home": "tex",
+    "away": "fsu",
+    "homeScore": 38,
+    "awayScore": 7,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 7,
+    "home": "mich",
+    "away": "ore",
+    "homeScore": 38,
+    "awayScore": 17,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 7,
+    "home": "usc",
+    "away": "osu",
+    "homeScore": 20,
+    "awayScore": 17,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 7,
+    "home": "uga",
+    "away": "nd",
+    "homeScore": 34,
+    "awayScore": 35,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 7,
+    "home": "lsu",
+    "away": "okla",
+    "homeScore": 14,
+    "awayScore": 24,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 8,
+    "home": "bama",
+    "away": "fsu",
+    "homeScore": 27,
+    "awayScore": 7,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 8,
+    "home": "mich",
+    "away": "clem",
+    "homeScore": 31,
+    "awayScore": 24,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 8,
+    "home": "tex",
+    "away": "osu",
+    "homeScore": 45,
+    "awayScore": 10,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 8,
+    "home": "uga",
+    "away": "ore",
+    "homeScore": 24,
+    "awayScore": 21,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 8,
+    "home": "usc",
+    "away": "okla",
+    "homeScore": 38,
+    "awayScore": 10,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 8,
+    "home": "lsu",
+    "away": "nd",
+    "homeScore": 24,
+    "awayScore": 31,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 9,
+    "home": "mich",
+    "away": "bama",
+    "homeScore": 34,
+    "awayScore": 21,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 9,
+    "home": "fsu",
+    "away": "osu",
+    "homeScore": 38,
+    "awayScore": 10,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 9,
+    "home": "uga",
+    "away": "clem",
+    "homeScore": 41,
+    "awayScore": 7,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 9,
+    "home": "tex",
+    "away": "okla",
+    "homeScore": 24,
+    "awayScore": 17,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 9,
+    "home": "lsu",
+    "away": "ore",
+    "homeScore": 34,
+    "awayScore": 35,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 9,
+    "home": "usc",
+    "away": "nd",
+    "homeScore": 38,
+    "awayScore": 10,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 10,
+    "home": "bama",
+    "away": "osu",
+    "homeScore": 10,
+    "awayScore": 42,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 10,
+    "home": "uga",
+    "away": "mich",
+    "homeScore": 10,
+    "awayScore": 24,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 10,
+    "home": "fsu",
+    "away": "okla",
+    "homeScore": 20,
+    "awayScore": 21,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 10,
+    "home": "lsu",
+    "away": "clem",
+    "homeScore": 41,
+    "awayScore": 10,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 10,
+    "home": "tex",
+    "away": "nd",
+    "homeScore": 10,
+    "awayScore": 35,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 10,
+    "home": "usc",
+    "away": "ore",
+    "homeScore": 31,
+    "awayScore": 28,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 11,
+    "home": "uga",
+    "away": "bama",
+    "homeScore": null,
+    "awayScore": null,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 11,
+    "home": "osu",
+    "away": "okla",
+    "homeScore": null,
+    "awayScore": null,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 11,
+    "home": "lsu",
+    "away": "mich",
+    "homeScore": null,
+    "awayScore": null,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 11,
+    "home": "fsu",
+    "away": "nd",
+    "homeScore": null,
+    "awayScore": null,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 11,
+    "home": "usc",
+    "away": "clem",
+    "homeScore": null,
+    "awayScore": null,
+    "note": ""
+  },
+  {
+    "season": 2026,
+    "week": 11,
+    "home": "tex",
+    "away": "ore",
+    "homeScore": null,
+    "awayScore": null,
+    "note": ""
+  }
+]
