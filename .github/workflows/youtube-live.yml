@@ -19,7 +19,7 @@ jobs:
         env:
           YT_API_KEY: ${{ secrets.YT_API_KEY }}
         run: |
-          import json, os, re, urllib.request, urllib.parse
+          import json, os, re, time, urllib.request, urllib.parse
           HANDLE = "@originalentertainingcrackers"
           key = (os.environ.get("YT_API_KEY") or "").strip()
 
@@ -62,7 +62,9 @@ jobs:
           if os.path.exists("live.json"):
               try: old = json.load(open("live.json"))
               except Exception: pass
-          if old.get("live") == new["live"] and old.get("videoId") == new.get("videoId"):
+          if new["live"]:
+              new["checkedAt"] = int(time.time() * 1000)
+          elif old.get("live") is False or (not old.get("live") and "live" in old):
               print("No change:", new); raise SystemExit(0)
           json.dump(new, open("live.json", "w"), indent=1)
           open(os.environ["GITHUB_OUTPUT"], "a").write("changed=true\n")
