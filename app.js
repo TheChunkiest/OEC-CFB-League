@@ -2,8 +2,8 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName
-} from './core.js?v=28';
+  gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName
+} from './core.js?v=29';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['odds', 'Odds'], ['betting', 'Betting'],
@@ -95,7 +95,7 @@ const PAGES = {
   },
 
   odds() {
-    const s = S(), L = D.league, cur = L.phase === PHASES.REG ? L.week : 999;
+    const s = S(), L = D.league, cur = nowUpto();
     const sim = simulate(s, cur), st = UI.oddsSort;
     const pre = !seasonGames().some(played);
     const rows = sortRows(leagueTeams().map(t => ({ id: t.id, name: t.name, coach: t.coach || 'CPU', ...sim[t.id] })), st, { likely: r => parseInt(r.likely) });
@@ -174,7 +174,7 @@ const PAGES = {
     const t = team(id), s = S(), r = records(s)[t.id];
     if (!r) return '<div class="card empty">Team not found.</div>';
     const games = D.games.filter(g => g.season === s && (g.home === id || g.away === id)).sort((a, b) => a.week - b.week);
-    const pr = currentPower().find(x => x.id === id), sim = t.conf === D.league.conference ? simulate(s, D.league.phase === PHASES.REG ? D.league.week : 999)[id] : null;
+    const pr = currentPower().find(x => x.id === id), sim = t.conf === D.league.conference ? simulate(s, nowUpto())[id] : null;
     return `<p><a href="#teams">← All teams</a></p>
       <div class="card" style="border-left:6px solid ${esc(teamColor(t))}"><h2>${pr ? '#' + pr.rank + ' ' : ''}${esc(t.name)}</h2>
         <div class="muted">${esc(t.conf)}${t.div ? ' ' + esc(t.div) : ''} · ${isUserTeam(t) ? `Coach <a href="#coach/${slug(t.coach)}">${esc(t.coach)}</a>` : 'CPU'}</div>
@@ -607,6 +607,15 @@ function showSlip(gid, market, pick) {
 }
 function updToWin() { const s = Math.floor(+$('#stake').value || 0), o = UI.slip.odds;
   if (UI.slip.parlay) { const p = parlayProfit(s, UI.legs); $('#towin').textContent = s > 0 ? p + ' (returns ' + (s + p) + ')' : '–'; return; } $('#towin').textContent = s > 0 ? Math.round(o > 0 ? s * o / 100 : s * 100 / -o) + ' (returns ' + (s + Math.round(o > 0 ? s * o / 100 : s * 100 / -o)) + ')' : '–'; }
+// If the database rejects a bet, the usual reason is that the line just moved. Reload and tell the coach.
+async function lineMoved(e) {
+  if (e && (e.code === 'permission-denied' || /permission/i.test(e.message || ''))) {
+    await reload(); $('#modal').innerHTML = '';
+    alert('The line just moved after new results came in. Check the new price and place your bet again.');
+    return;
+  }
+  $('#smsg').textContent = 'Could not place this bet. ' + friendlyError(e);
+}
 async function placeBet() {
   const { g, market, pick, odds, line } = UI.slip, me = auth.profile, stake = Math.floor(+$('#stake').value || 0), L = D.league;
   const bal = bankroll(me.id).balance;
@@ -621,7 +630,7 @@ async function placeBet() {
       const legs = UI.legs.map(l => ({ gameId: l.gameId, market: l.market, pick: l.pick, line: l.line, odds: l.odds, ...(l.team ? { team: l.team } : {}) }));
       await placeWager({ uid: me.id, coach: me.name, season: L.season, week: L.week, gameId: '', market: 'parlay', pick: '', line: null, odds: parlayOdds(legs), legs, stake, status: 'open', payout: 0, ts: Date.now() });
       UI.legs = []; await reload(); showPlacedSlip();
-    } catch (e) { $('#smsg').textContent = 'Could not place parlay. ' + friendlyError(e); }
+    } catch (e) { await lineMoved(e); }
     return;
   }
   if (!UI.slip.parlay && alreadyHolding(UI.slip.wins ? UI.slip : UI.slip.future ? { market: 'future', pick } : { market, gameId: g.id, pick }))
@@ -631,7 +640,7 @@ async function placeBet() {
     try {
       await placeWager({ uid: me.id, coach: me.name, season: L.season, week: L.week, gameId: '', market: 'wins', team: UI.slip.team, pick, line: UI.slip.line, odds, stake, status: 'open', payout: 0, ts: Date.now() });
       await reload(); showPlacedSlip();
-    } catch (e) { $('#smsg').textContent = 'Could not place wager. ' + friendlyError(e); }
+    } catch (e) { await lineMoved(e); }
     return;
   }
   if (UI.slip.future) {
@@ -639,14 +648,14 @@ async function placeBet() {
     try {
       await placeWager({ uid: me.id, coach: me.name, season: L.season, week: L.week, gameId: '', market: 'future', pick, line: null, odds, stake, status: 'open', payout: 0, ts: Date.now() });
       await reload(); showPlacedSlip();
-    } catch (e) { $('#smsg').textContent = 'Could not place wager. ' + friendlyError(e); }
+    } catch (e) { await lineMoved(e); }
     return;
   }
   if (!L.bettingOpen || played(g) || g.week < L.week || g.season !== L.season) return $('#smsg').textContent = 'This game is locked.';
   try {
     await placeWager({ uid: me.id, coach: me.name, season: L.season, week: L.week, gameId: g.id, market, pick, line, odds, stake, status: 'open', payout: 0, ts: Date.now() });
     await reload(); showPlacedSlip();
-  } catch (e) { $('#smsg').textContent = 'Could not place wager. ' + friendlyError(e); }
+  } catch (e) { await lineMoved(e); }
 }
 
 /* ---------- chart ---------- */

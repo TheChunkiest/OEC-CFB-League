@@ -2,7 +2,7 @@ import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally
-} from './core.js?v=28';
+} from './core.js?v=29';
 import { lookupColor } from './teamcolors.js';
 
 const TABS = [['advance', 'Weekly Advance'], ['games', 'Games'], ['top25', 'Top 25'], ['ratings', 'Ratings'], ['betting', 'Betting'], ['coaches', 'Coaches & Accounts'], ['awards', 'Awards'], ['preseason', 'Preseason'], ['settings', 'Settings & History']];
@@ -75,6 +75,8 @@ function readScores(games) {
   return { ops, missing };
 }
 const lineOps = (week, season = L().season) => boardOps(week, season);
+// Re-price every open game, League Champion futures and win totals from all data entered so far.
+async function refreshBooks() { const p = L().phase; if (p === PHASES.REG || p === PHASES.CCG) await batch(boardOps(L().week)); }
 async function saveScoresAndSettle(games) {
   const { ops, missing } = readScores(games);
   await batch(ops);
@@ -333,7 +335,8 @@ const ACT = {
   async clearPoll() { if (!confirm('Clear every ranking for this week?')) return; await put('meta', 'league', { polls: { [pollKey(L().week)]: [] } }); flash('Top 25 cleared for this week.'); },
   async wizSave() {
     collectScores(); const ops = draftScoreOps(); await batch(ops); await batch(settleOps(ops.map(o => o.id)));
-    flash(`Saved ${ops.length} score${ops.length === 1 ? '' : 's'}. Those games are locked and their bets graded.`);
+    await refreshBooks();
+    flash(`Saved ${ops.length} score${ops.length === 1 ? '' : 's'}. Those games are locked, their bets graded, and every line, title odd and win total re-priced.`);
   },
   wizNext() {
     const dr = draft();
@@ -350,7 +353,7 @@ const ACT = {
     const dr = draft(); try { dr.poll = readPoll(); } catch (e) { /* ignore */ } dr.desk = { on: ST.desk === 'yes', text: ($('#deskText')?.value || '').trim() };
     const h = $('#wH').value, a = $('#wA').value; if (!h || !a || h === a) return alert('Pick two different teams.');
     const g = { season: L().season, week: L().week + 1, type: 'reg', home: h, away: a, neutral: false, homeScore: null, awayScore: null };
-    await put('games', newId(), g, false); render();
+    await put('games', newId(), g, false); await refreshBooks(); render();
   },
   async wizConfirm() {
     const lg = L(), W = lg.week, last = W >= lg.finalWeek, dr = draft();
@@ -459,13 +462,13 @@ const ACT = {
     D.users.forEach(u => { const want = userOps[u.id] || ''; if ((u.teamId || '') !== want) ops.push({ op: 'set', col: 'users', id: u.id, data: { teamId: want } }); });
     await batch(ops);
     if (conf !== L().conference) await put('meta', 'league', { conference: conf });
-    D.teams.forEach(t => delete t._new); await loadAll(); refreshProfile(); flash('Teams saved.');
+    D.teams.forEach(t => delete t._new); await loadAll(); refreshProfile(); await refreshBooks(); flash('Teams saved. Books re-priced.');
   },
   async addSched() {
     const s = +$('#psSeason').value, a = $('#sgA').value, h = $('#sgH').value;
     if (!a || !h || a === h) return alert('Pick two different teams.');
     await put('games', newId(), { season: s, week: +$('#sgW').value, type: 'reg', home: h, away: a, neutral: $('#sgN').checked, homeScore: null, awayScore: null }, false);
-    render();
+    if (s === L().season) await refreshBooks(); render();
   },
   async bulkSched() {
     const s = +$('#psSeason').value, ops = [], bad = [];
@@ -474,7 +477,7 @@ const ACT = {
       if (p.length < 3 || isNaN(+p[0]) || !a || !h || a === h) { bad.push(line); return; }
       ops.push({ op: 'set', col: 'games', id: newId() + ops.length, data: { season: s, week: +p[0], type: 'reg', home: h.id, away: a.id, neutral: /neutral/i.test(p[3] || ''), homeScore: null, awayScore: null }, merge: false });
     });
-    await batch(ops);
+    await batch(ops); if (s === L().season) await refreshBooks();
     ST.msg = `Added ${ops.length} game(s).` + (bad.length ? ` Couldn't read: ${bad.join(' | ')} (save new teams first, and check spelling).` : ''); render();
   },
   async publish() {
@@ -496,15 +499,14 @@ const ACT = {
       reg.push({ op: 'set', col: 'wagers', id: w.id, data: { status: st, payout: st === 'won' ? profit(w.stake, w.odds) : st === 'lost' ? -w.stake : 0, ...(st !== w.status ? { settledAt: Date.now() } : {}) } });
     });
     reg.push(...parlayOps(true));
-    await batch(reg); flash(`Saved ${ops.length} score(s); ${reg.length} wager(s) graded.`);
+    await batch(reg); await refreshBooks(); flash(`Saved ${ops.length} score(s); ${reg.length} wager(s) graded; books re-priced.`);
   },
   async addGame() {
     const wk = ST.gamesWeek ?? L().week, h = $('#gH').value, a = $('#gA').value;
     if (!h || !a || h === a) return alert('Pick two different teams.');
     const g = { season: L().season, week: wk, type: $('#gT').value, home: h, away: a, neutral: $('#gN').checked, homeScore: null, awayScore: null }, id = newId();
     await put('games', id, g, false);
-    if (wk === L().week) await put('games', id, { lines: freshLine({ ...g, id }) });
-    render();
+    await refreshBooks(); render();
   },
   async saveUsers() {
     const ops = [];
@@ -598,7 +600,7 @@ document.addEventListener('click', async e => {
     if (t.dataset.tab) { ST.tab = t.dataset.tab; ST.msg = ''; render(); if (t.dataset.tab === 'awards') { try { await loadBallots(true); } catch (err) { console.error(err); ST.msg = 'Could not load ballots from Firebase (' + err.message + '). Make sure the latest Firestore rules are published.'; } render(); } }
     else if (t.dataset.desk) { ST.desk = t.dataset.desk; const keep = $('#deskText')?.value; $$('[data-desk]').forEach(b => b.classList.toggle('on', b.dataset.desk === ST.desk)); $('#deskText').parentElement.hidden = ST.desk !== 'yes'; if (keep) $('#deskText').value = keep; }
     else if (t.dataset.act) { t.disabled = true; await ACT[t.dataset.act](); }
-    else if (t.dataset.delgame) { if (confirm('Delete this game? Open wagers on it will be voided.')) { await batch([{ op: 'del', col: 'games', id: t.dataset.delgame }, ...D.wagers.filter(w => w.gameId === t.dataset.delgame && w.status === 'open').map(w => ({ op: 'set', col: 'wagers', id: w.id, data: { status: 'void', payout: 0, settledAt: Date.now() } }))]); await batch(parlayOps()); render(); } }
+    else if (t.dataset.delgame) { if (confirm('Delete this game? Open wagers on it will be voided.')) { await batch([{ op: 'del', col: 'games', id: t.dataset.delgame }, ...D.wagers.filter(w => w.gameId === t.dataset.delgame && w.status === 'open').map(w => ({ op: 'set', col: 'wagers', id: w.id, data: { status: 'void', payout: 0, settledAt: Date.now() } }))]); await batch(parlayOps()); await refreshBooks(); render(); } }
     else if (t.dataset.delteam) { const id = t.dataset.delteam; if (D.games.some(g => g.home === id || g.away === id)) return alert('This team has games scheduled. Delete those first.'); if (confirm('Delete ' + team(id).name + '?')) { if (D.teams.find(x => x.id === id)?._new) D.teams = D.teams.filter(x => x.id !== id); else await batch([{ op: 'del', col: 'teams', id }]); render(); } }
     else if (t.dataset.void) { if (confirm('Void this wager and refund the stake?')) { await put('wagers', t.dataset.void, { status: 'void', payout: 0, settledAt: Date.now() }); render(); } }
     else if (t.dataset.delcat) { const c = readCats(); c.splice(+t.dataset.delcat, 1); $('#cats').innerHTML = catEditor(c); }

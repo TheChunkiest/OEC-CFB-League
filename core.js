@@ -264,12 +264,15 @@ export function juiceOf(l, market, pick) {
   return l && l[k] != null ? l[k] : -110;
 }
 // Line shown for a game: frozen line if posted, else projection from the latest results.
+// "Now" for the model: every result entered so far this season, including games already finished this week.
+export const nowUpto = () => D.league.phase === PHASES.REG ? D.league.week + 1 : 999;
+// Ratings used to price a game: for unplayed games in the current season, every result entered so far.
+const priceUpto = g => g.season === D.league.season && !played(g) ? Math.max(g.week, nowUpto() === 999 ? g.week : nowUpto()) : g.week;
 export function lineOf(g) {
   if (g.lines && g.lines.spread != null) return { ...g.lines, pHome: g.lines.pHome ?? Phi(-g.lines.spread / SIG) };
-  const cur = g.season === D.league.season ? D.league.week : g.week;
-  return lineFrom(ratings(g.season, Math.min(g.week, cur)), g);
+  return lineFrom(ratings(g.season, priceUpto(g)), g);
 }
-export function freshLine(g) { const l = lineFrom(ratings(g.season, g.week), g); if (l) l.pHome = Math.round(l.pHome * 1000) / 1000; return l; }
+export function freshLine(g) { const l = lineFrom(ratings(g.season, priceUpto(g)), g); if (l) l.pHome = Math.round(l.pHome * 1000) / 1000; return l; }
 
 /* ---------------- Records & standings ---------------- */
 export function records(season, upto = Infinity) {
@@ -489,12 +492,12 @@ export function friendlyError(e) {
 export function futuresOpen() { const L = D.league; return L.phase === PHASES.REG && L.bettingOpen; }
 export function futuresBoard() {
   const L = D.league; if (L.phase !== PHASES.REG) return [];
-  const sim = simulate(L.season, L.week), F = L.futures, posted = F && F.season === L.season && F.odds ? F.odds : null;
+  const sim = simulate(L.season, nowUpto()), F = L.futures, posted = F && F.season === L.season && F.odds ? F.odds : null;
   return leagueTeams().map(t => ({ id: t.id, p: sim[t.id]?.titlePct || 0, odds: posted ? (posted[t.id] ?? null) : futuresOdds(sim[t.id]?.titlePct || 0), posted: !!posted }))
     .sort((a, b) => b.p - a.p || a.id.localeCompare(b.id));
 }
 export function futuresSnapshot() {
-  const L = D.league, sim = simulate(L.season, L.week), odds = {};
+  const L = D.league, sim = simulate(L.season, nowUpto()), odds = {};
   leagueTeams().forEach(t => odds[t.id] = futuresOdds(sim[t.id]?.titlePct || 0));
   return { season: L.season, week: L.week, open: true, odds };
 }
@@ -509,7 +512,7 @@ export function regWinsInfo(season, tid) {
   return { w, rem };
 }
 export function winTotalsSnapshot() {
-  const L = D.league, sim = simulate(L.season, L.week), odds = {};
+  const L = D.league, sim = simulate(L.season, nowUpto()), odds = {};
   leagueTeams().forEach(t => {
     const o = sim[t.id], info = regWinsInfo(L.season, t.id);
     if (!o || info.rem < 1) { odds[t.id] = null; return; }
@@ -526,7 +529,7 @@ export function winTotalsSnapshot() {
 export function winsPosted() { const L = D.league, W = L.winTotals; return DEMO || !!(W && W.season === L.season && W.odds); }
 export function winsBoard() {
   const L = D.league; if (L.phase !== PHASES.REG) return [];
-  const sim = simulate(L.season, L.week), W = L.winTotals, posted = W && W.season === L.season && W.odds ? W.odds : null;
+  const sim = simulate(L.season, nowUpto()), W = L.winTotals, posted = W && W.season === L.season && W.odds ? W.odds : null;
   const snap = posted ? null : winTotalsSnapshot().odds;
   return leagueTeams().map(t => ({ id: t.id, proj: sim[t.id]?.expW || 0, ...regWinsInfo(L.season, t.id), o: posted ? (posted[t.id] || null) : snap[t.id] }))
     .sort((a, b) => b.proj - a.proj);
