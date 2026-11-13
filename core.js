@@ -384,7 +384,33 @@ export function settleOps(gameIds) {
     const st = g.forfeit ? 'void' : grade(w, g), payout = st === 'won' ? profit(w.stake, w.odds) : st === 'lost' ? -w.stake : 0;
     ops.push({ op: 'set', col: 'wagers', id: w.id, data: { status: st, payout } });
   });
-  return ops;
+  return ops.concat(parlayOps());
+}
+/* ---- Parlays: 2-6 legs, one per game. Any loss loses; pushes/voids drop out; pays when all legs are final. ---- */
+export const MAX_LEGS = 6;
+export const decOf = o => o > 0 ? 1 + o / 100 : 1 + 100 / -o;
+export const amerOf = d => d >= 2 ? Math.round((d - 1) * 100) : -Math.round(100 / (d - 1));
+export const parlayOdds = legs => amerOf(legs.reduce((p, l) => p * decOf(l.odds), 1));
+export const parlayProfit = (stake, legs) => Math.round(stake * (legs.reduce((p, l) => p * decOf(l.odds), 1) - 1));
+function evalParlay(w) {
+  const legs = (w.legs || []).map(l => {
+    const g = D.games.find(x => x.id === l.gameId);
+    return { ...l, result: !g ? 'void' : !played(g) ? 'open' : g.forfeit ? 'void' : grade(l, g) };
+  });
+  let status = 'open', payout = 0;
+  if (legs.some(l => l.result === 'lost')) { status = 'lost'; payout = -w.stake; }
+  else if (legs.every(l => l.result !== 'open')) {
+    const won = legs.filter(l => l.result === 'won');
+    if (won.length) { status = 'won'; payout = parlayProfit(w.stake, won); } else status = 'push';
+  }
+  return { legs, status, payout };
+}
+export function parlayOps(regrade = false) {
+  return D.wagers.filter(w => w.market === 'parlay' && (regrade ? w.status !== 'void' : w.status === 'open')).map(w => {
+    const r = evalParlay(w);
+    const same = r.status === w.status && r.payout === (w.payout || 0) && r.legs.every((l, i) => l.result === (w.legs[i] || {}).result);
+    return same ? null : { op: 'set', col: 'wagers', id: w.id, data: { status: r.status, payout: r.payout, legs: r.legs } };
+  }).filter(Boolean);
 }
 export function bankroll(uid, season = D.league.season) {
   const b = { balance: START_CREDITS, w: 0, l: 0, p: 0, net: 0, open: 0, risked: 0, n: 0 };
@@ -444,6 +470,7 @@ export function settleFuturesOps(season, champId) {
   });
 }
 export function wagerLabel(w) {
+  if (w.market === 'parlay') return `${(w.legs || []).length}-leg parlay (${fmtOdds(w.odds)})`;
   if (w.market === 'future') return `${team(w.pick).name} to win Season ${seasonNum(w.season)} title (${fmtOdds(w.odds)})`;
   const g = D.games.find(x => x.id === w.gameId) || {}, side = w.pick === 'home' ? g.home : g.away;
   if (w.market === 'ml') return `${team(side).name} ML ${fmtOdds(w.odds)}`;

@@ -46,9 +46,19 @@ service cloud.firestore {
       return L.phase == 'Regular Season' && L.futures.season == L.season && L.futures.open == true
         && d.pick in L.futures.odds && d.odds is int && d.odds == L.futures.odds[d.pick];
     }
+    // Parlay: 2-6 legs, each checked against its game's posted line like a single bet.
+    function validParlay(d) {
+      let n = d.legs.size();
+      return d.legs is list && n >= 2 && n <= 6
+        && validGameWager(d.legs[0]) && validGameWager(d.legs[1])
+        && (n < 3 || validGameWager(d.legs[2])) && (n < 4 || validGameWager(d.legs[3]))
+        && (n < 5 || validGameWager(d.legs[4])) && (n < 6 || validGameWager(d.legs[5]));
+    }
     function validWager(d) {
       let L = league();
-      return baseWager(d, L) && ((d.market == 'future' && validFuture(d, L)) || (d.market != 'future' && validGameWager(d)));
+      return baseWager(d, L) && ((d.market == 'future' && validFuture(d, L))
+        || (d.market == 'parlay' && validParlay(d))
+        || (d.market != 'future' && d.market != 'parlay' && validGameWager(d)));
     }
     match /wagers/{id} {
       allow read: if true;
@@ -57,7 +67,7 @@ service cloud.firestore {
       allow delete: if isCommish() || (signedIn() && resource.data.uid == request.auth.uid && resource.data.status == 'open'
         && league().bettingOpen == true
         && ((resource.data.market == 'future' && league().phase == 'Regular Season')
-          || (resource.data.market != 'future' && gameOf(resource.data.gameId).homeScore == null)));
+          || (resource.data.market != 'future' && resource.data.market != 'parlay' && gameOf(resource.data.gameId).homeScore == null)));
     }
 
     // Game of the Week votes: cast during week N for a game in week N+1. Doc id = season_week_uid.

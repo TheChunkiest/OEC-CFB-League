@@ -146,3 +146,8 @@ ul.clean{margin:0;padding-left:20px}
 .livepop .lp-x{position:absolute;top:8px;right:8px;background:transparent;color:var(--muted);padding:4px 8px;font-size:14px}
 @keyframes lpPulse{50%{opacity:.25}}
 @keyframes lpIn{from{transform:translateY(20px);opacity:0}to{transform:none;opacity:1}}
+
+/* Parlay slip bar */
+.parlaybar{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:45;width:min(560px,calc(100vw - 24px));display:flex;justify-content:space-between;align-items:center;gap:10px;background:#1b1314;border:2px solid var(--gold);border-radius:12px;padding:10px 14px;box-shadow:0 10px 30px rgba(0,0,0,.6)}
+.parlaybar span.gold{color:var(--gold);font-weight:900;margin-left:6px}
+body:has(.parlaybar) .livepop{bottom:84px}
