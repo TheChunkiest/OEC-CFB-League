@@ -151,3 +151,8 @@ ul.clean{margin:0;padding-left:20px}
 .parlaybar{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:45;width:min(560px,calc(100vw - 24px));display:flex;justify-content:space-between;align-items:center;gap:10px;background:#1b1314;border:2px solid var(--gold);border-radius:12px;padding:10px 14px;box-shadow:0 10px 30px rgba(0,0,0,.6)}
 .parlaybar span.gold{color:var(--gold);font-weight:900;margin-left:6px}
 body:has(.parlaybar) .livepop{bottom:84px}
+
+/* Most Popular Bet card */
+.popular{border:2px solid var(--gold);background:linear-gradient(135deg,#3a0a0d,#171314 65%);position:relative;margin-top:14px;padding-top:18px}
+.popular .ribbon{position:absolute;top:-11px;left:14px;background:var(--gold);color:#140b00;font-weight:900;font-size:11px;letter-spacing:1px;padding:3px 10px;border-radius:6px;text-transform:uppercase}
+.popular .pop-title{font-size:20px;font-weight:900;line-height:1.2}

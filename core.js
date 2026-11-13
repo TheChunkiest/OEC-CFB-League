@@ -90,6 +90,13 @@ export async function refreshLive() {
   try { const { fs, db } = await fbInit(); const s = await fs.getDoc(fs.doc(db, 'meta', 'league')); if (s.exists()) D.league.live = s.data().live || null; } catch (e) { /* ignore */ }
   return D.league.live;
 }
+export async function refreshWagers() {
+  if (DEMO) return D.wagers;
+  try { const { fs, db } = await fbInit(); const s = await fs.getDocs(fs.collection(db, 'wagers')); D.wagers = s.docs.map(d => ({ ...d.data(), id: d.id })); clearCache(); } catch (e) { /* ignore */ }
+  return D.wagers;
+}
+// Identity of a selection, ignoring line movement (same side of the same market).
+export const selKey = l => l.market === 'future' ? 'future|' + l.pick : l.market === 'wins' ? `wins|${l.team}|${l.pick}` : `${l.market}|${l.gameId}|${l.pick}`;
 export async function loadBallots(all) {
   if (DEMO) return D.ballots;
   const { fs, db } = await fbInit();

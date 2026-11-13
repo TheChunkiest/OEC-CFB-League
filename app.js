@@ -2,8 +2,8 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit
-} from './core.js?v=19';
+  gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey
+} from './core.js?v=20';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['odds', 'Odds'], ['betting', 'Betting'],
@@ -117,7 +117,7 @@ const PAGES = {
     const bw = bwks.includes(UI.betWeek) ? UI.betWeek : bwks[0];
     const games = D.games.filter(g => g.season === s && g.week === bw && !played(g));
     const open = L.bettingOpen && L.phase !== PHASES.PRE && L.phase !== PHASES.POST;
-    let html = `<h2>Sportsbook · ${esc(weekLabel())}</h2>`;
+    let html = `<h2>Sportsbook · ${esc(weekLabel())}</h2><div id="popular">${popularCard()}</div>`;
     if (!me) html += `<div class="notice">Every coach gets <b>${START_CREDITS.toLocaleString()} credits</b> per season. <a href="#account">Log in</a> to place wagers.</div>`;
     else if (!me.teamId) html += `<div class="notice">Your account isn't linked to a team yet. Ask the commissioner to link it.</div>`;
     if (me && me.teamId) {
@@ -315,6 +315,58 @@ function regRec(tid) {
   D.games.filter(g => g.season === D.league.season && (g.type || 'reg') === 'reg' && played(g) && (g.home === tid || g.away === tid)).forEach(g => ((+g.homeScore > +g.awayScore ? g.home : g.away) === tid ? w++ : l++));
   return { w, l };
 }
+/* ---------- Most Popular Bet of the Week ---------- */
+function popularPick() {
+  const L = D.league, counts = {};
+  D.wagers.filter(w => w.season === L.season && w.week === L.week && w.status !== 'void').forEach(w => {
+    (w.market === 'parlay' ? (w.legs || []) : [w]).forEach(l => {
+      const k = selKey(l), c = counts[k] || (counts[k] = { k, leg: l, n: 0, coaches: new Set(), stake: 0 });
+      c.n++; c.coaches.add(w.uid); c.stake += w.stake;
+    });
+  });
+  const live = Object.values(counts).map(c => ({ ...c, cur: legFor(c.leg.gameId, c.leg.market, c.leg.pick, c.leg.team) })).filter(c => {
+    if (!c.cur) return false;
+    if (c.leg.market === 'future') return futuresOpen() && futuresPosted();
+    if (c.leg.market === 'wins') return futuresOpen() && winsPosted();
+    const g = D.games.find(x => x.id === c.leg.gameId); return g && !played(g) && g.week >= L.week && L.bettingOpen;
+  });
+  live.sort((a, b) => b.n - a.n || b.coaches.size - a.coaches.size || b.stake - a.stake);
+  return live[0] || null;
+}
+function popularCard() {
+  const L = D.league;
+  if (L.phase === PHASES.PRE || L.phase === PHASES.POST) return '';
+  const p = popularPick();
+  if (!p) return `<div class="card popular"><span class="ribbon">🔥 Most Popular Bet · ${esc(weekLabel())}</span><div class="muted">No bets placed yet this week. The most popular pick will show up here.</div></div>`;
+  const row = slipRows({ ...p.cur, season: L.season })[0], inSlip = UI.mode === 'parlay' && UI.legs.some(x => selKey(x) === p.k);
+  const mine = auth.profile && D.wagers.some(w => w.uid === auth.profile.id && w.status === 'open' && w.market !== 'parlay' && selKey(w) === p.k);
+  return `<div class="card popular"><span class="ribbon">🔥 Most Popular Bet · ${esc(weekLabel())}</span>
+    <div class="row spread" style="align-items:flex-end"><div style="min-width:0"><div class="pop-title">${esc(row.t)}</div><div class="muted small">${esc(row.s)}</div>
+      <div class="small" style="margin-top:6px"><b>${p.n}</b> bet${p.n === 1 ? '' : 's'} from <b>${p.coaches.size}</b> coach${p.coaches.size === 1 ? '' : 'es'} this week</div></div>
+    <div style="text-align:right"><div class="big" style="color:var(--gold)">${fmtOdds(p.cur.odds)}</div>
+      ${UI.mode === 'parlay' ? `<button class="${inSlip ? 'ghost' : 'gold'}" data-popular="1">${inSlip ? '✓ In your parlay' : '+ Add to parlay'}</button>`
+        : mine ? '<span class="pill open">✓ You\'re on this</span>' : '<button class="gold" data-popular="1">Bet it</button>'}</div></div></div>`;
+}
+function betPopular() {
+  const p = popularPick(); if (!p) return;
+  const l = p.leg;
+  if (UI.mode === 'parlay') return toggleLeg(l.gameId, l.market, l.pick, l.team);
+  if (l.market === 'future') return showFutureSlip(l.pick);
+  if (l.market === 'wins') return showWinsSlip(l.team, l.pick);
+  showSlip(l.gameId, l.market, l.pick);
+}
+// No doubling up: one open single bet per selection per coach.
+function alreadyHolding(sel) {
+  const me = auth.profile;
+  return me && D.wagers.some(w => w.uid === me.id && w.status === 'open' && w.market !== 'parlay' && selKey(w) === selKey(sel));
+}
+setInterval(async () => {
+  const page = (location.hash.slice(1) || 'home').split('/')[0];
+  if (page !== 'betting' || document.hidden || $('#modal').innerHTML) return;
+  await refreshWagers();
+  const el = document.getElementById('popular'); if (el) el.innerHTML = popularCard();
+}, 30000);
+
 /* ---------- Shareable bet slip image ---------- */
 async function placeWager(data) {
   const id = newId();
@@ -519,6 +571,8 @@ async function placeBet() {
     } catch (e) { $('#smsg').textContent = 'Could not place parlay. ' + friendlyError(e); }
     return;
   }
+  if (!UI.slip.parlay && alreadyHolding(UI.slip.wins ? UI.slip : UI.slip.future ? { market: 'future', pick } : { market, gameId: g.id, pick }))
+    return $('#smsg').textContent = 'You already have this exact bet open. Add to it in a parlay instead, or cancel the first one.';
   if (UI.slip.wins) {
     if (!(futuresOpen() && winsPosted())) return $('#smsg').textContent = 'Win totals are locked.';
     try {
@@ -625,7 +679,7 @@ async function reload() { await loadAll(); refreshProfile(); if (D.league.awards
 document.addEventListener('click', async e => {
   const lx = e.target.closest('[data-livex]');
   if (lx) { try { sessionStorage.setItem('oecLiveDismissed', lx.dataset.livex); } catch (err) { /* ignore */ } showLive(); return; }
-  const t = e.target.closest('[data-sort],[data-metric],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-slip],[data-act],[data-close],[data-stake],[data-acct],[data-cancel]');
+  const t = e.target.closest('[data-sort],[data-metric],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-slip],[data-popular],[data-act],[data-close],[data-stake],[data-acct],[data-cancel]');
   if (!t) return;
   const page = (location.hash.slice(1) || 'home').split('/')[0];
   if (t.dataset.sort) {
@@ -639,6 +693,7 @@ document.addEventListener('click', async e => {
   else if (t.dataset.fut) { if (UI.mode === 'parlay') toggleLeg('', 'future', t.dataset.fut); else showFutureSlip(t.dataset.fut); }
   else if (t.dataset.bet) { const [g, m, p] = t.dataset.bet.split('|'); if (UI.mode === 'parlay') toggleLeg(g, m, p); else showSlip(g, m, p); }
   else if (t.dataset.wins) { const [tid, pk] = t.dataset.wins.split('|'); if (UI.mode === 'parlay') toggleLeg('', 'wins', pk, tid); else showWinsSlip(tid, pk); }
+  else if (t.dataset.popular) betPopular();
   else if (t.dataset.mode) { UI.mode = t.dataset.mode; route(); }
   else if (t.dataset.stake) { $('#stake').value = t.dataset.stake; updToWin(); }
   else if (t.dataset.close && e.target === t) $('#modal').innerHTML = '';
