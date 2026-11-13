@@ -2,7 +2,7 @@ import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor
-} from './core.js?v=25';
+} from './core.js?v=27';
 import { lookupColor } from './teamcolors.js';
 
 const TABS = [['advance', 'Advance'], ['preseason', 'Preseason'], ['games', 'Games'], ['ratings', 'Ratings'], ['top25', 'Top 25'], ['coaches', 'Coaches & Accounts'], ['betting', 'Betting'], ['awards', 'Awards'], ['settings', 'Settings & History']];

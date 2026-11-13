@@ -669,15 +669,22 @@ export function storylines() {
     const wins = meet.filter(x => coachOf(x, +x.homeScore > +x.awayScore ? 'home' : 'away') === wc).length;
     if (meet.length >= 1 && wins === 0) notes.push({ p: 90 + Math.min(meet.length, 5), title: `${wc} finally beats ${lc}`, body: `${wc} had lost all ${meet.length} previous meeting${meet.length === 1 ? '' : 's'} with ${lc}, across every season. Not anymore.` });
   });
-  // First win over a top-5 team this season.
-  const top5At = w => new Set(powerRankings(s, w).slice(0, 5).map(x => x.id));
+  // First win over a top-5 / ranked team this season, using the in-game Top 25 entered by the commissioner.
   real.forEach(g => {
-    const hw = +g.homeScore > +g.awayScore, w = hw ? g.home : g.away, l = hw ? g.away : g.home, t5 = top5At(lw);
-    if (!t5.has(l) || t5.has(w) || !isUserTeam(team(w))) return;
+    const hw = +g.homeScore > +g.awayScore, w = hw ? g.home : g.away, l = hw ? g.away : g.home;
+    if (!isUserTeam(team(w))) return;
+    const poll = pollFor(s, lw), lr = poll[l], wr = poll[w];
+    if (!lr) return;
     const before = D.games.filter(x => x.season === s && played(x) && !x.forfeit && x.week < lw && (x.home === w || x.away === w));
-    const tries = before.filter(x => top5At(x.week).has(x.home === w ? x.away : x.home));
-    const beat = tries.filter(x => (+x.homeScore > +x.awayScore ? x.home : x.away) === w);
-    if (beat.length === 0) notes.push({ p: tries.length ? 88 : 80, title: `${poss(team(w).name)} first win over a top-5 team`, body: `${name(w)} knocked off #${powerRankings(s, lw).find(x => x.id === l).rank} ${team(l).name}${tries.length ? `, after going 0-${tries.length} against the top 5 earlier this season` : ' for the first time this season'}.` });
+    const vs = cut => before.filter(x => { const o = x.home === w ? x.away : x.home, r = pollFor(s, x.week)[o]; return r && r <= cut; });
+    const won = list => list.filter(x => (+x.homeScore > +x.awayScore ? x.home : x.away) === w).length;
+    if (lr <= 5 && !(wr && wr <= 5)) {
+      const tries = vs(5);
+      if (!won(tries)) notes.push({ p: tries.length ? 89 : 84, title: `${poss(team(w).name)} first win over a top-5 team`, body: `${wr ? '#' + wr + ' ' : ''}${name(w)} knocked off #${lr} ${team(l).name}${tries.length ? `, after going 0-${tries.length} against top-5 teams earlier this season` : ' for the first time this season'}.` });
+    } else if (!wr) {
+      const tries = vs(25);
+      if (!won(tries)) notes.push({ p: tries.length ? 80 : 76, title: `${poss(team(w).name)} first win over a ranked team`, body: `Unranked ${name(w)} took down #${lr} ${team(l).name}${tries.length ? `, after going 0-${tries.length} against ranked teams this season` : ' for its first ranked win of the season'}.` });
+    }
   });
   // Long streak snapped / first win of the season.
   const recBefore = records(s, lw), recNow = records(s, lw + 1);
@@ -699,7 +706,7 @@ export function storylines() {
   // 3) Upset of the Week.
   const info = real.map(g => { const l = lineAt(g), hw = +g.homeScore > +g.awayScore; return { g, l, w: hw ? g.home : g.away, lo: hw ? g.away : g.home, ws: Math.max(+g.homeScore, +g.awayScore), ls: Math.min(+g.homeScore, +g.awayScore), pw: l ? (hw ? l.pHome : 1 - l.pHome) : 0.5 }; });
   const upset = info.filter(x => x.pw < 0.45).sort((a, b) => a.pw - b.pw)[0];
-  if (upset) out.push({ tag: 'Upset of the Week', title: `${team(upset.w).name} stuns ${team(upset.lo).name}`, body: `${name(upset.w)} entered with a ${pctStr(upset.pw)} chance to win (${fmtOdds(upset.w === upset.g.home ? upset.l.mlHome : upset.l.mlAway)}) and won ${upset.ws}-${upset.ls}.` });
+  if (upset) out.push({ tag: 'Upset of the Week', title: `${rankName(upset.w, s, lw)} stuns ${rankName(upset.lo, s, lw)}`, body: `${name(upset.w)} entered with a ${pctStr(upset.pw)} chance to win (${fmtOdds(upset.w === upset.g.home ? upset.l.mlHome : upset.l.mlAway)}) and won ${upset.ws}-${upset.ls}.` });
 
   // 4) Big Cash — the biggest winning bet that settled on last week's games.
   const lastWeekOf = w => w.market === 'parlay' ? Math.max(...(w.legs || []).map(l => D.games.find(x => x.id === l.gameId)?.week ?? -1)) : (D.games.find(x => x.id === w.gameId)?.week ?? -1);

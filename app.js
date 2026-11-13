@@ -3,7 +3,7 @@ import {
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
   gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName
-} from './core.js?v=25';
+} from './core.js?v=27';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['odds', 'Odds'], ['betting', 'Betting'],
