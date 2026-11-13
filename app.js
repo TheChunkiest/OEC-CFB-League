@@ -2,8 +2,8 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen
-} from './core.js?v=7';
+  gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError
+} from './core.js?v=8';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['odds', 'Odds'], ['betting', 'Betting'],
@@ -288,12 +288,12 @@ function futuresSection() {
   const board = futuresBoard();
   let h = `<h2>Season ${n} League Champion</h2>`;
   if (!board.length) return h + `<div class="card empty">Futures are open during the regular season. ${L.phase === PHASES.PRE ? 'They open when the season is published.' : 'Betting has closed for this season; open bets settle when the championship is decided.'}</div>`;
-  const open = futuresOpen();
+  const open = futuresOpen() && futuresPosted();
   h += `<div class="card"><p class="muted small" style="margin-top:0">Pick who wins the ${esc(L.conference)} Championship Game. Odds update after every advance${board[0].posted ? '' : ' (projected until the commissioner posts this week\'s lines)'}. A bet keeps the odds it was placed at, and it pays out when the title game is final. Closes at the end of the regular season.</p>
     <div class="tablewrap"><table><tr><th>Team</th><th>Coach</th><th class="num">Title chance</th><th class="num">Odds</th></tr>
     ${board.map(r => { const t = team(r.id); return `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td>${chip(r.id)}</td><td>${isUserTeam(t) ? esc(t.coach) : '<span class="muted">CPU</span>'}</td><td class="num">${pctStr(r.p)}</td>
       <td class="num">${r.odds == null ? '<span class="muted small">Off the board</span>' : open ? `<button class="pick" data-fut="${esc(r.id)}"><b>${fmtOdds(r.odds)}</b></button>` : `<b>${fmtOdds(r.odds)}</b>`}</td></tr>`; }).join('')}
-    </table></div>${open ? '' : '<p class="muted small">Betting is locked right now.</p>'}</div>`;
+    </table></div>${open ? '' : futuresOpen() ? '<p class="muted small">Futures odds open once the commissioner posts this week\'s lines.</p>' : '<p class="muted small">Betting is locked right now.</p>'}</div>`;
   return h;
 }
 function showFutureSlip(tid) {
@@ -336,14 +336,14 @@ async function placeBet() {
     try {
       await put('wagers', newId(), { uid: me.id, coach: me.name, season: L.season, week: L.week, gameId: '', market: 'future', pick, line: null, odds, stake, status: 'open', payout: 0, ts: Date.now() }, false);
       $('#modal').innerHTML = ''; await reload();
-    } catch (e) { $('#smsg').textContent = 'Could not place wager: ' + e.message; }
+    } catch (e) { $('#smsg').textContent = 'Could not place wager. ' + friendlyError(e); }
     return;
   }
   if (!L.bettingOpen || played(g) || g.week !== L.week) return $('#smsg').textContent = 'This game is locked.';
   try {
     await put('wagers', newId(), { uid: me.id, coach: me.name, season: L.season, week: L.week, gameId: g.id, market, pick, line, odds, stake, status: 'open', payout: 0, ts: Date.now() }, false);
     $('#modal').innerHTML = ''; await reload();
-  } catch (e) { $('#smsg').textContent = 'Could not place wager: ' + e.message; }
+  } catch (e) { $('#smsg').textContent = 'Could not place wager. ' + friendlyError(e); }
 }
 
 /* ---------- chart ---------- */
@@ -455,7 +455,7 @@ document.addEventListener('submit', async e => {
     await loadAll();
     window.addEventListener('hashchange', route);
     route();
-    await watchAuth(async () => { if (D.league.awards?.open && auth.user) await loadBallots(false); route(); });
+    await watchAuth(async () => { if (D.league.awards?.open && auth.user) await loadBallots(false); try { await ensureFutures(); } catch (e) { console.warn('futures post failed', e); } route(); });
   } catch (e) {
     console.error(e);
     $('#view').innerHTML = `<div class="card"><b>Couldn't load league data.</b><p class="muted">${esc(e.message)}. If you opened index.html straight from your computer, publish it with GitHub Pages (or run a local server).</p></div>`;

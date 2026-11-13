@@ -367,6 +367,17 @@ export function futuresOdds(p) {
   const v = 100 * (1 - q) / q;
   return Math.max(100, v >= 1000 ? Math.round(v / 50) * 50 : v >= 300 ? Math.round(v / 10) * 10 : round5(v));
 }
+export function futuresPosted() { const L = D.league, F = L.futures; return DEMO || !!(F && F.season === L.season && F.open && F.odds); }
+// Commissioner's browser posts the futures board if it's missing for this season.
+export async function ensureFutures() {
+  const L = D.league;
+  if (DEMO || !isCommish() || L.phase !== PHASES.REG || futuresPosted()) return false;
+  await put('meta', 'league', { futures: futuresSnapshot() }); return true;
+}
+export function friendlyError(e) {
+  if (e && (e.code === 'permission-denied' || /permission/i.test(e.message || ''))) return 'The league database turned this bet down. Ask the commissioner to check the Firebase rules are up to date and to re-post lines on the Commissioner page (Betting tab).';
+  return (e && e.message) || 'Something went wrong.';
+}
 export function futuresOpen() { const L = D.league; return L.phase === PHASES.REG && L.bettingOpen; }
 export function futuresBoard() {
   const L = D.league; if (L.phase !== PHASES.REG) return [];

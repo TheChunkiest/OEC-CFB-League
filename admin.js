@@ -1,8 +1,8 @@
 import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
-  orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps
-} from './core.js?v=7';
+  orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures
+} from './core.js?v=8';
 import { lookupColor } from './teamcolors.js';
 
 const TABS = [['advance', 'Advance'], ['preseason', 'Preseason'], ['games', 'Games'], ['ratings', 'Ratings'], ['coaches', 'Coaches & Accounts'], ['betting', 'Betting'], ['awards', 'Awards'], ['recruiting', 'Recruiting'], ['settings', 'Settings & History']];
@@ -470,6 +470,7 @@ document.addEventListener('change', e => {
       if (!auth.user) { $('#panel').innerHTML = `<div class="card"><h2>Commissioner Login</h2><p>Log in on the hub with your commissioner account first.</p><a class="btn" style="padding:8px 14px;border-radius:8px" href="index.html#account">Go to login</a></div>`; $('#tabs').innerHTML = ''; return; }
       if (!isCommish()) { $('#panel').innerHTML = `<div class="card"><h2>Commissioner only</h2><p class="muted">Your account doesn't have commissioner access.</p></div>`; $('#tabs').innerHTML = ''; return; }
       if (L().awards?.open) await loadBallots(true);
+      try { if (await ensureFutures()) ST.msg = 'Posted this week\'s League Champion futures odds.'; } catch (e) { ST.msg = 'Could not post futures odds: ' + e.message + ' — check the Firestore rules are the latest version.'; }
       render();
     });
   } catch (e) {
