@@ -685,16 +685,18 @@ async function checkLive() {
   try { const r = await fetch('live.json?t=' + Date.now(), { cache: 'no-store' }); if (r.ok) autoLive = await r.json(); } catch (e) { /* ignore */ }
   showLive();
 }
+// Manual switch expires after 6 hours; the automatic status only counts if the checker confirmed it in the last 25 minutes.
+const MANUAL_TTL = 6 * 3600e3, AUTO_TTL = 25 * 60e3;
 function liveInfo() {
-  const m = D.league.live;
-  if (m && m.on) return { key: 'm:' + (m.url || '') + (m.since || ''), url: m.url || YT_CHANNEL + '/live', title: m.title || 'OEC is live on YouTube' };
-  if (autoLive.live) return { key: 'a:' + autoLive.videoId, url: autoLive.url || YT_CHANNEL + '/live', title: autoLive.title || 'OEC is live on YouTube' };
+  const m = D.league.live, now = Date.now();
+  if (m && m.on && m.since && now - m.since < MANUAL_TTL) return { key: 'm:' + m.since, url: m.url || YT_CHANNEL + '/live', title: m.title || 'OEC is live on YouTube' };
+  if (autoLive.live && autoLive.checkedAt && now - autoLive.checkedAt < AUTO_TTL) return { key: 'a:' + autoLive.videoId, url: autoLive.url || YT_CHANNEL + '/live', title: autoLive.title || 'OEC is live on YouTube' };
   return null;
 }
 function showLive() {
   let el = document.getElementById('livePop');
   const info = liveInfo();
-  let dismissed = ''; try { dismissed = sessionStorage.getItem('oecLiveDismissed') || ''; } catch (e) { /* ignore */ }
+  let dismissed = ''; try { dismissed = localStorage.getItem('oecLiveDismissed') || ''; } catch (e) { /* ignore */ }
   if (!info || dismissed === info.key) { if (el) el.remove(); return; }
   if (!el) { el = document.createElement('div'); el.id = 'livePop'; el.className = 'livepop'; document.body.appendChild(el); }
   el.innerHTML = `<button class="lp-x" data-livex="${esc(info.key)}" aria-label="Close">✕</button>
@@ -730,7 +732,7 @@ async function reload() { await loadAll(); refreshProfile(); if (D.league.awards
 
 document.addEventListener('click', async e => {
   const lx = e.target.closest('[data-livex]');
-  if (lx) { try { sessionStorage.setItem('oecLiveDismissed', lx.dataset.livex); } catch (err) { /* ignore */ } showLive(); return; }
+  if (lx) { try { localStorage.setItem('oecLiveDismissed', lx.dataset.livex); } catch (err) { /* ignore */ } showLive(); return; }
   const t = e.target.closest('[data-sort],[data-metric],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-slip],[data-popular],[data-res],[data-act],[data-close],[data-stake],[data-acct],[data-cancel]');
   if (!t) return;
   const page = (location.hash.slice(1) || 'home').split('/')[0];
