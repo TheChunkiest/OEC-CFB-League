@@ -1,12 +1,12 @@
 import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
-  orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor
-} from './core.js?v=27';
+  orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally
+} from './core.js?v=28';
 import { lookupColor } from './teamcolors.js';
 
-const TABS = [['advance', 'Advance'], ['preseason', 'Preseason'], ['games', 'Games'], ['ratings', 'Ratings'], ['top25', 'Top 25'], ['coaches', 'Coaches & Accounts'], ['betting', 'Betting'], ['awards', 'Awards'], ['settings', 'Settings & History']];
-const ST = { tab: 'advance', desk: 'no', gamesWeek: null, msg: '' };
+const TABS = [['advance', 'Weekly Advance'], ['games', 'Games'], ['top25', 'Top 25'], ['ratings', 'Ratings'], ['betting', 'Betting'], ['coaches', 'Coaches & Accounts'], ['awards', 'Awards'], ['preseason', 'Preseason'], ['settings', 'Settings & History']];
+const ST = { tab: 'advance', desk: 'no', gamesWeek: null, msg: '', step: 1, draft: null, done: null };
 const DEFAULT_AWARDS = ['MVP', 'Offensive Player of the Year', 'Defensive Player of the Year', 'Best Offense', 'Best Defense', 'Game of the Year'];
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -22,8 +22,8 @@ function pollTeams() {
   D.games.filter(g => g.season === s).forEach(g => { ids.add(g.home); ids.add(g.away); });
   return [...ids].map(team);
 }
-function pollEditor(week) {
-  const cur = pollFor(L().season, week);
+function pollEditor(week, override) {
+  const cur = override ? Object.fromEntries(override.map(x => [x.id, x.r])) : pollFor(L().season, week);
   const ts = pollTeams().sort((a, b) => (cur[a.id] || 99) - (cur[b.id] || 99) || a.name.localeCompare(b.name));
   return `<div class="poll">${ts.map(t => `<label class="pollrow"><span><i class="sw" style="background:${esc(teamColor(t))}"></i> ${esc(t.name)} <span class="muted small">${esc(isUserTeam(t) ? t.coach : '')}</span></span>
     <span class="row" style="flex-wrap:nowrap"><b class="muted">#</b><input type="number" inputmode="numeric" min="1" max="25" data-poll="${esc(t.id)}" value="${cur[t.id] || ''}" placeholder="—" style="width:70px"></span></label>`).join('')}</div>
@@ -47,19 +47,19 @@ const pollChanged = (arr, week) => { const cur = pollFor(L().season, week); retu
 function deskBlock() {
   return `<div class="card"><h3 style="margin-top:0">Post a Commissioner's Desk note with this advance?</h3>
     <div class="seg"><button data-desk="yes" class="${ST.desk === 'yes' ? 'on' : ''}">Yes</button><button data-desk="no" class="${ST.desk === 'no' ? 'on' : ''}">No</button></div>
-    <div ${ST.desk === 'yes' ? '' : 'hidden'}><label>Note to the league (shows at the top of the Home page)</label><textarea id="deskText" rows="4" placeholder="Advance times, reminders, trash talk…"></textarea></div>
+    <div ${ST.desk === 'yes' ? '' : 'hidden'}><label>Note to the league (shows at the top of the Home page)</label><textarea id="deskText" rows="4" placeholder="Advance times, reminders, trash talk…">${esc(ST.draft?.desk?.text || '')}</textarea></div>
     <p class="muted small">Choosing No clears last week's note from the Home page.</p></div>`;
 }
 const deskValue = () => ST.desk === 'yes' && $('#deskText')?.value.trim() ? { show: true, text: $('#deskText').value.trim() } : { show: false, text: '' };
-function scoreRows(games) {
+function scoreRows(games, dr) {
   return games.map(g => {
-    const l = lineOf(g);
-    return `<div class="card game"><div class="teams"><div>${esc(team(g.away).name)} <span class="muted small">${g.neutral ? '(neutral)' : '(away)'} ${isUserTeam(team(g.away)) ? '· ' + esc(team(g.away).coach) : ''}</span></div>
-      <div>${esc(team(g.home).name)} <span class="muted small">(home) ${isUserTeam(team(g.home)) ? '· ' + esc(team(g.home).coach) : ''}</span></div>
-      <div class="meta">${l ? `${g.lines ? 'Posted' : 'Projected'} line: ${esc(team(g.home).abbr)} ${fmtLine(l.spread)} · O/U ${l.total}` : ''} ${g.type && g.type !== 'reg' ? '· <span class="tag gold">' + esc(g.type.toUpperCase()) + '</span>' : ''}</div></div>
-      <div><input class="score" type="number" inputmode="numeric" min="0" data-sc="${esc(g.id)}" data-side="away" value="${g.awayScore ?? ''}" placeholder="Away"><br><br>
-      <input class="score" type="number" inputmode="numeric" min="0" data-sc="${esc(g.id)}" data-side="home" value="${g.homeScore ?? ''}" placeholder="Home"><br>
-      <select data-ff="${esc(g.id)}" style="margin-top:6px;font-size:12px;padding:4px"><option value="">Played</option><option value="away" ${g.forfeit && +g.awayScore > +g.homeScore ? 'selected' : ''}>Away FW</option><option value="home" ${g.forfeit && +g.homeScore > +g.awayScore ? 'selected' : ''}>Home FW</option></select></div></div>`;
+    const l = lineOf(g), d = dr && dr.scores[g.id];
+    const av = d ? d.a : (g.awayScore ?? ''), hv = d ? d.h : (g.homeScore ?? ''), ff = d ? d.ff : (g.forfeit ? (+g.awayScore > +g.homeScore ? 'away' : 'home') : '');
+    const row = (side, v) => { const t = team(g[side]); return `<div class="sr"><span class="tn"><i class="sw" style="background:${esc(teamColor(t))}"></i><b>${esc(t.name)}</b> <span class="muted small">${isUserTeam(t) ? esc(t.coach) + ' · ' : ''}${side === 'home' ? (g.neutral ? 'neutral' : 'home') : 'away'}</span></span>
+      <input class="score" type="number" inputmode="numeric" min="0" data-sc="${esc(g.id)}" data-side="${side}" value="${esc(v)}" placeholder="–"></div>`; };
+    return `<div class="card scorecard">${row('away', av)}${row('home', hv)}
+      <div class="row spread" style="margin-top:6px"><span class="meta" style="margin:0">${g.week !== L().week ? `<b class="gstat">Week ${g.week}</b> · ` : ''}${l ? `${g.lines ? 'Line' : 'Projected'}: ${esc(team(g.home).abbr)} ${fmtLine(l.spread)} · O/U ${l.total}` : ''} ${g.type && g.type !== 'reg' ? '· <span class="tag gold">' + esc(g.type.toUpperCase()) + '</span>' : ''}</span>
+      <select data-ff="${esc(g.id)}" style="font-size:13px;padding:4px 8px"><option value="">Played</option><option value="away" ${ff === 'away' ? 'selected' : ''}>Away forfeit win</option><option value="home" ${ff === 'home' ? 'selected' : ''}>Home forfeit win</option></select></div></div>`;
   }).join('');
 }
 function readScores(games) {
@@ -82,21 +82,90 @@ async function saveScoresAndSettle(games) {
   return { saved: ops.length, missing };
 }
 
+/* ---------- Weekly advance wizard: ① Results → ② Next week → ③ Review & confirm ---------- */
+function draft() {
+  const lg = L();
+  if (!ST.draft || ST.draft.week !== lg.week || ST.draft.season !== lg.season) ST.draft = { season: lg.season, week: lg.week, scores: {}, poll: null, desk: { on: false, text: '' } };
+  return ST.draft;
+}
+// This week's games plus any earlier regular-season games still missing a result.
+const wizGames = () => { const s = L().season, W = L().week; return D.games.filter(g => g.season === s && (g.week === W || (g.week < W && !played(g) && (g.type || 'reg') === 'reg'))).sort((a, b) => a.week - b.week); };
+function collectScores() {
+  const dr = draft();
+  wizGames().forEach(g => {
+    const a = $(`[data-sc="${g.id}"][data-side=away]`), h = $(`[data-sc="${g.id}"][data-side=home]`), f = $(`[data-ff="${g.id}"]`);
+    if (!a) return;
+    const v = { a: a.value, h: h.value, ff: f ? f.value : '' };
+    if (!v.ff && v.a !== '' && v.h !== '' && +v.a === +v.h) throw new Error(`${team(g.away).name} @ ${team(g.home).name} is tied — college games can't end tied.`);
+    dr.scores[g.id] = v;
+  });
+}
+function draftScoreOps() {
+  const ops = [];
+  Object.entries(draft().scores).forEach(([id, v]) => {
+    const g = D.games.find(x => x.id === id); if (!g) return;
+    const base = { homeCoach: team(g.home).coach || 'CPU', awayCoach: team(g.away).coach || 'CPU' };
+    if (v.ff) ops.push({ op: 'set', col: 'games', id, data: { ...base, forfeit: true, awayScore: v.ff === 'away' ? 1 : 0, homeScore: v.ff === 'home' ? 1 : 0 } });
+    else if (v.a !== '' && v.h !== '') ops.push({ op: 'set', col: 'games', id, data: { ...base, forfeit: false, awayScore: +v.a, homeScore: +v.h } });
+  });
+  return ops;
+}
+function stepper(n) {
+  const steps = ['Results', 'Next week', 'Review & confirm'];
+  return `<div class="stepper">${steps.map((t, i) => `<div class="st ${i + 1 === n ? 'on' : i + 1 < n ? 'done' : ''}"><b>${i + 1 < n ? '✓' : i + 1}</b><span>${t}</span></div>`).join('<i></i>')}</div>`;
+}
+function wizard() {
+  const lg = L(), s = lg.season, W = lg.week, last = W >= lg.finalWeek, dr = draft(), nextLbl = last ? 'championship week' : `Week ${W + 1}`;
+  if (ST.done) return ST.done;
+  if (ST.step === 1) {
+    const g = wizGames(), cur = g.filter(x => x.week === W), late = g.filter(x => x.week < W);
+    return `${stepper(1)}<div class="card"><h2>Week ${W} results</h2><p class="muted small" style="margin:0">Enter every score (or mark a forfeit). Use <b>Save scores now</b> to lock finished user games mid-week. Betting is <b>${lg.bettingOpen ? 'OPEN' : 'LOCKED'}</b> <button class="sm ghost" data-act="toggleBet">${lg.bettingOpen ? 'Lock betting' : 'Unlock'}</button></p></div>
+      ${late.length ? `<div class="notice">⚠️ ${late.length} earlier game${late.length === 1 ? ' is' : 's are'} still missing a result. Enter ${late.length === 1 ? 'it' : 'them'} here too.</div>${scoreRows(late, dr)}` : ''}
+      ${cur.length ? scoreRows(cur, dr) : '<div class="card empty">No games scheduled this week. Add them on the Games tab, or continue.</div>'}
+      <div class="card row spread"><button class="ghost" data-act="wizSave">Save scores now</button><button data-act="wizNext">Next: set up ${nextLbl} →</button></div>`;
+  }
+  if (ST.step === 2) {
+    const nxt = D.games.filter(g => g.season === s && g.week === W + 1);
+    return `${stepper(2)}<div class="card"><h2>Set up ${nextLbl}</h2>
+        <h3>Top 25 entering ${nextLbl}</h3><p class="muted small" style="margin-top:0">Copy the new in-game poll. Leave everything as-is to keep this week's rankings.</p>${pollEditor(W, dr.poll)}</div>
+      ${deskBlock()}
+      ${last ? `<div class="card"><h3 style="margin-top:0">Up next: championship setup</h3><p class="muted small" style="margin:0">After you confirm, you'll set the championship matchup and the awards ballot.</p></div>` :
+      `<div class="card"><h3 style="margin-top:0">Week ${W + 1} schedule (${nxt.length} game${nxt.length === 1 ? '' : 's'})</h3>${nxt.length ? `<div class="tablewrap"><table>${nxt.map(g => `<tr><td class="wrap">${esc(team(g.away).name)} ${g.neutral ? 'vs' : '@'} ${esc(team(g.home).name)}${isUserTeam(team(g.home)) && isUserTeam(team(g.away)) ? ' <span class="h2h">USER GAME</span>' : ''}</td><td class="num"><button class="sm danger" data-delgame="${esc(g.id)}">✕</button></td></tr>`).join('')}</table></div>` : '<p class="muted">No games scheduled yet.</p>'}
+        <div class="row" style="margin-top:8px"><select id="wA">${teamOpts('', 'Away')}</select> @ <select id="wH">${teamOpts('', 'Home')}</select><button class="ghost sm" data-act="wizAddGame">+ Add game</button></div></div>`}
+      <div class="card row spread"><button class="ghost" data-act="wizBack">← Back</button><button data-act="wizNext">Next: review →</button></div>`;
+  }
+  // Step 3: review
+  const games = wizGames(), sc = dr.scores, ids = new Set();
+  const lines = games.map(g => {
+    const v = sc[g.id] || { a: g.awayScore ?? '', h: g.homeScore ?? '', ff: '' }, a = team(g.away).abbr || team(g.away).name, h = team(g.home).abbr || team(g.home).name;
+    if (v.ff) { ids.add(g.id); return `<li>✅ ${esc(a)} @ ${esc(h)} — <b>${esc(v.ff === 'away' ? a : h)} wins by forfeit</b> <span class="muted small">(bets on this game are refunded)</span></li>`; }
+    if (v.a === '' || v.h === '') return `<li class="err">⚠️ Wk ${g.week}: ${esc(a)} @ ${esc(h)} — no score (bets stay open)</li>`;
+    ids.add(g.id); return `<li>✅ ${g.week < W ? `<span class="muted small">Wk ${g.week}</span> ` : ''}${esc(a)} <b>${esc(v.a)}</b> @ ${esc(h)} <b>${esc(v.h)}</b></li>`;
+  });
+  const missing = lines.filter(x => x.includes('class="err"')).length;
+  const singles = D.wagers.filter(w => w.status === 'open' && ids.has(w.gameId)).length, parl = D.wagers.filter(w => w.status === 'open' && w.market === 'parlay' && (w.legs || []).some(l => ids.has(l.gameId))).length;
+  const cur = pollFor(s, W), np = dr.poll || Object.entries(cur).map(([id, r]) => ({ id, r }));
+  const npm = Object.fromEntries(np.map(x => [x.id, x.r])), allIds = [...new Set([...Object.keys(cur), ...Object.keys(npm)])];
+  const moves = allIds.map(id => ({ id, a: cur[id], b: npm[id] })).filter(x => x.a !== x.b).sort((x, y) => (x.b || 99) - (y.b || 99));
+  const gv = gotwTally(s, W + 1, { includeOpen: true });
+  const nxt = D.games.filter(g => g.season === s && g.week === W + 1);
+  return `${stepper(3)}<div class="card"><h2>Review Week ${W}</h2>
+      <h3>Results (${ids.size} of ${games.length})</h3><ul class="clean review">${lines.join('') || '<li class="muted">No games.</li>'}</ul>
+      <h3>Sportsbook</h3><p style="margin:4px 0">${singles + parl ? `${singles} single bet${singles === 1 ? '' : 's'}${parl ? ` and ${parl} parlay${parl === 1 ? '' : 's'}` : ''} will be graded and paid out.` : 'No open bets on these games.'}${last ? ' Win-total bets settle and League Champion futures close.' : ` Lines post for every upcoming game, and betting opens for Week ${W + 1}.`}</p>
+      <h3>Top 25 entering ${nextLbl}</h3>${moves.length ? `<ul class="clean review">${moves.map(m => `<li>${esc(team(m.id).name)}: ${m.a ? '#' + m.a : 'unranked'} → <b>${m.b ? '#' + m.b : 'unranked'}</b></li>`).join('')}</ul>` : `<p style="margin:4px 0" class="muted">No changes (${Object.keys(cur).length} ranked teams carry over).</p>`}
+      <h3>Commissioner's Desk</h3>${dr.desk.on && dr.desk.text ? `<div class="notice" style="white-space:pre-wrap;margin:4px 0">${esc(dr.desk.text)}</div>` : '<p style="margin:4px 0" class="muted">No note. Last week\'s note will be cleared.</p>'}
+      ${last ? '' : `<h3>Week ${W + 1}</h3><p style="margin:4px 0">${nxt.length} game${nxt.length === 1 ? '' : 's'} scheduled.${gv.total ? ` Game of the Week voting closes: <b>${esc(team(gv.game?.away).name)} @ ${esc(team(gv.game?.home).name)}</b> leads with ${gv.counts[gv.game?.id]} of ${gv.total} votes.` : ' No Game of the Week votes were cast.'}</p>`}
+      ${missing ? `<div class="notice" style="margin-top:12px">⚠️ ${missing} game${missing === 1 ? ' has' : 's have'} no result. You can still advance and enter ${missing === 1 ? 'it' : 'them'} later from the Games tab.</div>` : ''}</div>
+    <div class="card row spread"><button class="ghost" data-act="wizBack">← Back</button><button class="gold" data-act="wizConfirm">✅ Confirm & ${last ? 'end the regular season' : `advance to Week ${W + 1}`}</button></div>`;
+}
+
 /* ---------- views ---------- */
 const views = {
   advance() {
     const lg = L(), s = lg.season;
     if (!D.teams.length) return `<div class="card"><h2>Welcome, Commissioner</h2><p>The database is empty. Load the league history and the current season (Seasons 1–3 through Week 9) from <code>league-data.json</code>. This adds all teams, coaches, divisions, results, champions, awards and "Holy Shit" moments, then posts Week 10 lines.</p><button class="gold" data-act="importSeed">Load league data</button></div>`;
     if (lg.phase === PHASES.PRE) return `<div class="card"><h2>Offseason</h2><p>The ${s} season is wrapped up${D.history.find(h => h.season === s) ? ' and in the history books' : ''}. Fill out the <b>Preseason</b> form to set up next season: coaches, team ratings and the schedule. Publishing it opens Week 0 betting and posts preseason odds.</p><button data-tab="preseason">Open Preseason form →</button></div>`;
-    if (lg.phase === PHASES.REG) {
-      const W = lg.week, games = D.games.filter(g => g.season === s && g.week === W), last = W >= lg.finalWeek;
-      return `<div class="card"><h2>Week ${W} Results</h2><p class="muted">Enter every score for Week ${W}, then submit to advance. Saving a score also locks that game for betting, so you can enter coach-vs-coach results as they finish. Betting is <b>${lg.bettingOpen ? 'OPEN' : 'LOCKED'}</b> <button class="sm ghost" data-act="toggleBet">${lg.bettingOpen ? 'Lock betting' : 'Unlock betting'}</button></p></div>
-        ${games.length ? scoreRows(games) : '<div class="card empty">No games scheduled for this week. Add them on the Games tab, or just advance.</div>'}
-        <div class="card"><details><summary><b>Update the Top 25 for ${last ? 'championship week' : `Week ${W + 1}`}</b> <span class="muted small">(optional — leave as-is to keep this week's rankings)</span></summary>${pollEditor(W)}</details></div>
-        ${deskBlock()}
-        <div class="card row"><button class="ghost" data-act="saveScores">Save scores only</button>
-          <button data-act="advanceWeek">${last ? `Submit Week ${W} & end the regular season` : `Submit Week ${W} & advance to Week ${W + 1}`}</button></div>`;
-    }
+    if (lg.phase === PHASES.REG || ST.done) return wizard();
     if (lg.phase === PHASES.CCG) {
       const ccg = D.games.find(g => g.season === s && g.type === 'ccg');
       if (!ccg) {
@@ -262,6 +331,50 @@ const ACT = {
   },
   async savePoll() { const arr = readPoll(); await put('meta', 'league', { polls: { [pollKey(L().week)]: arr } }); flash(`Top 25 saved (${arr.length} ranked teams).`); },
   async clearPoll() { if (!confirm('Clear every ranking for this week?')) return; await put('meta', 'league', { polls: { [pollKey(L().week)]: [] } }); flash('Top 25 cleared for this week.'); },
+  async wizSave() {
+    collectScores(); const ops = draftScoreOps(); await batch(ops); await batch(settleOps(ops.map(o => o.id)));
+    flash(`Saved ${ops.length} score${ops.length === 1 ? '' : 's'}. Those games are locked and their bets graded.`);
+  },
+  wizNext() {
+    const dr = draft();
+    if (ST.step === 1) { collectScores(); ST.desk = dr.desk.on ? 'yes' : ST.desk; }
+    else if (ST.step === 2) { dr.poll = readPoll(); dr.desk = { on: ST.desk === 'yes', text: ($('#deskText')?.value || '').trim() }; }
+    ST.step = Math.min(3, ST.step + 1); render(); window.scrollTo(0, 0);
+  },
+  wizBack() {
+    const dr = draft();
+    if (ST.step === 2) { try { dr.poll = readPoll(); } catch (e) { /* keep old */ } dr.desk = { on: ST.desk === 'yes', text: ($('#deskText')?.value || '').trim() }; }
+    ST.step = Math.max(1, ST.step - 1); render(); window.scrollTo(0, 0);
+  },
+  async wizAddGame() {
+    const dr = draft(); try { dr.poll = readPoll(); } catch (e) { /* ignore */ } dr.desk = { on: ST.desk === 'yes', text: ($('#deskText')?.value || '').trim() };
+    const h = $('#wH').value, a = $('#wA').value; if (!h || !a || h === a) return alert('Pick two different teams.');
+    const g = { season: L().season, week: L().week + 1, type: 'reg', home: h, away: a, neutral: false, homeScore: null, awayScore: null };
+    await put('games', newId(), g, false); render();
+  },
+  async wizConfirm() {
+    const lg = L(), W = lg.week, last = W >= lg.finalWeek, dr = draft();
+    const ops = draftScoreOps(); await batch(ops); await batch(settleOps(ops.map(o => o.id)));
+    const desk = dr.desk.on && dr.desk.text ? { show: true, text: dr.desk.text } : { show: false, text: '' };
+    if (dr.poll && pollChanged(dr.poll, W)) await put('meta', 'league', { polls: { [pollKey(W + 1)]: dr.poll } });
+    if (last) {
+      await put('meta', 'league', { week: W + 1, phase: PHASES.CCG, bettingOpen: false, desk, futures: { ...(lg.futures || {}), open: false }, winTotals: { season: 0, odds: {} }, awards: { open: false, season: lg.season, categories: lg.awards?.season === lg.season ? (lg.awards.categories || []) : [] } });
+      await batch(settleOps([]));
+    } else {
+      await put('meta', 'league', { week: W + 1, bettingOpen: true, desk });
+      await batch(lineOps(W + 1));
+    }
+    const settled = D.wagers.filter(w => w.settledAt && Date.now() - w.settledAt < 60000).length;
+    ST.draft = null; ST.step = 1; ST.desk = 'no';
+    ST.done = `<div class="card banner"><h2>✅ ${last ? 'Regular season complete' : `Week ${W + 1} is live`}</h2><ul class="clean">
+      <li>${ops.length} result${ops.length === 1 ? '' : 's'} saved; ${settled} bet${settled === 1 ? '' : 's'} graded and paid.</li>
+      ${last ? '<li>Win totals settled and League Champion futures closed.</li>' : `<li>Lines posted for every upcoming game; betting is open for Week ${W + 1}.</li><li>Standings, odds, power rankings and storylines are updated.</li>`}
+      ${dr.poll && pollChanged(dr.poll, W) ? `<li>Top 25 updated (${dr.poll.length} ranked teams).</li>` : '<li>Top 25 carried over.</li>'}
+      <li>${desk.show ? "Commissioner's Desk note posted." : "Commissioner's Desk cleared."}</li></ul>
+      <div class="row" style="margin-top:10px"><a class="btn" style="padding:8px 14px;border-radius:8px" href="index.html" target="_blank">View the site</a><button class="gold" data-act="wizDone">${last ? 'Set up the championship →' : `Start Week ${W + 1} →`}</button></div></div>`;
+    render(); window.scrollTo(0, 0);
+  },
+  wizDone() { ST.done = null; ST.step = 1; render(); },
   async advanceWeek() {
     const lg = L(), W = lg.week, games = D.games.filter(g => g.season === lg.season && g.week === W);
     const poll = $$('[data-poll]').length ? readPoll() : null;

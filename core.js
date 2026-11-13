@@ -565,8 +565,13 @@ export function wagerLabel(w) {
 }
 
 /* ---------------- Game of the Week ---------------- */
-export function gotwTally(season, week) {
+// The Game of the Week for a week is only decided once voting closes (when the league advances into that week).
+export function gotwTally(season, week, { includeOpen = false } = {}) {
   const counts = {};
+  if (!includeOpen && season === D.league.season && week > D.league.week) {
+    D.gotw.filter(v => v.season === season && v.week === week).forEach(v => counts[v.gameId] = (counts[v.gameId] || 0) + 1);
+    return { game: null, counts, total: Object.values(counts).reduce((a, b) => a + b, 0) };
+  }
   D.gotw.filter(v => v.season === season && v.week === week).forEach(v => counts[v.gameId] = (counts[v.gameId] || 0) + 1);
   const games = D.games.filter(g => g.season === season && g.week === week && counts[g.id]);
   if (!games.length) return { game: null, counts, total: 0 };

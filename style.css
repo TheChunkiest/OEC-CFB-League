@@ -275,3 +275,18 @@ td.wrap{white-space:normal;min-width:140px}
 .poll{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:4px 18px}
 .pollrow{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0;padding:6px 0;border-bottom:1px solid var(--line);color:var(--text);font-size:14px}
 details summary{cursor:pointer;padding:4px 0}
+
+/* Weekly advance wizard */
+.stepper{display:flex;align-items:center;gap:8px;margin:0 0 14px;flex-wrap:nowrap}
+.stepper .st{display:flex;align-items:center;gap:8px;color:var(--muted);font-weight:700;font-size:13px;white-space:nowrap}
+.stepper .st b{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#2a2023;color:var(--muted);font-size:13px}
+.stepper .st.on{color:var(--text)} .stepper .st.on b{background:var(--red);color:#fff}
+.stepper .st.done b{background:var(--green);color:#06210f}
+.stepper i{flex:1;height:2px;background:var(--line);min-width:12px}
+ul.review{padding-left:2px;list-style:none;margin:4px 0}
+ul.review li{padding:4px 0;border-bottom:1px dashed var(--line)}
+@media (max-width:640px){ .stepper .st span{display:none} .stepper .st.on span{display:inline} }
+
+.scorecard .sr{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0}
+.scorecard .tn{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0}
+.scorecard input.score{width:76px;font-size:18px;font-weight:800;text-align:center;flex:none}
