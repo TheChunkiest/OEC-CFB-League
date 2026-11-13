@@ -85,6 +85,11 @@ export async function batch(ops) {
   ops.forEach(demoApply); clearCache();
 }
 
+export async function refreshLive() {
+  if (DEMO) return D.league.live;
+  try { const { fs, db } = await fbInit(); const s = await fs.getDoc(fs.doc(db, 'meta', 'league')); if (s.exists()) D.league.live = s.data().live || null; } catch (e) { /* ignore */ }
+  return D.league.live;
+}
 export async function loadBallots(all) {
   if (DEMO) return D.ballots;
   const { fs, db } = await fbInit();

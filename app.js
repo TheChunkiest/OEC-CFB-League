@@ -2,8 +2,8 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError
-} from './core.js?v=9';
+  gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive
+} from './core.js?v=10';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['odds', 'Odds'], ['betting', 'Betting'],
@@ -372,6 +372,31 @@ function trendChart(hist) {
   return svg + `<div class="legend">${teams.map(t => `<span><i class="sw" style="background:${esc(teamColor(t))}"></i>${esc(t.coach)} (${esc(t.abbr || t.name)})</span>`).join('')}</div>`;
 }
 
+/* ---------- YouTube live pop-up ---------- */
+const YT_CHANNEL = 'https://youtube.com/@originalentertainingcrackers';
+let autoLive = { live: false };
+async function checkLive() {
+  try { const r = await fetch('live.json?t=' + Date.now(), { cache: 'no-store' }); if (r.ok) autoLive = await r.json(); } catch (e) { /* ignore */ }
+  showLive();
+}
+function liveInfo() {
+  const m = D.league.live;
+  if (m && m.on) return { key: 'm:' + (m.url || '') + (m.since || ''), url: m.url || YT_CHANNEL + '/live', title: m.title || 'OEC is live on YouTube' };
+  if (autoLive.live) return { key: 'a:' + autoLive.videoId, url: autoLive.url || YT_CHANNEL + '/live', title: autoLive.title || 'OEC is live on YouTube' };
+  return null;
+}
+function showLive() {
+  let el = document.getElementById('livePop');
+  const info = liveInfo();
+  let dismissed = ''; try { dismissed = sessionStorage.getItem('oecLiveDismissed') || ''; } catch (e) { /* ignore */ }
+  if (!info || dismissed === info.key) { if (el) el.remove(); return; }
+  if (!el) { el = document.createElement('div'); el.id = 'livePop'; el.className = 'livepop'; document.body.appendChild(el); }
+  el.innerHTML = `<button class="lp-x" data-livex="${esc(info.key)}" aria-label="Close">✕</button>
+    <div class="lp-badge"><i></i>LIVE NOW</div><div class="lp-title">${esc(info.title)}</div>
+    <a class="btn lp-go" href="${esc(info.url)}" target="_blank" rel="noopener">▶ Watch on YouTube</a>`;
+}
+setInterval(async () => { await refreshLive(); checkLive(); }, 60000);
+
 /* ---------- shell ---------- */
 function header() {
   const L = D.league;
@@ -398,6 +423,8 @@ function route() {
 async function reload() { await loadAll(); refreshProfile(); if (D.league.awards?.open && auth.user) await loadBallots(false); route(); }
 
 document.addEventListener('click', async e => {
+  const lx = e.target.closest('[data-livex]');
+  if (lx) { try { sessionStorage.setItem('oecLiveDismissed', lx.dataset.livex); } catch (err) { /* ignore */ } showLive(); return; }
   const t = e.target.closest('[data-sort],[data-metric],[data-pr],[data-prsort],[data-bet],[data-fut],[data-act],[data-close],[data-stake],[data-acct],[data-cancel]');
   if (!t) return;
   const page = (location.hash.slice(1) || 'home').split('/')[0];
@@ -452,6 +479,7 @@ document.addEventListener('submit', async e => {
     await loadAll();
     window.addEventListener('hashchange', route);
     route();
+    checkLive();
     await watchAuth(async () => { if (D.league.awards?.open && auth.user) await loadBallots(false); try { await ensureFutures(); } catch (e) { console.warn('futures post failed', e); } route(); });
   } catch (e) {
     console.error(e);

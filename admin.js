@@ -2,7 +2,7 @@ import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps
-} from './core.js?v=9';
+} from './core.js?v=10';
 import { lookupColor } from './teamcolors.js';
 
 const TABS = [['advance', 'Advance'], ['preseason', 'Preseason'], ['games', 'Games'], ['ratings', 'Ratings'], ['coaches', 'Coaches & Accounts'], ['betting', 'Betting'], ['awards', 'Awards'], ['settings', 'Settings & History']];
@@ -175,6 +175,12 @@ const views = {
       <label>Rules (one per line)</label><textarea id="stRules" rows="6">${esc((lg.rules && lg.rules.length ? lg.rules : DEFAULT_RULES).join('\n'))}</textarea>
       <label>Extra links on the Rules page (one per line: <code>Label | https://…</code>)</label><textarea id="stLinks" rows="3">${esc((lg.links || []).map(l => l.label + ' | ' + l.url).join('\n'))}</textarea>
       <div class="row" style="margin-top:10px"><button data-act="saveSettings">Save settings</button></div></div>
+      <div class="card"><h2>YouTube Live Pop-up</h2>
+        <p class="muted small">The site checks the OEC channel automatically about every 5 minutes and shows a "Live now" pop-up while you're streaming. Automatic status: <b id="autoLive">checking…</b></p>
+        <p>Manual pop-up is <b>${lg.live?.on ? 'ON' : 'OFF'}</b>. Use this to show it instantly, or if the automatic check misses a stream.</p>
+        <label>Stream link (optional — defaults to the channel's live page)</label><input id="liveUrl" value="${esc(lg.live?.url || '')}" placeholder="https://youtube.com/live/…" style="width:100%">
+        <label>Pop-up text (optional)</label><input id="liveTitle" value="${esc(lg.live?.title || '')}" placeholder="OEC is live on YouTube" style="width:100%">
+        <div class="row" style="margin-top:10px"><button data-act="liveOn">${lg.live?.on ? 'Update pop-up' : 'Turn pop-up ON'}</button>${lg.live?.on ? '<button class="ghost" data-act="liveOff">Turn pop-up OFF</button>' : ''}</div></div>
       <div class="card"><h2>League History</h2><p class="muted small">Seasons are added automatically when you finalize a season. Use this to back-fill past seasons or fix one. Champion line shows as "Coach over Coach — Team 41, Team 27".</p>
         <div class="row"><input id="hSeason" type="number" placeholder="Season" style="width:90px"><select id="hCT">${teamOpts('', 'Champion team')}</select><input id="hCC" placeholder="Champ coach" style="width:120px"><input id="hCS" type="number" placeholder="Pts" style="width:70px"></div>
         <div class="row" style="margin-top:6px"><span style="width:90px"></span><select id="hRT">${teamOpts('', 'Runner-up team')}</select><input id="hRC" placeholder="Runner-up coach" style="width:120px"><input id="hRS" type="number" placeholder="Pts" style="width:70px"><button class="ghost" data-act="addHist">Add / replace season</button></div>
@@ -362,6 +368,8 @@ const ACT = {
   addCat() { const cats = readCats(); cats.push({ key: 'new', label: 'New Award', options: [{ name: '', team: '' }, { name: '', team: '' }, { name: '', team: '' }] }); $('#cats').innerHTML = catEditor(cats); },
   async saveCats() { const cats = readCats(); await put('meta', 'league', { awards: { ...(L().awards || {}), season: L().season, categories: cats } }); flash('Ballot saved.'); },
 
+  async liveOn() { await put('meta', 'league', { live: { on: true, url: $('#liveUrl').value.trim(), title: $('#liveTitle').value.trim(), since: Date.now() } }); flash('Live pop-up is ON for everyone on the site.'); },
+  async liveOff() { await put('meta', 'league', { live: { on: false, url: '', title: '', since: 0 } }); flash('Live pop-up is OFF. (It still appears automatically if the channel is detected live.)'); },
   async saveSettings() {
     await put('meta', 'league', {
       name: $('#stName').value.trim(), rules: $('#stRules').value.split('\n').map(s => s.trim()).filter(Boolean),
@@ -425,6 +433,7 @@ function render() {
   $('#panel').innerHTML = (ST.msg ? `<div class="notice">${esc(ST.msg)}</div>` : '') + views[ST.tab]();
   if (!ST.clear) KEEP.forEach(id => { const el = document.getElementById(id); if (el && kept[id] != null) el.value = kept[id]; });
   ST.msg = ''; ST.clear = false;
+  if ($('#autoLive')) fetch('live.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : { live: false }).then(j => { const el = $('#autoLive'); if (el) el.textContent = j.live ? 'LIVE — ' + (j.title || '') : 'not live'; }).catch(() => { const el = $('#autoLive'); if (el) el.textContent = 'not set up yet'; });
 }
 document.addEventListener('click', async e => {
   const t = e.target.closest('[data-tab],[data-act],[data-desk],[data-delgame],[data-delteam],[data-void],[data-delcat],[data-savehist],[data-delhist]');
