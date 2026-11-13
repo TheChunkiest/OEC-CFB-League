@@ -67,8 +67,9 @@ service cloud.firestore {
     function validBoost(d, L) {
       return !('boost' in d) || (d.boost == 1.1 && L.gotw.season == L.season && L.gotw.week == L.week && L.gotw.gameId != ''
         && ((d.market in ['ml', 'spread', 'total'] && d.gameId == L.gotw.gameId)
-          || (d.market == 'parlay' && d.legs.size() <= 2 && d.legs[0].gameId == L.gotw.gameId
-            && (d.legs.size() < 2 || d.legs[1].gameId == L.gotw.gameId))));
+          || (d.market == 'parlay' && d.legs.size() <= 3 && d.legs[0].gameId == L.gotw.gameId
+            && (d.legs.size() < 2 || d.legs[1].gameId == L.gotw.gameId)
+            && (d.legs.size() < 3 || d.legs[2].gameId == L.gotw.gameId))));
     }
     function validWager(d) {
       let L = league();

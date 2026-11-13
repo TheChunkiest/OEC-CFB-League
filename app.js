@@ -127,7 +127,7 @@ const PAGES = {
     }
     html += !open ? `<div class="card empty">Betting is ${L.phase === PHASES.PRE ? 'closed until the season is published' : 'locked right now'}.</div>` :
       games.length ? `<div class="row" style="margin-bottom:10px"><div class="seg"><button data-mode="single" class="${UI.mode === 'single' ? 'on' : ''}">Single bets</button><button data-mode="parlay" class="${UI.mode === 'parlay' ? 'on' : ''}">Parlay</button></div>
-        ${UI.mode === 'parlay' ? `<span class="muted small">Tap 2–${MAX_LEGS} picks from any upcoming week, plus League Champion and Win Total picks below. Per game: a spread <i>or</i> moneyline, plus the O/U. All must hit; payouts multiply.</span>` : ''}</div>
+        ${UI.mode === 'parlay' ? `<span class="muted small">Tap 2–${MAX_LEGS} picks from any upcoming week, plus League Champion and Win Total picks below. Per game: one spread, one moneyline and one O/U, but not the spread and moneyline on the same team. All must hit; payouts multiply.</span>` : ''}</div>
         <div class="row" style="margin-bottom:10px"><b>Bet on</b><select data-betweek="1">${bwks.map(w => `<option value="${w}" ${w === bw ? 'selected' : ''}>Week ${w}${w === L.week ? ' (this week)' : ''}</option>`).join('')}</select>
         <span class="muted small">${bw === L.week ? 'This week\'s games.' : 'Early lines: they move after every advance, but your bet keeps the line you took.'}</span></div><div class="card"><div class="betgrid"><div class="hdr">Spread</div><div class="hdr">Moneyline</div><div class="hdr">Total</div>
         ${games.slice().sort((x, y) => (y.id === gotwGameId()) - (x.id === gotwGameId())).map(g => betRows(g)).join('')}</div></div>` : '<div class="card empty">No open games this week.</div>';
@@ -554,7 +554,8 @@ function showFutureSlip(tid) {
     <p>To win: <b id="towin"></b></p><div class="row"><button data-act="place">Place wager</button><button class="ghost" data-close="1">Cancel</button><span id="smsg" class="err"></span></div></div></div>`;
   updToWin();
 }
-const legGroup = l => l.market === 'future' ? 'future' : l.market === 'wins' ? 'wins:' + l.team : l.market === 'total' ? 'total' : 'side';
+// One pick per market per game (spread, moneyline, O/U); one title pick; one win-total pick per team.
+const legGroup = l => l.market === 'future' ? 'future' : l.market === 'wins' ? 'wins:' + l.team : `${l.market}:${l.gameId}`;
 const legWeek = l => l.market === 'future' ? 'Title' : l.market === 'wins' ? 'Wins' : 'Wk ' + (D.games.find(x => x.id === l.gameId)?.week ?? '?');
 function legFor(gid, market, pick, tid) {
   if (market === 'wins') { const r = winsBoard().find(x => x.id === tid); return r && r.o ? { gameId: '', market, pick, team: tid, line: r.o.line, odds: pick === 'over' ? r.o.over : r.o.under } : null; }
@@ -564,15 +565,17 @@ function legFor(gid, market, pick, tid) {
 }
 // One spread-or-moneyline pick and one total per game; one League Champion pick per parlay.
 function toggleLeg(gid, market, pick, tid) {
-  const grp = legGroup({ market, team: tid });
-  const i = UI.legs.findIndex(x => legGroup(x) === grp && (grp === 'future' || grp.startsWith('wins:') || x.gameId === gid));
-  if (i >= 0 && UI.legs[i].market === market && UI.legs[i].pick === pick) UI.legs.splice(i, 1);
-  else {
-    const leg = legFor(gid, market, pick, tid); if (!leg) return;
-    if (i >= 0) UI.legs[i] = leg;
-    else if (UI.legs.length >= MAX_LEGS) return alert(`Parlays max out at ${MAX_LEGS} legs.`);
-    else UI.legs.push(leg);
-  }
+  const grp = legGroup({ market, team: tid, gameId: gid });
+  const i = UI.legs.findIndex(x => legGroup(x) === grp);
+  if (i >= 0 && UI.legs[i].market === market && UI.legs[i].pick === pick) { UI.legs.splice(i, 1); route(); return; }
+  const leg = legFor(gid, market, pick, tid); if (!leg) return;
+  // Spread and moneyline on the SAME team can't be combined: the new pick replaces the old one.
+  const clash = (market === 'ml' || market === 'spread') ? UI.legs.findIndex(x => x.gameId === gid && x.market === (market === 'ml' ? 'spread' : 'ml') && x.pick === pick) : -1;
+  if (i >= 0) UI.legs[i] = leg;
+  else if (clash >= 0) UI.legs[clash] = leg;
+  else if (UI.legs.length >= MAX_LEGS) return alert(`Parlays max out at ${MAX_LEGS} legs.`);
+  else UI.legs.push(leg);
+  if (i >= 0 && clash >= 0) UI.legs.splice(clash, 1);
   route();
 }
 function parlayBar() {
