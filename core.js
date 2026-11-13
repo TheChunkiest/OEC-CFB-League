@@ -520,6 +520,8 @@ export function settleFuturesOps(season, champId) {
     return { op: 'set', col: 'wagers', id: w.id, data: { status: st, payout: st === 'won' ? profit(w.stake, w.odds) : st === 'lost' ? -w.stake : 0 } };
   });
 }
+// When a bet was placed, in the viewer's own time zone (e.g. "Nov 12, 9:41 PM").
+export const fmtTime = ts => ts ? new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
 // Leg-by-leg breakdown for a parlay (HTML), with ✅ ❌ ➖ ⏳ status icons.
 export function legsHtml(w) {
   if (w.market !== 'parlay') return '';
