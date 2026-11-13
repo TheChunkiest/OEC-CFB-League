@@ -1,8 +1,8 @@
 import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
-  orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps
-} from './core.js?v=16';
+  orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml
+} from './core.js?v=17';
 import { lookupColor } from './teamcolors.js';
 
 const TABS = [['advance', 'Advance'], ['preseason', 'Preseason'], ['games', 'Games'], ['ratings', 'Ratings'], ['coaches', 'Coaches & Accounts'], ['betting', 'Betting'], ['awards', 'Awards'], ['settings', 'Settings & History']];
@@ -152,7 +152,7 @@ const views = {
     return `<div class="card"><h2>Sportsbook Controls</h2><p>Betting is <b>${lg.bettingOpen ? 'OPEN' : 'LOCKED'}</b> for ${esc(weekLabel())}.</p><div class="row"><button data-act="toggleBet">${lg.bettingOpen ? 'Lock betting' : 'Unlock betting'}</button>
       <button class="ghost" data-act="repost">Re-post lines for ${esc(weekLabel())}</button></div><p class="muted small">Re-posting recalculates lines for this week's unplayed games (use after adding games mid-week or fixing ratings). Existing wagers keep the line they were placed at.</p></div>
       <div class="card"><h3 style="margin-top:0">${s} wagers (${wk.length})</h3>${wk.length ? `<div class="tablewrap"><table><tr><th>Wk</th><th>Coach</th><th>Bet</th><th class="num">Stake</th><th class="num">Status</th><th></th></tr>
-        ${wk.map(w => `<tr><td>${w.week}</td><td>${esc(w.coach)}</td><td>${esc(wagerLabel(w))}</td><td class="num">${w.stake}</td><td class="num"><span class="pill ${w.status}">${w.status}${w.payout ? ' ' + (w.payout > 0 ? '+' : '') + w.payout : ''}</span></td><td>${w.status !== 'void' ? `<button class="sm danger" data-void="${esc(w.id)}">Void</button>` : ''}</td></tr>`).join('')}</table></div>` : '<p class="muted">No wagers yet.</p>'}</div>`;
+        ${wk.map(w => `<tr><td>${w.week}</td><td>${esc(w.coach)}</td><td style="white-space:normal">${esc(wagerLabel(w))}${legsHtml(w)}</td><td class="num">${w.stake}</td><td class="num"><span class="pill ${w.status}">${w.status}${w.payout ? ' ' + (w.payout > 0 ? '+' : '') + w.payout : ''}</span></td><td>${w.status !== 'void' ? `<button class="sm danger" data-void="${esc(w.id)}">Void</button>` : ''}</td></tr>`).join('')}</table></div>` : '<p class="muted">No wagers yet.</p>'}</div>`;
   },
 
   awards() {

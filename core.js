@@ -520,6 +520,13 @@ export function settleFuturesOps(season, champId) {
     return { op: 'set', col: 'wagers', id: w.id, data: { status: st, payout: st === 'won' ? profit(w.stake, w.odds) : st === 'lost' ? -w.stake : 0 } };
   });
 }
+// Leg-by-leg breakdown for a parlay (HTML), with ✅ ❌ ➖ ⏳ status icons.
+export function legsHtml(w) {
+  if (w.market !== 'parlay') return '';
+  const wk = l => l.market === 'future' ? 'Title' : l.market === 'wins' ? 'Wins' : 'Wk ' + (D.games.find(x => x.id === l.gameId)?.week ?? '?');
+  const ic = r => r === 'won' ? '✅' : r === 'lost' ? '❌' : r === 'push' || r === 'void' ? '➖' : '⏳';
+  return `<div class="muted small" style="white-space:normal">${(w.legs || []).map(l => `${ic(l.result)} ${wk(l)}: ${esc(wagerLabel({ ...l, season: w.season }))}`).join('<br>')}</div>`;
+}
 export function wagerLabel(w) {
   if (w.market === 'wins') return `${team(w.team).name} ${w.pick === 'over' ? 'Over' : 'Under'} ${w.line} wins (${fmtOdds(w.odds)})`;
   if (w.market === 'parlay') return `${(w.legs || []).length}-leg parlay (${fmtOdds(w.odds)})`;
