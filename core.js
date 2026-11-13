@@ -389,11 +389,11 @@ export function settleOps(gameIds) {
   D.wagers.filter(w => w.status === 'open' && ids.has(w.gameId)).forEach(w => {
     const g = D.games.find(x => x.id === w.gameId); if (!g || !played(g)) return;
     const st = g.forfeit ? 'void' : grade(w, g), payout = st === 'won' ? profit(w.stake, w.odds) : st === 'lost' ? -w.stake : 0;
-    ops.push({ op: 'set', col: 'wagers', id: w.id, data: { status: st, payout } });
+    ops.push({ op: 'set', col: 'wagers', id: w.id, data: { status: st, payout, settledAt: Date.now() } });
   });
   D.wagers.filter(w => w.status === 'open' && w.market === 'wins').forEach(w => {
     const st = winsResult(w, w.season); if (st === 'open') return;
-    ops.push({ op: 'set', col: 'wagers', id: w.id, data: { status: st, payout: st === 'won' ? profit(w.stake, w.odds) : -w.stake } });
+    ops.push({ op: 'set', col: 'wagers', id: w.id, data: { status: st, payout: st === 'won' ? profit(w.stake, w.odds) : -w.stake, settledAt: Date.now() } });
   });
   return ops.concat(parlayOps());
 }
@@ -426,7 +426,7 @@ export function parlayOps(regrade = false) {
   return D.wagers.filter(w => w.market === 'parlay' && (regrade ? w.status !== 'void' : w.status === 'open')).map(w => {
     const r = evalParlay(w);
     const same = r.status === w.status && r.payout === (w.payout || 0) && r.legs.every((l, i) => l.result === (w.legs[i] || {}).result);
-    return same ? null : { op: 'set', col: 'wagers', id: w.id, data: { status: r.status, payout: r.payout, legs: r.legs } };
+    return same ? null : { op: 'set', col: 'wagers', id: w.id, data: { status: r.status, payout: r.payout, legs: r.legs, ...(r.status !== w.status && r.status !== 'open' ? { settledAt: Date.now() } : {}) } };
   }).filter(Boolean);
 }
 export function bankroll(uid, season = D.league.season) {
@@ -524,7 +524,7 @@ export function winsResult(l, season) {
 export function settleFuturesOps(season, champId) {
   return D.wagers.filter(w => w.market === 'future' && w.season === season && w.status === 'open').map(w => {
     const st = !champId ? 'void' : w.pick === champId ? 'won' : 'lost';
-    return { op: 'set', col: 'wagers', id: w.id, data: { status: st, payout: st === 'won' ? profit(w.stake, w.odds) : st === 'lost' ? -w.stake : 0 } };
+    return { op: 'set', col: 'wagers', id: w.id, data: { status: st, payout: st === 'won' ? profit(w.stake, w.odds) : st === 'lost' ? -w.stake : 0, settledAt: Date.now() } };
   });
 }
 // When a bet was placed, in the viewer's own time zone (e.g. "Nov 12, 9:41 PM").

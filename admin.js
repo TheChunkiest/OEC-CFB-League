@@ -2,7 +2,7 @@ import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime
-} from './core.js?v=23';
+} from './core.js?v=24';
 import { lookupColor } from './teamcolors.js';
 
 const TABS = [['advance', 'Advance'], ['preseason', 'Preseason'], ['games', 'Games'], ['ratings', 'Ratings'], ['coaches', 'Coaches & Accounts'], ['betting', 'Betting'], ['awards', 'Awards'], ['settings', 'Settings & History']];
@@ -341,7 +341,7 @@ const ACT = {
     const ids = new Set(ops.map(o => o.id)), reg = [];
     D.wagers.filter(w => ids.has(w.gameId) && w.status !== 'void' && w.market !== 'parlay').forEach(w => {
       const g = D.games.find(x => x.id === w.gameId), st = g.forfeit ? 'void' : grade(w, g);
-      reg.push({ op: 'set', col: 'wagers', id: w.id, data: { status: st, payout: st === 'won' ? profit(w.stake, w.odds) : st === 'lost' ? -w.stake : 0 } });
+      reg.push({ op: 'set', col: 'wagers', id: w.id, data: { status: st, payout: st === 'won' ? profit(w.stake, w.odds) : st === 'lost' ? -w.stake : 0, ...(st !== w.status ? { settledAt: Date.now() } : {}) } });
     });
     reg.push(...parlayOps(true));
     await batch(reg); flash(`Saved ${ops.length} score(s); ${reg.length} wager(s) graded.`);
@@ -446,9 +446,9 @@ document.addEventListener('click', async e => {
     if (t.dataset.tab) { ST.tab = t.dataset.tab; ST.msg = ''; render(); if (t.dataset.tab === 'awards') { try { await loadBallots(true); } catch (err) { console.error(err); ST.msg = 'Could not load ballots from Firebase (' + err.message + '). Make sure the latest Firestore rules are published.'; } render(); } }
     else if (t.dataset.desk) { ST.desk = t.dataset.desk; const keep = $('#deskText')?.value; $$('[data-desk]').forEach(b => b.classList.toggle('on', b.dataset.desk === ST.desk)); $('#deskText').parentElement.hidden = ST.desk !== 'yes'; if (keep) $('#deskText').value = keep; }
     else if (t.dataset.act) { t.disabled = true; await ACT[t.dataset.act](); }
-    else if (t.dataset.delgame) { if (confirm('Delete this game? Open wagers on it will be voided.')) { await batch([{ op: 'del', col: 'games', id: t.dataset.delgame }, ...D.wagers.filter(w => w.gameId === t.dataset.delgame && w.status === 'open').map(w => ({ op: 'set', col: 'wagers', id: w.id, data: { status: 'void', payout: 0 } }))]); await batch(parlayOps()); render(); } }
+    else if (t.dataset.delgame) { if (confirm('Delete this game? Open wagers on it will be voided.')) { await batch([{ op: 'del', col: 'games', id: t.dataset.delgame }, ...D.wagers.filter(w => w.gameId === t.dataset.delgame && w.status === 'open').map(w => ({ op: 'set', col: 'wagers', id: w.id, data: { status: 'void', payout: 0, settledAt: Date.now() } }))]); await batch(parlayOps()); render(); } }
     else if (t.dataset.delteam) { const id = t.dataset.delteam; if (D.games.some(g => g.home === id || g.away === id)) return alert('This team has games scheduled. Delete those first.'); if (confirm('Delete ' + team(id).name + '?')) { if (D.teams.find(x => x.id === id)?._new) D.teams = D.teams.filter(x => x.id !== id); else await batch([{ op: 'del', col: 'teams', id }]); render(); } }
-    else if (t.dataset.void) { if (confirm('Void this wager and refund the stake?')) { await put('wagers', t.dataset.void, { status: 'void', payout: 0 }); render(); } }
+    else if (t.dataset.void) { if (confirm('Void this wager and refund the stake?')) { await put('wagers', t.dataset.void, { status: 'void', payout: 0, settledAt: Date.now() }); render(); } }
     else if (t.dataset.delcat) { const c = readCats(); c.splice(+t.dataset.delcat, 1); $('#cats').innerHTML = catEditor(c); }
     else if (t.dataset.savehist) { const v = JSON.parse($(`[data-hist="${t.dataset.savehist}"]`).value); await put('history', t.dataset.savehist, v, false); flash('History saved.'); }
     else if (t.dataset.delhist) { if (confirm('Delete this season from History?')) { await batch([{ op: 'del', col: 'history', id: t.dataset.delhist }]); render(); } }

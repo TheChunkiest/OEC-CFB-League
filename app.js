@@ -3,7 +3,7 @@ import {
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
   gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey
-} from './core.js?v=23';
+} from './core.js?v=24';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['odds', 'Odds'], ['betting', 'Betting'],
@@ -25,7 +25,6 @@ function gameCard(g, opts = {}) {
   if (isUserTeam(h) && isUserTeam(a)) tags.push('<span class="h2h">USER GAME</span>');
   if (g.type === 'ccg') tags.push('<span class="tag gold">League Championship</span>');
   if (g.type === 'bowl') tags.push('<span class="tag">Postseason</span>');
-  if (opts.gotw) tags.push('<span class="tag gold">Game of the Week</span>');
   const coach = t => isUserTeam(t) ? ` <span class="muted small">${esc(t.coach)}</span>` : '';
   const l = lineOf(g);
   let meta = '';
@@ -395,55 +394,78 @@ function wrapText(ctx, text, maxW) {
 }
 async function drawSlip(w) {
   const rows = slipRows(w), W = 1080, P = 64, F = '"Arial Black","Segoe UI Black",Impact,system-ui,sans-serif', B = 'system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
+  const st = w.status || 'open', settled = st !== 'open';
   const toWin = w.market === 'parlay' ? parlayProfit(w.stake, w.legs || []) : profit(w.stake, w.odds);
+  const legRes = w.market === 'parlay' ? (w.legs || []).map(l => l.result || 'open') : [st];
+  const icons = settled || legRes.some(r => r !== 'open');
+  const band = { won: ['#1f9d55', `WINNER · +${(w.payout || 0).toLocaleString()} CREDITS`], lost: ['#a3141c', 'LOST'], push: ['#4a4245', 'PUSH · STAKE REFUNDED'], void: ['#4a4245', 'VOID · STAKE REFUNDED'] }[st];
   const c = document.createElement('canvas'), ctx = c.getContext('2d');
-  // measure height
+  const tx = P + (icons ? 92 : 36);
   ctx.font = `700 40px ${B}`;
-  const rowH = rows.map(r => 40 + wrapText(ctx, r.t, W - P * 2 - 220).length * 50 + (r.s ? 44 : 0));
-  const H = 330 + 150 + rowH.reduce((a, b) => a + b, 0) + 300 + 170;
+  const rowH = rows.map(r => 40 + wrapText(ctx, r.t, W - tx - P - 190).length * 50 + (r.s ? 44 : 0));
+  const H = 330 + (band ? 130 : 0) + 150 + rowH.reduce((a, b) => a + b, 0) + 300 + (w.settledAt ? 210 : 170);
   c.width = W; c.height = H;
-  // background
   const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#1d0809'); bg.addColorStop(0.35, '#121011'); bg.addColorStop(1, '#09090a');
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = '#d3121c'; ctx.fillRect(0, 300, W, 8); ctx.fillStyle = '#f5b82e'; ctx.fillRect(0, 314, W, 5);
-  // header
   const logo = await loadImg('logo.png');
   if (logo) { const lh = 220, lw = lh * logo.width / logo.height; ctx.drawImage(logo, P - 10, 40, lw, lh); }
   ctx.textAlign = 'right'; ctx.fillStyle = '#fff'; ctx.font = `900 54px ${F}`; ctx.fillText('OEC SPORTSBOOK', W - P, 130);
   ctx.fillStyle = '#f5b82e'; ctx.font = `700 34px ${B}`; ctx.fillText(`Season ${seasonNum(w.season)} · Placed in Week ${w.week}`, W - P, 185);
   ctx.fillStyle = '#a69a9c'; ctx.font = `600 30px ${B}`; ctx.fillText(`Coach ${w.coach || ''}`, W - P, 235);
-  // title
-  let y = 400; ctx.textAlign = 'left';
-  ctx.fillStyle = '#43c97e'; ctx.font = `800 30px ${B}`; ctx.fillText('✓ BET PLACED', P, y);
+  let y = 319;
+  if (band) {
+    ctx.fillStyle = band[0]; ctx.fillRect(0, y, W, 130);
+    ctx.fillStyle = 'rgba(255,255,255,.12)'; for (let k = -W; k < W * 2; k += 60) { ctx.beginPath(); ctx.moveTo(k, y); ctx.lineTo(k + 30, y); ctx.lineTo(k - 100, y + 130); ctx.lineTo(k - 130, y + 130); ctx.fill(); }
+    ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.font = `900 ${st === 'won' ? 58 : 52}px ${F}`; ctx.fillText(band[1], W / 2, y + 86); ctx.textAlign = 'left';
+    y += 130;
+  }
+  y += 81; ctx.textAlign = 'left';
+  const status = { open: ['#43c97e', '✓ BET PLACED'], won: ['#43c97e', '✓ SETTLED · WON'], lost: ['#ff5a5f', '✕ SETTLED · LOST'], push: ['#a69a9c', 'SETTLED · PUSH'], void: ['#a69a9c', 'SETTLED · VOID'] }[st] || ['#43c97e', ''];
+  ctx.fillStyle = status[0]; ctx.font = `800 30px ${B}`; ctx.fillText(status[1], P, y);
   y += 70; ctx.fillStyle = '#fff'; ctx.font = `900 50px ${F}`;
   ctx.fillText(w.market === 'parlay' ? `${rows.length}-LEG PARLAY` : 'SINGLE BET', P, y);
   ctx.textAlign = 'right'; ctx.fillStyle = '#f5b82e'; ctx.fillText(fmtOdds(w.odds), W - P, y); ctx.textAlign = 'left';
   y += 40;
-  // legs
+  const drawIcon = (r, cx, cy) => {
+    if (r === 'open') { ctx.strokeStyle = '#6b6264'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(cx, cy, 20, 0, Math.PI * 2); ctx.stroke(); return; }
+    ctx.fillStyle = r === 'won' ? '#1f9d55' : r === 'lost' ? '#c4161c' : '#5a5254'; ctx.beginPath(); ctx.arc(cx, cy, 22, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.beginPath();
+    if (r === 'won') { ctx.moveTo(cx - 10, cy + 1); ctx.lineTo(cx - 3, cy + 9); ctx.lineTo(cx + 11, cy - 9); }
+    else if (r === 'lost') { ctx.moveTo(cx - 8, cy - 8); ctx.lineTo(cx + 8, cy + 8); ctx.moveTo(cx + 8, cy - 8); ctx.lineTo(cx - 8, cy + 8); }
+    else { ctx.moveTo(cx - 9, cy); ctx.lineTo(cx + 9, cy); }
+    ctx.stroke(); ctx.lineCap = 'butt';
+  };
   rows.forEach((r, i) => {
-    const top = y, h = rowH[i];
+    const top = y, h = rowH[i], res = legRes[i] || 'open';
     ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(P, top, W - P * 2, h - 16);
-    ctx.fillStyle = '#d3121c'; ctx.fillRect(P, top, 8, h - 16);
-    ctx.font = `700 40px ${B}`; ctx.fillStyle = '#fff';
-    const lines = wrapText(ctx, r.t, W - P * 2 - 220); let ly = top + 62;
-    lines.forEach(t => { ctx.fillText(t, P + 36, ly); ly += 50; });
-    if (r.s) { ctx.font = `500 28px ${B}`; ctx.fillStyle = '#a69a9c'; wrapText(ctx, r.s, W - P * 2 - 80).slice(0, 1).forEach(t => ctx.fillText(t, P + 36, ly - 4)); }
+    ctx.fillStyle = res === 'won' ? '#1f9d55' : res === 'lost' ? '#c4161c' : '#d3121c'; ctx.fillRect(P, top, 8, h - 16);
+    if (icons) drawIcon(res, P + 52, top + 48);
+    ctx.font = `700 40px ${B}`; ctx.fillStyle = res === 'lost' ? '#bdb3b5' : '#fff';
+    const lines = wrapText(ctx, r.t, W - tx - P - 190); let ly = top + 62;
+    lines.forEach(t => { ctx.fillText(t, tx, ly); ly += 50; });
+    if (r.s) { ctx.font = `500 28px ${B}`; ctx.fillStyle = '#a69a9c'; wrapText(ctx, r.s, W - tx - P - 40).slice(0, 1).forEach(t => ctx.fillText(t, tx, ly - 4)); }
     ctx.textAlign = 'right'; ctx.font = `900 40px ${F}`; ctx.fillStyle = '#f5b82e'; ctx.fillText(fmtOdds(r.o), W - P - 30, top + 62); ctx.textAlign = 'left';
     y += h;
   });
-  // money boxes
   y += 30; const bw = (W - P * 2 - 40) / 3;
-  [['WAGER', w.stake], ['TO WIN', toWin], ['TOTAL PAYOUT', w.stake + toWin]].forEach(([k, v], i) => {
-    const x = P + i * (bw + 20);
-    ctx.fillStyle = i === 2 ? '#f5b82e' : 'rgba(255,255,255,0.07)'; ctx.fillRect(x, y, bw, 190);
-    ctx.fillStyle = i === 2 ? '#140b00' : '#a69a9c'; ctx.font = `800 26px ${B}`; ctx.textAlign = 'center'; ctx.fillText(k, x + bw / 2, y + 62);
-    ctx.fillStyle = i === 2 ? '#140b00' : '#fff'; ctx.font = `900 58px ${F}`; ctx.fillText(Number(v).toLocaleString(), x + bw / 2, y + 140);
-    ctx.font = `600 22px ${B}`; ctx.fillText('credits', x + bw / 2, y + 172);
+  const boxes = st === 'won' ? [['WAGER', w.stake], ['WON', w.payout || 0], ['TOTAL PAID', w.stake + (w.payout || 0)]]
+    : st === 'lost' ? [['WAGER', w.stake], ['WOULD HAVE WON', toWin], ['PAID', 0]]
+    : st === 'push' || st === 'void' ? [['WAGER', w.stake], ['RESULT', st.toUpperCase()], ['REFUNDED', w.stake]]
+    : [['WAGER', w.stake], ['TO WIN', toWin], ['TOTAL PAYOUT', w.stake + toWin]];
+  const hiCol = st === 'won' ? '#43c97e' : st === 'lost' ? '#3a2326' : '#f5b82e', hiText = st === 'lost' ? '#ffadb0' : '#140b00';
+  boxes.forEach(([k, v], i) => {
+    const x = P + i * (bw + 20), hi = i === 2;
+    ctx.fillStyle = hi ? hiCol : 'rgba(255,255,255,0.07)'; ctx.fillRect(x, y, bw, 190);
+    ctx.fillStyle = hi ? hiText : '#a69a9c'; ctx.font = `800 ${k.length > 12 ? 21 : 26}px ${B}`; ctx.textAlign = 'center'; ctx.fillText(k, x + bw / 2, y + 62);
+    ctx.fillStyle = hi ? hiText : '#fff'; ctx.font = `900 ${typeof v === 'string' ? 44 : 58}px ${F}`; ctx.fillText(typeof v === 'string' ? v : Number(v).toLocaleString(), x + bw / 2, y + 140);
+    if (typeof v !== 'string') { ctx.font = `600 22px ${B}`; ctx.fillText('credits', x + bw / 2, y + 172); }
   });
   ctx.textAlign = 'left'; y += 250;
-  // footer
   ctx.strokeStyle = '#33242a'; ctx.lineWidth = 2; ctx.setLineDash([12, 10]); ctx.beginPath(); ctx.moveTo(P, y - 30); ctx.lineTo(W - P, y - 30); ctx.stroke(); ctx.setLineDash([]);
-  ctx.fillStyle = '#d9d0d1'; ctx.font = `600 30px ${B}`; ctx.fillText('Placed ' + new Date(w.ts || Date.now()).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }), P, y + 20);
+  const when = ts => new Date(ts).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
+  ctx.fillStyle = '#d9d0d1'; ctx.font = `600 30px ${B}`; ctx.fillText('Placed ' + when(w.ts || Date.now()), P, y + 20);
+  if (w.settledAt) { ctx.fillText('Settled ' + when(w.settledAt), P, y + 62); y += 42; }
   ctx.fillStyle = '#a69a9c'; ctx.font = `500 26px ${B}`; ctx.fillText('Bet ID ' + String(w.id || '').toUpperCase(), P, y + 70);
   ctx.textAlign = 'right'; ctx.fillText('OEC CFB League Hub', W - P, y + 70); ctx.textAlign = 'left';
   return c;
@@ -453,9 +475,37 @@ async function showSlipImage(w) {
   const c = await drawSlip(w), url = c.toDataURL('image/png');
   UI.slipCanvas = c;
   $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card" style="max-width:460px;max-height:92vh;overflow:auto">
-    <h2>${w.status === 'open' || !w.status ? 'Bet placed!' : 'Bet slip'}</h2><img src="${url}" alt="Bet slip" style="width:100%;border-radius:10px;display:block">
+    <h2>${w.status === 'open' || !w.status ? 'Bet placed!' : w.status === 'won' ? '🎉 Winner!' : 'Bet slip'}</h2><img src="${url}" alt="Bet slip" style="width:100%;border-radius:10px;display:block">
     <div class="row" style="margin-top:12px"><button class="gold" data-act="saveSlip">⬇ Save image</button><button class="ghost" data-close="1">Done</button></div>
     <p class="muted small">On iPhone, you can also press and hold the image → <b>Save to Photos</b>.</p></div></div>`;
+}
+/* ---------- "You won!" results pop-up after an advance ---------- */
+function unseenResults() {
+  const me = auth.profile; if (!me) return { list: [], key: '' };
+  const key = 'oecSeenResults_' + me.id;
+  let last = 0; try { last = +localStorage.getItem(key) || 0; } catch (e) { /* ignore */ }
+  if (!last) last = Date.now() - 7 * 864e5; // first visit on this device: last 7 days
+  return { key, list: D.wagers.filter(w => w.uid === me.id && w.status !== 'open' && w.settledAt && w.settledAt > last).sort((a, b) => (b.payout || 0) - (a.payout || 0)) };
+}
+async function showResultsPopup() {
+  if ($('#modal').innerHTML) return;
+  const { key, list } = unseenResults();
+  try { localStorage.setItem(key, String(Date.now())); } catch (e) { /* ignore */ }
+  const wins = list.filter(w => w.status === 'won');
+  if (!wins.length) return;
+  UI.results = { wins, i: 0, others: list.filter(w => w.status !== 'won') };
+  await renderResult();
+}
+async function renderResult() {
+  const R = UI.results, w = R.wins[R.i], total = R.wins.reduce((a, x) => a + (x.payout || 0), 0);
+  const c = await drawSlip(w); UI.slipCanvas = c;
+  const lost = R.others.filter(x => x.status === 'lost').length, ref = R.others.filter(x => x.status === 'push' || x.status === 'void').length;
+  $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card" style="max-width:460px;max-height:92vh;overflow:auto">
+    <h2>🎉 ${R.wins.length === 1 ? 'Your bet cashed!' : `${R.wins.length} bets cashed!`}</h2>
+    <p style="margin-top:0">You won <b class="win">+${total.toLocaleString()} credits</b> since your last visit.${lost || ref ? ` <span class="muted small">Also settled: ${[lost ? lost + ' lost' : '', ref ? ref + ' refunded' : ''].filter(Boolean).join(', ')}.</span>` : ''}</p>
+    <img src="${c.toDataURL('image/png')}" alt="Winning bet slip" style="width:100%;border-radius:10px;display:block">
+    ${R.wins.length > 1 ? `<div class="row spread" style="margin-top:10px"><button class="sm ghost" data-res="-1" ${R.i === 0 ? 'disabled' : ''}>‹ Prev</button><span class="muted small">${R.i + 1} of ${R.wins.length}</span><button class="sm ghost" data-res="1" ${R.i === R.wins.length - 1 ? 'disabled' : ''}>Next ›</button></div>` : ''}
+    <div class="row" style="margin-top:12px"><button class="gold" data-act="saveSlip">⬇ Save image</button><a class="btn ghost" style="padding:8px 14px;border-radius:8px" href="#betting" data-close="1">My bets</a><button class="ghost" data-close="1">Close</button></div></div></div>`;
 }
 function showPlacedSlip() { const w = UI.placed; UI.placed = null; if (w) showSlipImage(w); }
 async function saveSlip() {
@@ -680,7 +730,7 @@ async function reload() { await loadAll(); refreshProfile(); if (D.league.awards
 document.addEventListener('click', async e => {
   const lx = e.target.closest('[data-livex]');
   if (lx) { try { sessionStorage.setItem('oecLiveDismissed', lx.dataset.livex); } catch (err) { /* ignore */ } showLive(); return; }
-  const t = e.target.closest('[data-sort],[data-metric],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-slip],[data-popular],[data-act],[data-close],[data-stake],[data-acct],[data-cancel]');
+  const t = e.target.closest('[data-sort],[data-metric],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-slip],[data-popular],[data-res],[data-act],[data-close],[data-stake],[data-acct],[data-cancel]');
   if (!t) return;
   const page = (location.hash.slice(1) || 'home').split('/')[0];
   if (t.dataset.sort) {
@@ -695,6 +745,7 @@ document.addEventListener('click', async e => {
   else if (t.dataset.bet) { const [g, m, p] = t.dataset.bet.split('|'); if (UI.mode === 'parlay') toggleLeg(g, m, p); else showSlip(g, m, p); }
   else if (t.dataset.wins) { const [tid, pk] = t.dataset.wins.split('|'); if (UI.mode === 'parlay') toggleLeg('', 'wins', pk, tid); else showWinsSlip(tid, pk); }
   else if (t.dataset.popular) betPopular();
+  else if (t.dataset.res) { UI.results.i = Math.max(0, Math.min(UI.results.wins.length - 1, UI.results.i + +t.dataset.res)); renderResult(); }
   else if (t.dataset.mode) { UI.mode = t.dataset.mode; route(); }
   else if (t.dataset.stake) { $('#stake').value = t.dataset.stake; updToWin(); }
   else if (t.dataset.close && e.target === t) $('#modal').innerHTML = '';
@@ -742,7 +793,7 @@ document.addEventListener('submit', async e => {
     window.addEventListener('hashchange', route);
     route();
     checkLive();
-    await watchAuth(async () => { if (D.league.awards?.open && auth.user) await loadBallots(false); try { await ensureFutures(); } catch (e) { console.warn('futures post failed', e); } route(); });
+    await watchAuth(async () => { if (D.league.awards?.open && auth.user) await loadBallots(false); try { await ensureFutures(); } catch (e) { console.warn('futures post failed', e); } route(); showResultsPopup(); });
   } catch (e) {
     console.error(e);
     $('#view').innerHTML = `<div class="card"><b>Couldn't load league data.</b><p class="muted">${esc(e.message)}. If you opened index.html straight from your computer, publish it with GitHub Pages (or run a local server).</p></div>`;
