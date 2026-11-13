@@ -3,7 +3,7 @@ import {
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
   gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey
-} from './core.js?v=22';
+} from './core.js?v=23';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['odds', 'Odds'], ['betting', 'Betting'],
@@ -47,6 +47,7 @@ function sortRows(rows, st, getters) {
   const f = getters[st.key] || (r => r[st.key]);
   return rows.slice().sort((a, b) => { const x = f(a), y = f(b); return (typeof x === 'string' ? x.localeCompare(y) : x - y) * st.dir; });
 }
+const subSm = txt => txt ? `<div class="show-sm muted small">${txt}</div>` : '';
 const mvHtml = m => m > 0 ? `<span class="up">+${m}</span>` : m < 0 ? `<span class="down">${m}</span>` : '<span class="muted">–</span>';
 
 /* ---------- pages ---------- */
@@ -76,8 +77,8 @@ const PAGES = {
       const ordered = orderGroup(ids, s).map((id, i) => ({ id, place: i + 1, ...R[id], name: team(id).name, coach: team(id).coach || 'CPU', cpct: R[id].cw + R[id].cl ? R[id].cw / (R[id].cw + R[id].cl) : 0, opct: R[id].w + R[id].l ? R[id].w / (R[id].w + R[id].l) : 0, diff: R[id].pf - R[id].pa, stk: streak(R[id]) }));
       const rows = sortRows(ordered, st, { stk: r => (r.stk[0] === 'W' ? 1 : -1) * (+r.stk.slice(1) || 0) });
       return `<div class="card"><h3 style="margin-top:0">${esc(d ? D.league.conference + ' ' + d : D.league.conference)}</h3><div class="tablewrap"><table>
-        <tr>${sortTh(st, 'place', '#')}${sortTh(st, 'name', 'Team')}${sortTh(st, 'coach', 'Coach')}${sortTh(st, 'cpct', 'Conf', 'num')}${sortTh(st, 'opct', 'Overall', 'num')}${sortTh(st, 'pf', 'PF', 'num')}${sortTh(st, 'pa', 'PA', 'num')}${sortTh(st, 'diff', 'Diff', 'num')}${sortTh(st, 'stk', 'Strk', 'num')}</tr>
-        ${rows.map(r => `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td class="rank">${r.place}</td><td>${chip(r.id)}</td><td>${isUserTeam(team(r.id)) ? `<a href="#coach/${slug(r.coach)}">${esc(r.coach)}</a>` : '<span class="muted">CPU</span>'}</td><td class="num">${r.cw}-${r.cl}</td><td class="num">${r.w}-${r.l}</td><td class="num">${r.pf}</td><td class="num">${r.pa}</td><td class="num">${r.diff > 0 ? '+' : ''}${r.diff}</td><td class="num">${r.stk}</td></tr>`).join('')}
+        <tr>${sortTh(st, 'place', '#')}${sortTh(st, 'name', 'Team')}${sortTh(st, 'coach', 'Coach', 'hide-sm')}${sortTh(st, 'cpct', 'Conf', 'num')}${sortTh(st, 'opct', 'Ovr', 'num')}${sortTh(st, 'pf', 'PF', 'num hide-sm')}${sortTh(st, 'pa', 'PA', 'num hide-sm')}${sortTh(st, 'diff', 'Diff', 'num')}${sortTh(st, 'stk', 'Strk', 'num hide-xs')}</tr>
+        ${rows.map(r => `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td class="rank">${r.place}</td><td>${chip(r.id)}${subSm(isUserTeam(team(r.id)) ? esc(r.coach) : 'CPU')}</td><td class="hide-sm">${isUserTeam(team(r.id)) ? `<a href="#coach/${slug(r.coach)}">${esc(r.coach)}</a>` : '<span class="muted">CPU</span>'}</td><td class="num">${r.cw}-${r.cl}</td><td class="num">${r.w}-${r.l}</td><td class="num hide-sm">${r.pf}</td><td class="num hide-sm">${r.pa}</td><td class="num">${r.diff > 0 ? '+' : ''}${r.diff}</td><td class="num hide-xs">${r.stk}</td></tr>`).join('')}
       </table></div></div>`;
     }).join('');
   },
@@ -103,11 +104,11 @@ const PAGES = {
     return `<h2>${pre ? 'Preseason Odds' : 'Season Odds'}</h2>
       <p class="muted small">${pre ? 'Built from team overall, offense and defense ratings and the full schedule, before any Week 0 games.' : 'Re-simulated 1,500 times after every advance using results so far.'} "League Title" means winning the ${esc(L.conference)} Championship Game.</p>
       <div class="card"><div class="tablewrap"><table>
-        <tr>${sortTh(st, 'name', 'Team')}${sortTh(st, 'coach', 'Coach')}${sortTh(st, 'likely', 'Likely Record', 'num')}${sortTh(st, 'expW', 'Proj. Wins', 'num')}${sortTh(st, 'divPct', divLbl, 'num')}${sortTh(st, 'ccgPct', 'Make Title Game', 'num')}${sortTh(st, 'titlePct', 'League Title', 'num')}</tr>
-        ${rows.map(r => `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td>${chip(r.id)}</td><td>${isUserTeam(team(r.id)) ? esc(r.coach) : '<span class="muted">CPU</span>'}</td><td class="num">${r.likely}</td><td class="num">${r.expW.toFixed(1)}</td><td class="num">${pctStr(r.divPct)}</td><td class="num">${pctStr(r.ccgPct)}</td><td class="num"><b>${pctStr(r.titlePct)}</b></td></tr>`).join('')}
+        <tr>${sortTh(st, 'name', 'Team')}${sortTh(st, 'coach', 'Coach', 'hide-sm')}${sortTh(st, 'likely', 'Likely', 'num')}${sortTh(st, 'expW', 'Proj. W', 'num hide-xs')}${sortTh(st, 'divPct', divLbl.replace('Reg. Season Title', 'Div'), 'num')}${sortTh(st, 'ccgPct', 'Make Title Game', 'num hide-sm')}${sortTh(st, 'titlePct', 'Title', 'num')}</tr>
+        ${rows.map(r => `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td>${chip(r.id)}${subSm(isUserTeam(team(r.id)) ? esc(r.coach) + ' · ' + r.expW.toFixed(1) + ' proj. W' : 'CPU')}</td><td class="hide-sm">${isUserTeam(team(r.id)) ? esc(r.coach) : '<span class="muted">CPU</span>'}</td><td class="num">${r.likely}</td><td class="num hide-xs">${r.expW.toFixed(1)}</td><td class="num">${pctStr(r.divPct)}</td><td class="num hide-sm">${pctStr(r.ccgPct)}</td><td class="num"><b>${pctStr(r.titlePct)}</b></td></tr>`).join('')}
       </table></div></div>
       <h2>Coach Odds Trend</h2><div class="card chart"><div class="row spread"><div class="seg">
-        ${[['titlePct', 'League Title %'], ['divPct', divLbl + ' %'], ['expW', 'Projected Wins']].map(([k, l]) => `<button data-metric="${k}" class="${UI.metric === k ? 'on' : ''}">${l}</button>`).join('')}
+        ${[['titlePct', 'League Title %', 'Title %'], ['divPct', divLbl + ' %', 'Div %'], ['expW', 'Projected Wins', 'Proj. W']].map(([k, l, sm]) => `<button data-metric="${k}" class="${UI.metric === k ? 'on' : ''}"><span class="hide-sm">${l}</span><span class="show-sm">${sm}</span></button>`).join('')}
       </div><span class="muted small">Odds entering each week · ${s} season · resets each new season</span></div>${trendChart(hist)}</div>`;
   },
 
@@ -134,17 +135,17 @@ const PAGES = {
     html += winsSection();
     if (me && me.teamId) {
       const mine = D.wagers.filter(w => w.uid === me.id && w.season === s).sort((a, b) => b.week - a.week || (b.ts || 0) - (a.ts || 0));
-      html += `<h2>My Wagers</h2><div class="card">${mine.length ? `<div class="tablewrap"><table><tr><th>Wk</th><th>Bet</th><th>Placed</th><th class="num">Stake</th><th class="num">Result</th><th></th></tr>
+      html += `<h2>My Wagers</h2><div class="card">${mine.length ? `<div class="tablewrap"><table class="bets"><tr><th class="hide-sm">Wk</th><th>Bet</th><th class="hide-sm">Placed</th><th class="num">Stake</th><th class="num">Result</th><th></th></tr>
         ${mine.map(w => { const g = D.games.find(x => x.id === w.gameId); const canCancel = w.status === 'open' && w.market !== 'parlay' && (w.market === 'future' || w.market === 'wins' ? futuresOpen() : open && g && !played(g));
-          return `<tr><td>${w.market === 'future' ? 'Fut' : w.market === 'wins' ? 'Wins' : w.market === 'parlay' ? 'Par' : (g ? g.week : w.week)}</td><td>${esc(wagerLabel(w))}${legsHtml(w)}</td><td class="muted small">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num"><span class="pill ${w.status}">${w.status === 'open' ? 'Open · to win ' + (w.market === 'parlay' ? parlayProfit(w.stake, w.legs || []) : Math.round(w.odds > 0 ? w.stake * w.odds / 100 : w.stake * 100 / -w.odds)) : (w.status === 'void' ? 'VOID · REFUNDED' : w.status.toUpperCase()) + (w.payout ? ' ' + (w.payout > 0 ? '+' : '') + w.payout : '')}</span></td><td class="row" style="flex-wrap:nowrap"><button class="sm ghost" data-slip="${esc(w.id)}" title="Bet slip image">🧾</button>${canCancel ? `<button class="sm ghost" data-cancel="${esc(w.id)}">Cancel</button>` : ''}</td></tr>`; }).join('')}
+          return `<tr><td class="hide-sm">${w.market === 'future' ? 'Fut' : w.market === 'wins' ? 'Wins' : w.market === 'parlay' ? 'Par' : (g ? g.week : w.week)}</td><td class="wrap">${esc(wagerLabel(w))}${legsHtml(w)}${subSm(fmtTime(w.ts))}</td><td class="muted small hide-sm">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num"><span class="pill ${w.status}">${w.status === 'open' ? 'Open · to win ' + (w.market === 'parlay' ? parlayProfit(w.stake, w.legs || []) : Math.round(w.odds > 0 ? w.stake * w.odds / 100 : w.stake * 100 / -w.odds)) : (w.status === 'void' ? 'VOID · REFUNDED' : w.status.toUpperCase()) + (w.payout ? ' ' + (w.payout > 0 ? '+' : '') + w.payout : '')}</span></td><td class="row" style="flex-wrap:nowrap"><button class="sm ghost" data-slip="${esc(w.id)}" title="Bet slip image">🧾</button>${canCancel ? `<button class="sm ghost" data-cancel="${esc(w.id)}">Cancel</button>` : ''}</td></tr>`; }).join('')}
       </table></div>` : '<div class="muted">No wagers yet this season.</div>'}</div>`;
     }
     const board = D.users.filter(u => u.teamId).map(u => ({ u, b: bankroll(u.id) })).sort((a, b) => b.b.balance - a.b.balance);
-    html += `<h2>Season ${seasonNum()} Leaderboard</h2><div class="card"><div class="tablewrap"><table><tr><th>#</th><th>Coach</th><th class="num">W-L-P</th><th class="num">Net</th><th class="num">ROI</th><th class="num">Balance</th></tr>
-      ${board.map((x, i) => `<tr class="${me && me.id === x.u.id ? 'me' : ''}"><td class="rank">${i + 1}</td><td><a href="#coach/${slug(x.u.name)}">${esc(x.u.name)}</a> <span class="muted small">${esc(team(x.u.teamId).name)}</span></td><td class="num">${x.b.w}-${x.b.l}-${x.b.p}</td><td class="num ${x.b.net >= 0 ? 'win' : 'loss'}">${x.b.net >= 0 ? '+' : ''}${x.b.net}</td><td class="num">${x.b.risked ? Math.round(x.b.net / x.b.risked * 100) + '%' : '–'}</td><td class="num"><b>${x.b.balance.toLocaleString()}</b></td></tr>`).join('')}
+    html += `<h2>Season ${seasonNum()} Leaderboard</h2><div class="card"><div class="tablewrap"><table><tr><th>#</th><th>Coach</th><th class="num">W-L-P</th><th class="num hide-xs">Net</th><th class="num hide-sm">ROI</th><th class="num">Balance</th></tr>
+      ${board.map((x, i) => `<tr class="${me && me.id === x.u.id ? 'me' : ''}"><td class="rank">${i + 1}</td><td><a href="#coach/${slug(x.u.name)}">${esc(x.u.name)}</a> <span class="muted small hide-sm">${esc(team(x.u.teamId).name)}</span>${subSm(esc(team(x.u.teamId).name))}</td><td class="num">${x.b.w}-${x.b.l}-${x.b.p}</td><td class="num hide-xs ${x.b.net >= 0 ? 'win' : 'loss'}">${x.b.net >= 0 ? '+' : ''}${x.b.net}</td><td class="num hide-sm">${x.b.risked ? Math.round(x.b.net / x.b.risked * 100) + '%' : '–'}</td><td class="num"><b>${x.b.balance.toLocaleString()}</b></td></tr>`).join('')}
     </table></div></div>`;
     const wk = D.wagers.filter(w => w.season === s && w.week === L.week);
-    if (wk.length) html += `<h2>Bets Placed This Week</h2><div class="card"><div class="tablewrap"><table><tr><th>Coach</th><th>Bet</th><th>Placed</th><th class="num">Stake</th><th class="num">Status</th></tr>${wk.slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)).map(w => `<tr><td>${esc(w.coach || '')}</td><td style="white-space:normal">${esc(wagerLabel(w))}${legsHtml(w)}</td><td class="muted small">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num"><span class="pill ${w.status}">${w.status}</span></td></tr>`).join('')}</table></div></div>`;
+    if (wk.length) html += `<h2>Bets Placed This Week</h2><div class="card"><div class="tablewrap"><table class="bets"><tr><th>Coach</th><th>Bet</th><th class="hide-sm">Placed</th><th class="num">Stake</th><th class="num hide-xs">Status</th></tr>${wk.slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)).map(w => `<tr><td>${esc(w.coach || '')}</td><td class="wrap">${esc(wagerLabel(w))}${legsHtml(w)}${subSm(fmtTime(w.ts))}</td><td class="muted small hide-sm">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num hide-xs"><span class="pill ${w.status}">${w.status}</span></td></tr>`).join('')}</table></div></div>`;
     return html;
   },
 
@@ -155,8 +156,8 @@ const PAGES = {
     const lw = (() => { const w = seasonGames().filter(played).map(g => g.week); return w.length ? Math.max(...w) : null; })();
     return `<h2>Power Rankings</h2><p class="muted small">${lw == null ? 'Preseason order from team ratings.' : `Through Week ${lw}.`} Generated from team strength (adjusted every game by how each team performed versus expectations), recent form (last 3 games versus the spread) and record — not record alone. "Move" is the change since the previous week.</p>
       <div class="row" style="margin-bottom:10px"><div class="seg"><button data-prsort="rank" class="${st.key === 'rank' ? 'on' : ''}">Sort by rank</button><button data-prsort="move" class="${st.key === 'move' ? 'on' : ''}">Sort by movement</button></div></div>
-      <div class="card"><div class="tablewrap"><table><tr>${sortTh(st, 'rank', '#')}${sortTh(st, 'name', 'Team')}${sortTh(st, 'coach', 'Coach')}${sortTh(st, 'wp', 'Record', 'num')}${sortTh(st, 'hot', 'Form', 'num')}${sortTh(st, 'move', '+/−', 'num')}</tr>
-      ${rows.map(r => `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td class="rank">${r.rank}</td><td>${chip(r.id)}</td><td>${isUserTeam(team(r.id)) ? esc(r.coach) : '<span class="muted">CPU</span>'}</td><td class="num">${rec(r.rec)}</td>
+      <div class="card"><div class="tablewrap"><table><tr>${sortTh(st, 'rank', '#')}${sortTh(st, 'name', 'Team')}${sortTh(st, 'coach', 'Coach', 'hide-sm')}${sortTh(st, 'wp', 'Rec', 'num')}${sortTh(st, 'hot', 'Form', 'num')}${sortTh(st, 'move', '+/−', 'num')}</tr>
+      ${rows.map(r => `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td class="rank">${r.rank}</td><td>${chip(r.id)}${subSm(isUserTeam(team(r.id)) ? esc(r.coach) : 'CPU')}</td><td class="hide-sm">${isUserTeam(team(r.id)) ? esc(r.coach) : '<span class="muted">CPU</span>'}</td><td class="num">${rec(r.rec)}</td>
         <td class="num">${r.hot >= 4 ? '🔥 ' : r.hot <= -4 ? '🧊 ' : ''}<span class="${r.hot > 0 ? 'up' : r.hot < 0 ? 'down' : 'muted'}">${r.hot > 0 ? '+' : ''}${r.hot.toFixed(1)}</span></td><td class="num">${mvHtml(r.move)}</td></tr>`).join('')}
       </table></div><p class="muted small">Form = average points per game better (+) or worse (−) than expected over the last 3 games.</p></div>`;
   },
@@ -184,7 +185,7 @@ const PAGES = {
         const home = g.home === id, opp = home ? g.away : g.home, done = played(g), l = lineOf(g);
         const my = home ? +g.homeScore : +g.awayScore, th = home ? +g.awayScore : +g.homeScore;
         const myLine = l ? (home ? l.spread : -l.spread) : null;
-        return `<tr><td>${g.week}</td><td>${g.neutral ? 'vs' : home ? 'vs' : '@'} ${chip(opp)}</td><td class="muted">${l ? fmtLine(myLine) + ' · ' + fmtOdds(home ? l.mlHome : l.mlAway) : ''}</td><td class="num">${done ? `<span class="${my > th ? 'win' : 'loss'}">${my > th ? 'W' : 'L'} ${g.forfeit ? '(forfeit)' : my + '-' + th}</span>` : '<span class="muted">—</span>'}</td></tr>`;
+        return `<tr><td>${g.week}</td><td>${g.neutral ? 'vs' : home ? 'vs' : '@'} ${chip(opp)}</td><td class="muted">${l ? fmtLine(myLine) + `<span class="hide-sm"> · ${fmtOdds(home ? l.mlHome : l.mlAway)}</span>` : ''}</td><td class="num">${done ? `<span class="${my > th ? 'win' : 'loss'}">${my > th ? 'W' : 'L'} ${g.forfeit ? '(forfeit)' : my + '-' + th}</span>` : '<span class="muted">—</span>'}</td></tr>`;
       }).join('')}</table></div></div>`;
   },
 
@@ -239,10 +240,10 @@ const PAGES = {
     const H = D.history.slice().sort((a, b) => b.season - a.season), C = Object.values(coachStats()).sort((a, b) => b.titles - a.titles || (b.w / Math.max(1, b.w + b.l)) - (a.w / Math.max(1, a.w + a.l)));
     const champLine = h => h.champCoach ? `${esc(h.champCoach)} over ${esc(h.runnerCoach || 'CPU')} — ${esc(team(h.champTeam).name)} ${h.champScore ?? ''}, ${esc(team(h.runnerTeam).name)} ${h.runnerScore ?? ''}` : esc(h.summary || '');
     return `<h2>League Champions</h2><div class="card">${H.length ? H.map(h => `<div class="champ"><div class="yr">S${seasonNum(h.season)}<div class="muted small" style="font-family:system-ui">${h.season}</div></div><div><b>${champLine(h)}</b>${h.notes ? `<div class="muted small">${esc(h.notes)}</div>` : ''}</div></div>`).join('') : '<div class="muted">No completed seasons yet.</div>'}</div>
-      <h2>All-Time Coaches</h2><div class="card"><div class="tablewrap"><table><tr><th>Coach</th><th class="num">Seasons</th><th class="num">W-L</th><th class="num">Win %</th><th class="num">Titles</th></tr>
-        ${C.map(c => `<tr><td><a href="#coach/${slug(c.name)}">${esc(c.name)}</a></td><td class="num">${c.seasons.size}</td><td class="num">${c.w}-${c.l}</td><td class="num">${c.w + c.l ? (c.w / (c.w + c.l) * 100).toFixed(1) + '%' : '–'}</td><td class="num">${c.titles ? '🏆'.repeat(Math.min(c.titles, 5)) : '–'}</td></tr>`).join('')}
+      <h2>All-Time Coaches</h2><div class="card"><div class="tablewrap"><table><tr><th>Coach</th><th class="num hide-sm">Seasons</th><th class="num">W-L</th><th class="num">Win %</th><th class="num">Titles</th></tr>
+        ${C.map(c => `<tr><td><a href="#coach/${slug(c.name)}">${esc(c.name)}</a></td><td class="num hide-sm">${c.seasons.size}</td><td class="num">${c.w}-${c.l}</td><td class="num">${c.w + c.l ? (c.w / (c.w + c.l) * 100).toFixed(1) + '%' : '–'}</td><td class="num">${c.titles ? '🏆'.repeat(Math.min(c.titles, 5)) : '–'}</td></tr>`).join('')}
       </table></div><p class="muted small">Tap a coach for their profile and head-to-head records.</p></div>
-      <h2>Season Awards</h2>${H.filter(h => (h.awards || []).length).map(h => `<div class="card"><h3 style="margin-top:0">${h.season}</h3><div class="tablewrap"><table>${h.awards.map(a => `<tr><td>${esc(a.award)}</td><td><b>${esc(a.winner)}</b></td><td>${a.team ? chip(a.team) : ''}</td><td class="num muted small">${a.votes != null ? a.votes + (a.votes === 1 ? ' vote' : ' votes') : ''}</td></tr>`).join('')}</table></div></div>`).join('') || '<div class="card muted">No awards yet.</div>'}
+      <h2>Season Awards</h2>${H.filter(h => (h.awards || []).length).map(h => `<div class="card"><h3 style="margin-top:0">${h.season}</h3><div class="tablewrap"><table>${h.awards.map(a => `<tr><td class="wrap">${esc(a.award)}</td><td class="wrap"><b>${esc(a.winner)}</b>${subSm(a.team ? esc(team(a.team).name) : '')}</td><td class="hide-sm">${a.team ? chip(a.team) : ''}</td><td class="num muted small hide-sm">${a.votes != null ? a.votes + (a.votes === 1 ? ' vote' : ' votes') : ''}</td></tr>`).join('')}</table></div></div>`).join('') || '<div class="card muted">No awards yet.</div>'}
       <h2>"Holy Shit" Moments</h2>${H.filter(h => (h.moments || []).length).map(h => `<div class="card"><h3 style="margin-top:0">${h.season}</h3>${h.moments.map(m => `<div class="story"><p>${esc(m.text)}</p>${m.coach ? `<div class="muted small">— ${esc(m.coach)}</div>` : ''}</div>`).join('')}</div>`).join('') || '<div class="card muted">None yet.</div>'}`;
   },
 
@@ -290,8 +291,8 @@ function futuresSection() {
   if (!board.length) return h + `<div class="card empty">Futures are open during the regular season. ${L.phase === PHASES.PRE ? 'They open when the season is published.' : 'Betting has closed for this season; open bets settle when the championship is decided.'}</div>`;
   const open = futuresOpen() && futuresPosted();
   h += `<div class="card"><p class="muted small" style="margin-top:0">Pick who wins the ${esc(L.conference)} Championship Game. Odds update after every advance${board[0].posted ? '' : ' (projected until the commissioner posts this week\'s lines)'}. A bet keeps the odds it was placed at, and it pays out when the title game is final. Closes at the end of the regular season.</p>
-    <div class="tablewrap"><table><tr><th>Team</th><th>Coach</th><th class="num">Title chance</th><th class="num">Odds</th></tr>
-    ${board.map(r => { const t = team(r.id); return `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td>${chip(r.id)}</td><td>${isUserTeam(t) ? esc(t.coach) : '<span class="muted">CPU</span>'}</td><td class="num">${pctStr(r.p)}</td>
+    <div class="tablewrap"><table><tr><th>Team</th><th class="hide-sm">Coach</th><th class="num">Chance</th><th class="num">Odds</th></tr>
+    ${board.map(r => { const t = team(r.id); return `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td>${chip(r.id)}${subSm(isUserTeam(t) ? esc(t.coach) : 'CPU')}</td><td class="hide-sm">${isUserTeam(t) ? esc(t.coach) : '<span class="muted">CPU</span>'}</td><td class="num">${pctStr(r.p)}</td>
       <td class="num">${r.odds == null ? '<span class="muted small">Off the board</span>' : open ? `<button class="pick${UI.mode === 'parlay' && UI.legs.some(x => x.market === 'future' && x.pick === r.id) ? ' sel' : ''}" data-fut="${esc(r.id)}"><b>${fmtOdds(r.odds)}</b></button>` : `<b>${fmtOdds(r.odds)}</b>`}</td></tr>`; }).join('')}
     </table></div>${open ? '' : futuresOpen() ? '<p class="muted small">Futures odds open once the commissioner posts this week\'s lines.</p>' : '<p class="muted small">Betting is locked right now.</p>'}</div>`;
   return h;
@@ -304,8 +305,8 @@ function winsSection() {
   const btn = (r, pick) => { const o = r.o; if (!o) return ''; const odds = pick === 'over' ? o.over : o.under;
     return open ? `<button class="pick${UI.mode === 'parlay' && UI.legs.some(x => x.market === 'wins' && x.team === r.id && x.pick === pick) ? ' sel' : ''}" data-wins="${esc(r.id)}|${pick}">${pick === 'over' ? 'O' : 'U'} ${o.line} <b>${fmtOdds(odds)}</b></button>` : `${pick === 'over' ? 'O' : 'U'} ${o.line} <b>${fmtOdds(odds)}</b>`; };
   h += `<div class="card"><p class="muted small" style="margin-top:0">Regular-season wins (user games only), over/under the line. Lines are set from the projected wins on the Odds page and move after every advance; your bet keeps the line you took. Settles as soon as it's decided, or at the end of the regular season.</p>
-    <div class="tablewrap"><table><tr><th>Team</th><th class="num">Record</th><th class="num">Proj.</th><th class="num">Over</th><th class="num">Under</th></tr>
-    ${rows.map(r => `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td>${chip(r.id)} <span class="muted small">${esc(team(r.id).coach || '')}</span></td><td class="num">${r.w}-${(regRec(r.id)).l}</td><td class="num">${r.proj.toFixed(1)}</td>
+    <div class="tablewrap"><table><tr><th>Team</th><th class="num hide-sm">Record</th><th class="num hide-sm">Proj.</th><th class="num">Over</th><th class="num">Under</th></tr>
+    ${rows.map(r => `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td>${chip(r.id)} <span class="muted small hide-sm">${esc(team(r.id).coach || '')}</span>${subSm(`${esc(team(r.id).coach || '')} · ${r.w}-${regRec(r.id).l} · proj ${r.proj.toFixed(1)}`)}</td><td class="num hide-sm">${r.w}-${(regRec(r.id)).l}</td><td class="num hide-sm">${r.proj.toFixed(1)}</td>
       ${r.o ? `<td class="num">${btn(r, 'over')}</td><td class="num">${btn(r, 'under')}</td>` : '<td class="num muted small" colspan="2">Off the board</td>'}</tr>`).join('')}
     </table></div>${open ? '' : futuresOpen() ? '<p class="muted small">Win totals open once the commissioner posts this week\'s lines.</p>' : '<p class="muted small">Betting is locked right now.</p>'}</div>`;
   return h;
@@ -601,7 +602,7 @@ function trendChart(hist) {
   if (!hist.length) return '<div class="empty">The chart starts once the season schedule is published.</div>';
   const teams = userTeams(); if (!teams.length) return '<div class="empty">No coaches assigned yet.</div>';
   const k = UI.metric, isW = k === 'expW';
-  const W = 760, H = 320, P = { l: 44, r: 64, t: 14, b: 30 };
+  const narrow = innerWidth < 640, W = narrow ? 400 : 760, H = narrow ? 300 : 320, P = { l: narrow ? 36 : 44, r: narrow ? 14 : 64, t: 14, b: 30 };
   const maxY = isW ? Math.max(1, ...teams.map(t => hist[0].sim[t.id]?.gp || 0)) : 1;
   const x = i => P.l + (hist.length === 1 ? (W - P.l - P.r) / 2 : i * (W - P.l - P.r) / (hist.length - 1));
   const y = v => P.t + (1 - v / maxY) * (H - P.t - P.b);
@@ -609,8 +610,8 @@ function trendChart(hist) {
   const ticks = isW ? [...Array(maxY + 1).keys()].filter(v => v % Math.ceil(maxY / 6) === 0) : [0, .25, .5, .75, 1];
   let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Weekly odds by coach">`;
   ticks.forEach(v => svg += `<line x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}" stroke="#33242a"/><text x="${P.l - 6}" y="${y(v) + 4}" fill="#a69a9c" font-size="11" text-anchor="end">${isW ? v : Math.round(v * 100) + '%'}</text>`);
-  const step = Math.ceil(hist.length / 12);
-  hist.forEach((p, i) => { if (i % step === 0 || i === hist.length - 1) svg += `<text x="${x(i)}" y="${H - 8}" fill="#a69a9c" font-size="11" text-anchor="middle">${p.label}</text>`; });
+  const step = Math.ceil(hist.length / (narrow ? 6 : 12));
+  hist.forEach((p, i) => { if (i % step === 0 || i === hist.length - 1) svg += `<text x="${x(i)}" y="${H - 8}" fill="#a69a9c" font-size="11" text-anchor="${narrow && i === hist.length - 1 && hist.length > 1 ? 'end' : 'middle'}">${p.label}</text>`; });
   const ends = [];
   teams.forEach(t => {
     const c = teamColor(t), pts = hist.map((p, i) => [x(i), y(p.sim[t.id] ? p.sim[t.id][k] : 0), p]);
@@ -621,7 +622,7 @@ function trendChart(hist) {
   ends.sort((a, b) => a.y - b.y);
   for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 12) ends[i].y = ends[i - 1].y + 12;
   for (let i = ends.length - 1; i >= 0; i--) { const lim = i === ends.length - 1 ? H - P.b : ends[i + 1].y - 12; if (ends[i].y > lim) ends[i].y = lim; }
-  ends.forEach(e => svg += `<text x="${W - P.r + 6}" y="${e.y + 4}" fill="${e.c}" font-size="11" font-weight="700">${esc(e.t.abbr || e.t.name)}</text>`);
+  if (!narrow) ends.forEach(e => svg += `<text x="${W - P.r + 6}" y="${e.y + 4}" fill="${e.c}" font-size="11" font-weight="700">${esc(e.t.abbr || e.t.name)}</text>`);
   svg += '</svg>';
   return svg + `<div class="legend">${teams.map(t => `<span><i class="sw" style="background:${esc(teamColor(t))}"></i>${esc(t.coach)} (${esc(t.abbr || t.name)})</span>`).join('')}</div>`;
 }
@@ -662,7 +663,7 @@ function header() {
   $('#sub').textContent = `College Football 27 Online Dynasty · ${L.conference} · ${L.phase}${DEMO ? ' · DEMO DATA' : ''}`;
   const p = auth.profile;
   $('#acct').innerHTML = auth.user
-    ? `<span>${esc(p?.name || auth.user.email)}${p?.teamId ? ` · ${esc(team(p.teamId).name)} · <b>${bankroll(p.id).balance.toLocaleString()} cr</b>` : ''}</span>${isCommish() ? '<a class="btn gold" style="padding:5px 10px;border-radius:8px" href="admin.html">Commissioner</a>' : ''}<a class="btn ghost" style="padding:5px 10px;border-radius:8px" href="#account">Account</a>`
+    ? `<span><span class="hide-sm">${esc(p?.name || auth.user.email)}${p?.teamId ? ` · ${esc(team(p.teamId).name)} · ` : ''}</span>${p?.teamId ? `<b>${bankroll(p.id).balance.toLocaleString()} cr</b>` : ''}</span>${isCommish() ? '<a class="btn gold" style="padding:5px 10px;border-radius:8px" href="admin.html">Commissioner</a>' : ''}<a class="btn ghost" style="padding:5px 10px;border-radius:8px" href="#account">Account</a>`
     : '<a class="btn" style="padding:6px 14px;border-radius:8px" href="#account">Coach Login</a>';
   $('#footAdmin').innerHTML = isCommish() ? ' · <a href="admin.html">Commissioner Tools</a>' : '';
 }

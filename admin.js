@@ -2,7 +2,7 @@ import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime
-} from './core.js?v=22';
+} from './core.js?v=23';
 import { lookupColor } from './teamcolors.js';
 
 const TABS = [['advance', 'Advance'], ['preseason', 'Preseason'], ['games', 'Games'], ['ratings', 'Ratings'], ['coaches', 'Coaches & Accounts'], ['betting', 'Betting'], ['awards', 'Awards'], ['settings', 'Settings & History']];
@@ -109,13 +109,13 @@ const views = {
         <div><label>Final regular-season week</label><input id="psFinal" type="number" value="${lg.finalWeek || 14}" style="width:100px"></div>
         <div><label>League conference</label><input id="psConf" value="${esc(lg.conference)}" style="width:120px"></div></div></div>
       <div class="card"><h3 style="margin-top:0">Teams, coaches & ratings</h3><p class="muted small">Every user team belongs in the league conference (${esc(lg.conference)}). Add any non-conference opponents as "Non-Conf" so they can be scheduled. OVR/OFF/DEF drive the odds. Division is optional (e.g. East/West).</p>
-        <div class="tablewrap"><table id="teamTbl"><tr><th>Team</th><th>Abbr</th><th>Conf</th><th>Div</th><th>Coach</th><th>Account</th><th>Color</th><th>OVR</th><th>OFF</th><th>DEF</th><th></th></tr>
+        <div class="tablewrap"><table id="teamTbl" class="stack-sm"><tr><th>Team</th><th>Abbr</th><th>Conf</th><th>Div</th><th>Coach</th><th>Account</th><th>Color</th><th>OVR</th><th>OFF</th><th>DEF</th><th></th></tr>
         ${ts.map(t => teamRow(t)).join('')}</table></div>
         <div class="row" style="margin-top:10px"><button class="ghost sm" data-act="addTeam">+ Add team</button><button data-act="saveTeams">Save teams</button><button class="ghost sm" data-act="seedRatings">Apply ratings from league-data.json</button></div></div>
       <div class="card"><h3 style="margin-top:0">${next} schedule (${sg.length} games)</h3><p class="muted small">Add user-vs-user games and each user team's games vs CPU teams.</p>
         <div class="row"><input id="sgW" type="number" value="0" style="width:70px" title="Week"><select id="sgA">${teamOpts('', 'Away')}</select> @ <select id="sgH">${teamOpts('', 'Home')}</select><label class="row" style="margin:0"><input type="checkbox" id="sgN" style="width:auto"> Neutral</label><button class="ghost" data-act="addSched">Add game</button></div>
         <label>Bulk add — one game per line: <code>week, away team, home team</code> (add <code>, neutral</code> if needed). Team name or abbreviation.</label><textarea id="bulk" rows="4" placeholder="0, Liberty, Kennesaw State&#10;1, KENN, Ohio"></textarea><button class="ghost sm" data-act="bulkSched" style="margin-top:6px">Add these games</button> <span id="bulkMsg" class="muted"></span>
-        <div class="tablewrap" style="margin-top:10px"><table>${sg.map(g => `<tr><td>Wk ${g.week}</td><td>${esc(team(g.away).name)} ${g.neutral ? 'vs' : '@'} ${esc(team(g.home).name)}${isUserTeam(team(g.home)) && isUserTeam(team(g.away)) ? ' <span class="h2h">USER GAME</span>' : ''}</td><td class="num">${played(g) ? g.awayScore + '-' + g.homeScore : ''}</td><td class="num"><button class="sm danger" data-delgame="${esc(g.id)}">✕</button></td></tr>`).join('')}</table></div></div>
+        <div class="tablewrap" style="margin-top:10px"><table>${sg.map(g => `<tr><td>Wk ${g.week}</td><td class="wrap">${esc(team(g.away).name)} ${g.neutral ? 'vs' : '@'} ${esc(team(g.home).name)}${isUserTeam(team(g.home)) && isUserTeam(team(g.away)) ? ' <span class="h2h">USER GAME</span>' : ''}</td><td class="num">${played(g) ? g.awayScore + '-' + g.homeScore : ''}</td><td class="num"><button class="sm danger" data-delgame="${esc(g.id)}">✕</button></td></tr>`).join('')}</table></div></div>
       ${deskBlock()}
       <div class="card"><button class="gold" data-act="publish">Publish ${next} season → open Week ${sg.length ? Math.min(...sg.map(g => g.week)) : 0}</button>
         <p class="muted small">Publishing sets the current season and week, posts preseason odds and Week ${sg.length ? Math.min(...sg.map(g => g.week)) : 0} lines, opens betting (every coach starts with 1,000 credits) and starts a fresh odds chart. Save teams first.</p></div>`;
@@ -142,8 +142,8 @@ const views = {
   coaches() {
     const us = D.users.slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     return `<div class="card"><h2>Coach Accounts</h2><p class="muted small">Coaches create their own login on the hub (Coach Login → Create account). Link each account to a team here so they can bet and vote. Commissioners can use these tools; you can be a coach and the commissioner at the same time.</p>
-      ${us.length ? `<div class="tablewrap"><table><tr><th>Coach name</th><th>Team</th><th>Role</th></tr>${us.map(u => `<tr data-user="${esc(u.id)}"><td><input data-k="name" value="${esc(u.name)}"></td>
-        <td><select data-k="teamId">${teamOpts(u.teamId, 'Not linked', t => t.conf === L().conference)}</select></td><td><select data-k="role"><option value="coach" ${u.role !== 'commish' ? 'selected' : ''}>Coach</option><option value="commish" ${u.role === 'commish' ? 'selected' : ''}>Commissioner</option></select></td></tr>`).join('')}</table></div>
+      ${us.length ? `<div class="tablewrap"><table class="stack-sm"><tr><th>Coach name</th><th>Team</th><th>Role</th></tr>${us.map(u => `<tr data-user="${esc(u.id)}"><td data-l="Coach"><input data-k="name" value="${esc(u.name)}"></td>
+        <td data-l="Team"><select data-k="teamId">${teamOpts(u.teamId, 'Not linked', t => t.conf === L().conference)}</select></td><td data-l="Role"><select data-k="role"><option value="coach" ${u.role !== 'commish' ? 'selected' : ''}>Coach</option><option value="commish" ${u.role === 'commish' ? 'selected' : ''}>Commissioner</option></select></td></tr>`).join('')}</table></div>
         <div style="margin-top:10px"><button data-act="saveUsers">Save accounts</button></div>` : '<p class="muted">No one has signed up yet.</p>'}</div>`;
   },
 
@@ -191,13 +191,13 @@ const views = {
 
 function teamRow(t) {
   const lg = L();
-  return `<tr data-team="${esc(t.id)}"><td><input data-k="name" value="${esc(t.name)}" style="width:150px"></td><td><input data-k="abbr" value="${esc(t.abbr || '')}" style="width:70px"></td>
-    <td><select data-k="conf"><option ${t.conf === lg.conference ? 'selected' : ''}>${esc(lg.conference)}</option><option value="Non-Conf" ${t.conf !== lg.conference ? 'selected' : ''}>Non-Conf</option></select></td>
-    <td><input data-k="div" value="${esc(t.div || '')}" style="width:70px"></td><td><input data-k="coach" value="${esc(t.coach || '')}" placeholder="CPU" style="width:110px"></td>
-    <td><select data-k="uid"><option value="">—</option>${D.users.map(u => `<option value="${esc(u.id)}" ${u.id === t.uid ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}</select></td>
-    <td><input data-k="color" type="color" value="${esc(teamColor(t))}" style="width:46px;padding:2px"></td>
-    ${['ovr', 'off', 'def'].map(k => `<td><input data-k="${k}" type="number" min="40" max="99" value="${t[k] ?? ''}" style="width:62px"></td>`).join('')}
-    <td><button class="sm danger" data-delteam="${esc(t.id)}">✕</button></td></tr>`;
+  return `<tr data-team="${esc(t.id)}"><td data-l="Team"><input data-k="name" value="${esc(t.name)}" style="width:150px"></td><td data-l="Abbr"><input data-k="abbr" value="${esc(t.abbr || '')}" style="width:70px"></td>
+    <td data-l="Conf"><select data-k="conf"><option ${t.conf === lg.conference ? 'selected' : ''}>${esc(lg.conference)}</option><option value="Non-Conf" ${t.conf !== lg.conference ? 'selected' : ''}>Non-Conf</option></select></td>
+    <td data-l="Div"><input data-k="div" value="${esc(t.div || '')}" style="width:70px"></td><td data-l="Coach"><input data-k="coach" value="${esc(t.coach || '')}" placeholder="CPU" style="width:110px"></td>
+    <td data-l="Account"><select data-k="uid"><option value="">—</option>${D.users.map(u => `<option value="${esc(u.id)}" ${u.id === t.uid ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}</select></td>
+    <td data-l="Color"><input data-k="color" type="color" value="${esc(teamColor(t))}" style="width:46px;padding:2px"></td>
+    ${['ovr', 'off', 'def'].map(k => `<td data-l="${k.toUpperCase()}"><input data-k="${k}" type="number" inputmode="numeric" min="40" max="99" value="${t[k] ?? ''}" style="width:62px"></td>`).join('')}
+    <td data-l=""><button class="sm danger" data-delteam="${esc(t.id)}">✕ Remove</button></td></tr>`;
 }
 function catEditor(cats) {
   return cats.map((c, ci) => `<div class="card" data-cat="${ci}" style="background:#120e0f"><div class="row"><input data-ck="label" value="${esc(c.label)}" style="flex:1;font-weight:700"><button class="sm danger" data-delcat="${ci}">✕</button></div>
