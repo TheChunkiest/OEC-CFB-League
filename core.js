@@ -396,6 +396,21 @@ export function currentPower(season = D.league.season) {
 }
 
 /* ---------------- Betting ---------------- */
+/* ---- Game of the Week profit boost: +10% profit on single bets on the GOTW and parlays made only of its lines ---- */
+export const GOTW_BOOST = 1.1;
+const boosted = (p, w) => Math.round(p * (w && w.boost ? w.boost : 1));
+// The decided GOTW for the current week (frozen into the league doc at advance; demo falls back to the vote tally).
+export function gotwGameId() {
+  const L = D.league, G = L.gotw;
+  if (G && G.season === L.season && G.week === L.week) return G.gameId || null;
+  return DEMO ? (gotwTally(L.season, L.week).game?.id || null) : null;
+}
+export function boostFor(legs) {
+  const id = gotwGameId(); if (!id || !legs.length) return null;
+  return legs.every(l => l.gameId === id && ['ml', 'spread', 'total'].includes(l.market)) ? GOTW_BOOST : null;
+}
+// Profit a bet pays if it wins, including any boost.
+export function winProfit(w) { return boosted(w.market === 'parlay' ? parlayProfit(w.stake, w.legs || []) : profit(w.stake, w.odds), w); }
 export const profit = (stake, odds) => Math.round(odds > 0 ? stake * odds / 100 : stake * 100 / Math.abs(odds));
 export function grade(w, g) {
   const hs = +g.homeScore, as = +g.awayScore;
@@ -409,7 +424,7 @@ export function settleOps(gameIds) {
   const ids = new Set(gameIds), ops = [];
   D.wagers.filter(w => w.status === 'open' && ids.has(w.gameId)).forEach(w => {
     const g = D.games.find(x => x.id === w.gameId); if (!g || !played(g)) return;
-    const st = g.forfeit ? 'void' : grade(w, g), payout = st === 'won' ? profit(w.stake, w.odds) : st === 'lost' ? -w.stake : 0;
+    const st = g.forfeit ? 'void' : grade(w, g), payout = st === 'won' ? boosted(profit(w.stake, w.odds), w) : st === 'lost' ? -w.stake : 0;
     ops.push({ op: 'set', col: 'wagers', id: w.id, data: { status: st, payout, settledAt: Date.now() } });
   });
   D.wagers.filter(w => w.status === 'open' && w.market === 'wins').forEach(w => {
@@ -439,7 +454,7 @@ function evalParlay(w) {
   if (legs.some(l => l.result === 'lost')) { status = 'lost'; payout = -w.stake; }
   else if (legs.every(l => l.result !== 'open')) {
     const won = legs.filter(l => l.result === 'won');
-    if (won.length) { status = 'won'; payout = parlayProfit(w.stake, won); } else status = 'push';
+    if (won.length) { status = 'won'; payout = boosted(parlayProfit(w.stake, won), w); } else status = 'push';
   }
   return { legs, status, payout };
 }
@@ -481,6 +496,7 @@ export function boardOps(week, season = D.league.season) {
 export async function ensureFutures() {
   const L = D.league;
   if (DEMO || !isCommish() || (L.phase !== PHASES.REG && L.phase !== PHASES.CCG)) return false;
+  if (L.phase === PHASES.REG && !(L.gotw && L.gotw.season === L.season && L.gotw.week === L.week)) await put('meta', 'league', { gotw: { season: L.season, week: L.week, gameId: gotwTally(L.season, L.week).game?.id || '' } });
   const missingLines = D.games.some(g => g.season === L.season && g.week >= L.week && !played(g) && !(g.lines && g.lines.spread != null && g.lines.spreadOddsHome != null));
   if (!missingLines && (L.phase !== PHASES.REG || (futuresPosted() && winsPosted()))) return false;
   await batch(boardOps(L.week)); return true;
@@ -639,10 +655,10 @@ export function storylines() {
       const lost = (w.legs || []).filter(l => l.result === 'lost');
       if (lost.length !== 1 || !wkIds.has(lost[0].gameId) || (w.legs || []).length < 2) return;
       const m = miss(lost[0]); if (m == null) return;
-      beats.push({ w, m, leg: lost[0], missed: parlayProfit(w.stake, (w.legs || []).filter(l => l.result !== 'push' && l.result !== 'void')) });
+      beats.push({ w, m, leg: lost[0], missed: boosted(parlayProfit(w.stake, (w.legs || []).filter(l => l.result !== 'push' && l.result !== 'void')), w) });
     } else if (wkIds.has(w.gameId)) {
       const m = miss(w); if (m == null) return;
-      beats.push({ w, m, leg: w, missed: profit(w.stake, w.odds) });
+      beats.push({ w, m, leg: w, missed: boosted(profit(w.stake, w.odds), w) });
     }
   });
   beats.sort((a, b) => a.m - b.m || b.missed - a.missed);

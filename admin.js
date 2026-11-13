@@ -2,7 +2,7 @@ import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally
-} from './core.js?v=29';
+} from './core.js?v=30';
 import { lookupColor } from './teamcolors.js';
 
 const TABS = [['advance', 'Weekly Advance'], ['games', 'Games'], ['top25', 'Top 25'], ['ratings', 'Ratings'], ['betting', 'Betting'], ['coaches', 'Coaches & Accounts'], ['awards', 'Awards'], ['preseason', 'Preseason'], ['settings', 'Settings & History']];
@@ -364,7 +364,8 @@ const ACT = {
       await put('meta', 'league', { week: W + 1, phase: PHASES.CCG, bettingOpen: false, desk, futures: { ...(lg.futures || {}), open: false }, winTotals: { season: 0, odds: {} }, awards: { open: false, season: lg.season, categories: lg.awards?.season === lg.season ? (lg.awards.categories || []) : [] } });
       await batch(settleOps([]));
     } else {
-      await put('meta', 'league', { week: W + 1, bettingOpen: true, desk });
+      const gotwG = gotwTally(lg.season, W + 1, { includeOpen: true }).game;
+      await put('meta', 'league', { week: W + 1, bettingOpen: true, desk, gotw: { season: lg.season, week: W + 1, gameId: gotwG ? gotwG.id : '' } });
       await batch(lineOps(W + 1));
     }
     const settled = D.wagers.filter(w => w.settledAt && Date.now() - w.settledAt < 60000).length;
@@ -496,7 +497,7 @@ const ACT = {
     const ids = new Set(ops.map(o => o.id)), reg = [];
     D.wagers.filter(w => ids.has(w.gameId) && w.status !== 'void' && w.market !== 'parlay').forEach(w => {
       const g = D.games.find(x => x.id === w.gameId), st = g.forfeit ? 'void' : grade(w, g);
-      reg.push({ op: 'set', col: 'wagers', id: w.id, data: { status: st, payout: st === 'won' ? profit(w.stake, w.odds) : st === 'lost' ? -w.stake : 0, ...(st !== w.status ? { settledAt: Date.now() } : {}) } });
+      reg.push({ op: 'set', col: 'wagers', id: w.id, data: { status: st, payout: st === 'won' ? Math.round(profit(w.stake, w.odds) * (w.boost || 1)) : st === 'lost' ? -w.stake : 0, ...(st !== w.status ? { settledAt: Date.now() } : {}) } });
     });
     reg.push(...parlayOps(true));
     await batch(reg); await refreshBooks(); flash(`Saved ${ops.length} score(s); ${reg.length} wager(s) graded; books re-priced.`);

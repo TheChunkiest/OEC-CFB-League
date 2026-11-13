@@ -63,9 +63,16 @@ service cloud.firestore {
         && (n < 3 || validLeg(d.legs[2], L)) && (n < 4 || validLeg(d.legs[3], L))
         && (n < 5 || validLeg(d.legs[4], L)) && (n < 6 || validLeg(d.legs[5], L));
     }
+    // Game of the Week +10% profit boost: only on single bets on the GOTW, or parlays made only of its lines.
+    function validBoost(d, L) {
+      return !('boost' in d) || (d.boost == 1.1 && L.gotw.season == L.season && L.gotw.week == L.week && L.gotw.gameId != ''
+        && ((d.market in ['ml', 'spread', 'total'] && d.gameId == L.gotw.gameId)
+          || (d.market == 'parlay' && d.legs.size() <= 2 && d.legs[0].gameId == L.gotw.gameId
+            && (d.legs.size() < 2 || d.legs[1].gameId == L.gotw.gameId))));
+    }
     function validWager(d) {
       let L = league();
-      return baseWager(d, L) && ((d.market == 'future' && validFuture(d, L))
+      return baseWager(d, L) && validBoost(d, L) && ((d.market == 'future' && validFuture(d, L))
         || (d.market == 'wins' && validWins(d, L))
         || (d.market == 'parlay' && validParlay(d, L))
         || (d.market != 'future' && d.market != 'wins' && d.market != 'parlay' && validGameWager(d)));
