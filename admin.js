@@ -1,11 +1,11 @@
 import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
-  orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures
-} from './core.js?v=8';
+  orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps
+} from './core.js?v=9';
 import { lookupColor } from './teamcolors.js';
 
-const TABS = [['advance', 'Advance'], ['preseason', 'Preseason'], ['games', 'Games'], ['ratings', 'Ratings'], ['coaches', 'Coaches & Accounts'], ['betting', 'Betting'], ['awards', 'Awards'], ['recruiting', 'Recruiting'], ['settings', 'Settings & History']];
+const TABS = [['advance', 'Advance'], ['preseason', 'Preseason'], ['games', 'Games'], ['ratings', 'Ratings'], ['coaches', 'Coaches & Accounts'], ['betting', 'Betting'], ['awards', 'Awards'], ['settings', 'Settings & History']];
 const ST = { tab: 'advance', desk: 'no', gamesWeek: null, msg: '' };
 const DEFAULT_AWARDS = ['MVP', 'Offensive Player of the Year', 'Defensive Player of the Year', 'Best Offense', 'Best Defense', 'Game of the Year'];
 
@@ -47,12 +47,7 @@ function readScores(games) {
   });
   return { ops, missing };
 }
-function lineOps(week, season = L().season) {
-  const ops = D.games.filter(g => g.season === season && g.week === week && !played(g)).map(g => ({ op: 'set', col: 'games', id: g.id, data: { lines: freshLine(g) } }));
-  // Re-post League Champion futures whenever this season's current-week lines are posted.
-  if (season === L().season && week === L().week && L().phase === PHASES.REG) ops.push({ op: 'set', col: 'meta', id: 'league', data: { futures: futuresSnapshot() } });
-  return ops;
-}
+const lineOps = (week, season = L().season) => boardOps(week, season);
 async function saveScoresAndSettle(games) {
   const { ops, missing } = readScores(games);
   await batch(ops);
@@ -172,14 +167,7 @@ const views = {
       <div class="card"><h3 style="margin-top:0">Ballot</h3><div id="cats">${catEditor(cats)}</div><div class="row"><button class="ghost sm" data-act="addCat">+ Add category</button><button data-act="saveCats">Save ballot</button></div></div>`;
   },
 
-  recruiting() {
-    const R = D.recruiting || { class: '', rows: [] };
-    return `<div class="card"><label>Class year</label><input id="rc_class" type="number" value="${esc(R.class)}">
-      <div class="tablewrap"><table><tr><th>Team</th><th>Commits</th><th>5★</th><th>4★</th><th>3★</th><th>Pts</th></tr>
-      ${leagueTeams().map(t => { const r = (R.rows || []).find(x => x.team === t.id) || { commits: 0, five: 0, four: 0, three: 0, points: 0 };
-        return `<tr data-rt="${esc(t.id)}"><td>${esc(t.name)}</td>${['commits', 'five', 'four', 'three', 'points'].map(k => `<td><input class="score" type="number" data-k="${k}" value="${r[k]}"></td>`).join('')}</tr>`; }).join('')}
-      </table></div><div style="margin-top:12px"><button data-act="saveRecruit">Save recruiting</button></div></div>`;
-  },
+
 
   settings() {
     const lg = L(), H = D.history.slice().sort((a, b) => b.season - a.season);
@@ -373,10 +361,7 @@ const ACT = {
   async awardsToggle() { const A = L().awards || {}; await put('meta', 'league', { awards: { ...A, open: !A.open, season: L().season } }); flash('Voting ' + (L().awards.open ? 'opened' : 'closed') + '.'); },
   addCat() { const cats = readCats(); cats.push({ key: 'new', label: 'New Award', options: [{ name: '', team: '' }, { name: '', team: '' }, { name: '', team: '' }] }); $('#cats').innerHTML = catEditor(cats); },
   async saveCats() { const cats = readCats(); await put('meta', 'league', { awards: { ...(L().awards || {}), season: L().season, categories: cats } }); flash('Ballot saved.'); },
-  async saveRecruit() {
-    const rows = $$('[data-rt]').map(tr => { const o = { team: tr.dataset.rt }; tr.querySelectorAll('input').forEach(i => o[i.dataset.k] = +i.value || 0); return o; });
-    await put('meta', 'recruiting', { class: +$('#rc_class').value, rows }, false); flash('Recruiting saved.');
-  },
+
   async saveSettings() {
     await put('meta', 'league', {
       name: $('#stName').value.trim(), rules: $('#stRules').value.split('\n').map(s => s.trim()).filter(Boolean),
@@ -446,7 +431,7 @@ document.addEventListener('click', async e => {
   if (!t) return;
   e.preventDefault();
   try {
-    if (t.dataset.tab) { ST.tab = t.dataset.tab; ST.msg = ''; if (t.dataset.tab === 'awards') await loadBallots(true); render(); }
+    if (t.dataset.tab) { ST.tab = t.dataset.tab; ST.msg = ''; render(); if (t.dataset.tab === 'awards') { try { await loadBallots(true); } catch (err) { console.error(err); ST.msg = 'Could not load ballots from Firebase (' + err.message + '). Make sure the latest Firestore rules are published.'; } render(); } }
     else if (t.dataset.desk) { ST.desk = t.dataset.desk; const keep = $('#deskText')?.value; $$('[data-desk]').forEach(b => b.classList.toggle('on', b.dataset.desk === ST.desk)); $('#deskText').parentElement.hidden = ST.desk !== 'yes'; if (keep) $('#deskText').value = keep; }
     else if (t.dataset.act) { t.disabled = true; await ACT[t.dataset.act](); }
     else if (t.dataset.delgame) { if (confirm('Delete this game? Open wagers on it will be voided.')) { await batch([{ op: 'del', col: 'games', id: t.dataset.delgame }, ...D.wagers.filter(w => w.gameId === t.dataset.delgame && w.status === 'open').map(w => ({ op: 'set', col: 'wagers', id: w.id, data: { status: 'void', payout: 0 } }))]); render(); } }
@@ -470,7 +455,7 @@ document.addEventListener('change', e => {
       if (!auth.user) { $('#panel').innerHTML = `<div class="card"><h2>Commissioner Login</h2><p>Log in on the hub with your commissioner account first.</p><a class="btn" style="padding:8px 14px;border-radius:8px" href="index.html#account">Go to login</a></div>`; $('#tabs').innerHTML = ''; return; }
       if (!isCommish()) { $('#panel').innerHTML = `<div class="card"><h2>Commissioner only</h2><p class="muted">Your account doesn't have commissioner access.</p></div>`; $('#tabs').innerHTML = ''; return; }
       if (L().awards?.open) await loadBallots(true);
-      try { if (await ensureFutures()) ST.msg = 'Posted this week\'s League Champion futures odds.'; } catch (e) { ST.msg = 'Could not post futures odds: ' + e.message + ' — check the Firestore rules are the latest version.'; }
+      try { if (await ensureFutures()) ST.msg = 'Posted lines for upcoming games and League Champion futures odds.'; } catch (e) { ST.msg = 'Could not post futures odds: ' + e.message + ' — check the Firestore rules are the latest version.'; }
       render();
     });
   } catch (e) {

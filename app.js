@@ -3,12 +3,12 @@ import {
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
   gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError
-} from './core.js?v=8';
+} from './core.js?v=9';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['odds', 'Odds'], ['betting', 'Betting'],
-  ['rankings', 'Power Rankings'], ['teams', 'Teams'], ['vote', 'Vote'], ['recruiting', 'Recruiting'], ['history', 'History'], ['rules', 'Rules']];
-const UI = { stSort: { key: 'place', dir: 1 }, prSort: { key: 'rank', dir: 1 }, prUsers: false, oddsSort: { key: 'titlePct', dir: -1 }, metric: 'titlePct', acct: 'login', slip: null, msg: '' };
+  ['rankings', 'Power Rankings'], ['teams', 'Teams'], ['vote', 'Vote'], ['history', 'History'], ['rules', 'Rules']];
+const UI = { stSort: { key: 'place', dir: 1 }, prSort: { key: 'rank', dir: 1 }, prUsers: false, oddsSort: { key: 'titlePct', dir: -1 }, metric: 'titlePct', acct: 'login', slip: null, msg: '', betWeek: null };
 
 /* ---------- small renderers ---------- */
 const S = () => D.league.season;
@@ -88,7 +88,7 @@ const PAGES = {
     const gt = gotwTally(s, wk).game;
     return `<div class="row spread"><h2 style="margin:0">Schedule &amp; Scores</h2>
       <select data-nav="schedule">${weeks.map(w => `<option value="${w}" ${w === wk ? 'selected' : ''}>Week ${w}</option>`).join('')}</select></div>
-      <p class="muted small">Lines for future weeks are projections and update after every advance. Lines lock when that week becomes the current week.</p>
+      <p class="muted small">Lines for upcoming weeks update after every advance. You can bet any upcoming week on the Betting page, and a bet keeps the line you took.</p>
       ${games.length ? games.map(g => gameCard(g, { gotw: gt && gt.id === g.id })).join('') : '<div class="card empty">No games for this week.</div>'}`;
   },
 
@@ -112,8 +112,10 @@ const PAGES = {
 
   betting() {
     const L = D.league, s = S(), me = auth.profile;
-    const games = D.games.filter(g => g.season === s && g.week === L.week && !played(g));
-    const open = L.bettingOpen && L.phase !== PHASES.PRE;
+    const bwks = [...new Set(D.games.filter(g => g.season === s && g.week >= L.week && !played(g)).map(g => g.week))].sort((a, b) => a - b);
+    const bw = bwks.includes(UI.betWeek) ? UI.betWeek : bwks[0];
+    const games = D.games.filter(g => g.season === s && g.week === bw && !played(g));
+    const open = L.bettingOpen && L.phase !== PHASES.PRE && L.phase !== PHASES.POST;
     let html = `<h2>Sportsbook · ${esc(weekLabel())}</h2>`;
     if (!me) html += `<div class="notice">Every coach gets <b>${START_CREDITS.toLocaleString()} credits</b> per season. <a href="#account">Log in</a> to place wagers.</div>`;
     else if (!me.teamId) html += `<div class="notice">Your account isn't linked to a team yet. Ask the commissioner to link it.</div>`;
@@ -122,14 +124,15 @@ const PAGES = {
       html += `<div class="card"><div class="stat"><div><span>Balance</span><b>${b.balance.toLocaleString()}</b></div><div><span>In play</span><b>${b.open}</b></div><div><span>Record</span><b>${b.w}-${b.l}${b.p ? '-' + b.p : ''}</b></div><div><span>Net</span><b class="${b.net >= 0 ? 'win' : 'loss'}">${b.net >= 0 ? '+' : ''}${b.net}</b></div></div></div>`;
     }
     html += !open ? `<div class="card empty">Betting is ${L.phase === PHASES.PRE ? 'closed until the season is published' : 'locked right now'}.</div>` :
-      games.length ? `<div class="card"><div class="betgrid"><div class="hdr tm">Matchup</div><div class="hdr">Spread</div><div class="hdr">Moneyline</div><div class="hdr">Total</div>
+      games.length ? `<div class="row" style="margin-bottom:10px"><b>Bet on</b><select data-betweek="1">${bwks.map(w => `<option value="${w}" ${w === bw ? 'selected' : ''}>Week ${w}${w === L.week ? ' (this week)' : ''}</option>`).join('')}</select>
+        <span class="muted small">${bw === L.week ? 'This week\'s games.' : 'Early lines: they move after every advance, but your bet keeps the line you took.'}</span></div><div class="card"><div class="betgrid"><div class="hdr tm">Matchup</div><div class="hdr">Spread</div><div class="hdr">Moneyline</div><div class="hdr">Total</div>
         ${games.map(g => betRows(g)).join('')}</div></div>` : '<div class="card empty">No open games this week.</div>';
     html += futuresSection();
     if (me && me.teamId) {
       const mine = D.wagers.filter(w => w.uid === me.id && w.season === s).sort((a, b) => b.week - a.week || (b.ts || 0) - (a.ts || 0));
       html += `<h2>My Wagers</h2><div class="card">${mine.length ? `<div class="tablewrap"><table><tr><th>Wk</th><th>Bet</th><th class="num">Stake</th><th class="num">Result</th><th></th></tr>
         ${mine.map(w => { const g = D.games.find(x => x.id === w.gameId); const canCancel = w.status === 'open' && (w.market === 'future' ? futuresOpen() : open && g && !played(g));
-          return `<tr><td>${w.week}</td><td>${esc(wagerLabel(w))}</td><td class="num">${w.stake}</td><td class="num"><span class="pill ${w.status}">${w.status === 'open' ? 'Open · to win ' + Math.round(w.odds > 0 ? w.stake * w.odds / 100 : w.stake * 100 / -w.odds) : w.status.toUpperCase() + (w.payout ? ' ' + (w.payout > 0 ? '+' : '') + w.payout : '')}</span></td><td>${canCancel ? `<button class="sm ghost" data-cancel="${esc(w.id)}">Cancel</button>` : ''}</td></tr>`; }).join('')}
+          return `<tr><td>${w.market === 'future' ? 'Fut' : (g ? g.week : w.week)}</td><td>${esc(wagerLabel(w))}</td><td class="num">${w.stake}</td><td class="num"><span class="pill ${w.status}">${w.status === 'open' ? 'Open · to win ' + Math.round(w.odds > 0 ? w.stake * w.odds / 100 : w.stake * 100 / -w.odds) : w.status.toUpperCase() + (w.payout ? ' ' + (w.payout > 0 ? '+' : '') + w.payout : '')}</span></td><td>${canCancel ? `<button class="sm ghost" data-cancel="${esc(w.id)}">Cancel</button>` : ''}</td></tr>`; }).join('')}
       </table></div>` : '<div class="muted">No wagers yet this season.</div>'}</div>`;
     }
     const board = D.users.filter(u => u.teamId).map(u => ({ u, b: bankroll(u.id) })).sort((a, b) => b.b.balance - a.b.balance);
@@ -137,7 +140,7 @@ const PAGES = {
       ${board.map((x, i) => `<tr class="${me && me.id === x.u.id ? 'me' : ''}"><td class="rank">${i + 1}</td><td><a href="#coach/${slug(x.u.name)}">${esc(x.u.name)}</a> <span class="muted small">${esc(team(x.u.teamId).name)}</span></td><td class="num">${x.b.w}-${x.b.l}-${x.b.p}</td><td class="num ${x.b.net >= 0 ? 'win' : 'loss'}">${x.b.net >= 0 ? '+' : ''}${x.b.net}</td><td class="num">${x.b.risked ? Math.round(x.b.net / x.b.risked * 100) + '%' : '–'}</td><td class="num"><b>${x.b.balance.toLocaleString()}</b></td></tr>`).join('')}
     </table></div></div>`;
     const wk = D.wagers.filter(w => w.season === s && w.week === L.week);
-    if (wk.length) html += `<h2>Action This Week</h2><div class="card"><div class="tablewrap"><table>${wk.map(w => `<tr><td>${esc(w.coach || '')}</td><td>${esc(wagerLabel(w))}</td><td class="num">${w.stake}</td><td class="num"><span class="pill ${w.status}">${w.status}</span></td></tr>`).join('')}</table></div></div>`;
+    if (wk.length) html += `<h2>Bets Placed This Week</h2><div class="card"><div class="tablewrap"><table>${wk.map(w => `<tr><td>${esc(w.coach || '')}</td><td>${esc(wagerLabel(w))}</td><td class="num">${w.stake}</td><td class="num"><span class="pill ${w.status}">${w.status}</span></td></tr>`).join('')}</table></div></div>`;
     return html;
   },
 
@@ -226,14 +229,7 @@ const PAGES = {
     return html;
   },
 
-  recruiting() {
-    const R = D.recruiting || { rows: [] };
-    return `<h2>${esc(R.class)} Recruiting Class Rankings</h2><div class="card"><div class="tablewrap"><table>
-      <tr><th>#</th><th>Team</th><th>Coach</th><th class="num">Commits</th><th class="num">5★</th><th class="num">4★</th><th class="num">3★</th><th class="num">Pts</th></tr>
-      ${(R.rows || []).slice().sort((a, b) => b.points - a.points).map((r, i) => `<tr><td class="rank">${i + 1}</td><td>${chip(r.team)}</td><td>${esc(team(r.team).coach || 'CPU')}</td>
-        <td class="num">${r.commits}</td><td class="num">${r.five}</td><td class="num">${r.four}</td><td class="num">${r.three}</td><td class="num">${r.points}</td></tr>`).join('')}
-    </table></div></div>`;
-  },
+
 
   history() {
     const H = D.history.slice().sort((a, b) => b.season - a.season), C = Object.values(coachStats()).sort((a, b) => b.titles - a.titles || (b.w / Math.max(1, b.w + b.l)) - (a.w / Math.max(1, a.w + a.l)));
@@ -250,8 +246,8 @@ const PAGES = {
     const L = D.league;
     return `<h2>League Rules</h2><div class="card"><ul class="clean">${((L.rules && L.rules.length) ? L.rules : DEFAULT_RULES).map(r => `<li>${esc(r)}</li>`).join('') || '<li class="muted">No rules posted.</li>'}</ul></div>
       <h2>How Betting Works</h2><div class="card"><ul class="clean"><li>Every linked coach starts each season with ${START_CREDITS.toLocaleString()} credits. Credits don't carry over.</li>
-      <li>Lines post for the current week when we advance. Spreads and totals pay −110; moneylines pay the listed +/− odds.</li>
-      <li>Each advance re-rates every team from the results, so lines for all later weeks move too.</li>
+      <li>Lines are posted for every upcoming game, so you can bet future weeks early. Spreads and totals pay −110; moneylines pay the listed +/− odds.</li>
+      <li>Each advance re-rates every team from the results, so lines for all later weeks move. Your bet keeps the line it was placed at.</li>
       <li>A game locks once the commissioner enters its score or locks betting.</li></ul></div>
       ${(L.links || []).length ? `<h2>Links</h2><div class="card"><ul class="clean">${L.links.map(l => `<li><a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a></li>`).join('')}</ul></div>` : ''}`;
   },
@@ -339,7 +335,7 @@ async function placeBet() {
     } catch (e) { $('#smsg').textContent = 'Could not place wager. ' + friendlyError(e); }
     return;
   }
-  if (!L.bettingOpen || played(g) || g.week !== L.week) return $('#smsg').textContent = 'This game is locked.';
+  if (!L.bettingOpen || played(g) || g.week < L.week || g.season !== L.season) return $('#smsg').textContent = 'This game is locked.';
   try {
     await put('wagers', newId(), { uid: me.id, coach: me.name, season: L.season, week: L.week, gameId: g.id, market, pick, line, odds, stake, status: 'open', payout: 0, ts: Date.now() }, false);
     $('#modal').innerHTML = ''; await reload();
@@ -434,6 +430,7 @@ document.addEventListener('click', async e => {
 });
 document.addEventListener('input', e => { if (e.target.id === 'stake') updToWin(); });
 document.addEventListener('change', e => {
+  if (e.target.dataset.betweek) { UI.betWeek = +e.target.value; route(); }
   if (e.target.dataset.nav) location.hash = '#' + e.target.dataset.nav + '/' + e.target.value;
   if (e.target.type === 'radio') { const grp = $$(`input[name="${e.target.name}"]`); grp.forEach(r => r.closest('.vote-opt')?.classList.toggle('on', r.checked)); }
 });

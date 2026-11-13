@@ -28,7 +28,7 @@ service cloud.firestore {
       allow delete: if isCommish();
     }
 
-    // Wagers: a linked coach may bet on an unplayed game in the current week at the posted line,
+    // Wagers: a linked coach may bet on any unplayed game this week or later at its posted line,
     // or on the League Champion future at the posted odds during the regular season.
     function baseWager(d, L) {
       return d.uid == request.auth.uid && d.status == 'open' && d.payout == 0
@@ -37,7 +37,7 @@ service cloud.firestore {
     }
     function validGameWager(d) {
       let g = gameOf(d.gameId);
-      return g.season == league().season && g.week == league().week && g.homeScore == null
+      return g.season == league().season && g.week >= league().week && g.homeScore == null
         && ((d.market == 'ml' && ((d.pick == 'home' && d.odds == g.lines.mlHome) || (d.pick == 'away' && d.odds == g.lines.mlAway)))
           || (d.market == 'spread' && d.odds == -110 && d.line == g.lines.spread && (d.pick == 'home' || d.pick == 'away'))
           || (d.market == 'total' && d.odds == -110 && d.line == g.lines.total && (d.pick == 'over' || d.pick == 'under')));
@@ -74,7 +74,8 @@ service cloud.firestore {
 
     // Awards ballots: private to the voter and the commissioner. Doc id = season_uid.
     match /ballots/{id} {
-      allow read: if isCommish() || (signedIn() && id.matches('.*_' + request.auth.uid));
+      allow list: if isCommish();
+      allow get: if isCommish() || (signedIn() && id.matches('.*_' + request.auth.uid));
       allow create, update: if isCoach()
         && id == string(league().season) + '_' + request.auth.uid
         && request.resource.data.uid == request.auth.uid

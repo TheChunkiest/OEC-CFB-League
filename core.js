@@ -368,11 +368,20 @@ export function futuresOdds(p) {
   return Math.max(100, v >= 1000 ? Math.round(v / 50) * 50 : v >= 300 ? Math.round(v / 10) * 10 : round5(v));
 }
 export function futuresPosted() { const L = D.league, F = L.futures; return DEMO || !!(F && F.season === L.season && F.open && F.odds); }
-// Commissioner's browser posts the futures board if it's missing for this season.
+// Post lines for every unplayed game from `week` on (current + future weeks), plus League Champion futures.
+export function boardOps(week, season = D.league.season) {
+  const L = D.league;
+  const ops = D.games.filter(g => g.season === season && g.week >= week && !played(g)).map(g => ({ op: 'set', col: 'games', id: g.id, data: { lines: freshLine(g) } }));
+  if (season === L.season && week === L.week && L.phase === PHASES.REG) ops.push({ op: 'set', col: 'meta', id: 'league', data: { futures: futuresSnapshot() } });
+  return ops;
+}
+// Commissioner's browser fills in anything missing from the board (lines for upcoming games, futures odds).
 export async function ensureFutures() {
   const L = D.league;
-  if (DEMO || !isCommish() || L.phase !== PHASES.REG || futuresPosted()) return false;
-  await put('meta', 'league', { futures: futuresSnapshot() }); return true;
+  if (DEMO || !isCommish() || (L.phase !== PHASES.REG && L.phase !== PHASES.CCG)) return false;
+  const missingLines = D.games.some(g => g.season === L.season && g.week >= L.week && !played(g) && !(g.lines && g.lines.spread != null));
+  if (!missingLines && (L.phase !== PHASES.REG || futuresPosted())) return false;
+  await batch(boardOps(L.week)); return true;
 }
 export function friendlyError(e) {
   if (e && (e.code === 'permission-denied' || /permission/i.test(e.message || ''))) return 'The league database turned this bet down. Ask the commissioner to check the Firebase rules are up to date and to re-post lines on the Commissioner page (Betting tab).';
