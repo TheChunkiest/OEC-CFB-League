@@ -268,3 +268,10 @@ td.wrap{white-space:normal;min-width:140px}
 .game .teams{width:100%}
 .gstat{color:var(--text);font-weight:800;text-transform:uppercase;font-size:11px;letter-spacing:.6px}
 @media (max-width:640px){ .matchup .h2h{font-size:9px;padding:1px 6px} .matchup{font-size:14.5px} }
+
+/* Top 25 rank before team names */
+.chip .rk{font-size:.78em;font-weight:900;color:var(--gold);margin-right:-2px;font-variant-numeric:tabular-nums}
+
+.poll{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:4px 18px}
+.pollrow{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:0;padding:6px 0;border-bottom:1px solid var(--line);color:var(--text);font-size:14px}
+details summary{cursor:pointer;padding:4px 0}

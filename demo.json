@@ -25,7 +25,19 @@
    "All communication happens in the league Discord"
   ],
   "links": [],
-  "firstSeason": 2026
+  "firstSeason": 2026,
+  "polls": {
+   "2028_10": [
+    {
+     "id": "kennesaw-state",
+     "r": 4
+    },
+    {
+     "id": "purdue",
+     "r": 17
+    }
+   ]
+  }
  },
  "teams": [
   {

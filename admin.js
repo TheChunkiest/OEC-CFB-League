@@ -1,11 +1,11 @@
 import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
-  orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime
-} from './core.js?v=24';
+  orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor
+} from './core.js?v=27';
 import { lookupColor } from './teamcolors.js';
 
-const TABS = [['advance', 'Advance'], ['preseason', 'Preseason'], ['games', 'Games'], ['ratings', 'Ratings'], ['coaches', 'Coaches & Accounts'], ['betting', 'Betting'], ['awards', 'Awards'], ['settings', 'Settings & History']];
+const TABS = [['advance', 'Advance'], ['preseason', 'Preseason'], ['games', 'Games'], ['ratings', 'Ratings'], ['top25', 'Top 25'], ['coaches', 'Coaches & Accounts'], ['betting', 'Betting'], ['awards', 'Awards'], ['settings', 'Settings & History']];
 const ST = { tab: 'advance', desk: 'no', gamesWeek: null, msg: '' };
 const DEFAULT_AWARDS = ['MVP', 'Offensive Player of the Year', 'Defensive Player of the Year', 'Best Offense', 'Best Defense', 'Game of the Year'];
 
@@ -15,6 +15,33 @@ const teamOpts = (sel, blank, filter = () => true) => (blank ? `<option value=""
   D.teams.filter(filter).slice().sort((a, b) => a.name.localeCompare(b.name)).map(t => `<option value="${esc(t.id)}" ${t.id === sel ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
 const flash = m => { ST.msg = m; ST.clear = true; render(); window.scrollTo(0, 0); };
 const findTeam = s => { const q = String(s || '').trim().toLowerCase(); return D.teams.find(t => t.id === q || t.name.toLowerCase() === q || (t.abbr || '').toLowerCase() === q); };
+
+/* ---------- Top 25 editor ---------- */
+function pollTeams() {
+  const s = L().season, ids = new Set(leagueTeams().map(t => t.id));
+  D.games.filter(g => g.season === s).forEach(g => { ids.add(g.home); ids.add(g.away); });
+  return [...ids].map(team);
+}
+function pollEditor(week) {
+  const cur = pollFor(L().season, week);
+  const ts = pollTeams().sort((a, b) => (cur[a.id] || 99) - (cur[b.id] || 99) || a.name.localeCompare(b.name));
+  return `<div class="poll">${ts.map(t => `<label class="pollrow"><span><i class="sw" style="background:${esc(teamColor(t))}"></i> ${esc(t.name)} <span class="muted small">${esc(isUserTeam(t) ? t.coach : '')}</span></span>
+    <span class="row" style="flex-wrap:nowrap"><b class="muted">#</b><input type="number" inputmode="numeric" min="1" max="25" data-poll="${esc(t.id)}" value="${cur[t.id] || ''}" placeholder="—" style="width:70px"></span></label>`).join('')}</div>
+    <p class="muted small">Leave blank for unranked. Teams not in your schedule can be ignored; only teams you rank get a number.</p>`;
+}
+function readPoll() {
+  const arr = [], seen = {};
+  for (const el of $$('[data-poll]')) {
+    if (el.value === '') continue;
+    const r = Math.round(+el.value);
+    if (!(r >= 1 && r <= 25)) throw new Error(`${team(el.dataset.poll).name}: rank must be 1–25.`);
+    if (seen[r]) throw new Error(`Two teams are ranked #${r} (${team(seen[r]).name} and ${team(el.dataset.poll).name}).`);
+    seen[r] = el.dataset.poll; arr.push({ id: el.dataset.poll, r });
+  }
+  return arr.sort((x, y) => x.r - y.r);
+}
+const pollKey = (week, season = L().season) => `${season}_${week}`;
+const pollChanged = (arr, week) => { const cur = pollFor(L().season, week); return arr.length !== Object.keys(cur).length || arr.some(x => cur[x.id] !== x.r); };
 
 /* ---------- shared pieces ---------- */
 function deskBlock() {
@@ -65,6 +92,7 @@ const views = {
       const W = lg.week, games = D.games.filter(g => g.season === s && g.week === W), last = W >= lg.finalWeek;
       return `<div class="card"><h2>Week ${W} Results</h2><p class="muted">Enter every score for Week ${W}, then submit to advance. Saving a score also locks that game for betting, so you can enter coach-vs-coach results as they finish. Betting is <b>${lg.bettingOpen ? 'OPEN' : 'LOCKED'}</b> <button class="sm ghost" data-act="toggleBet">${lg.bettingOpen ? 'Lock betting' : 'Unlock betting'}</button></p></div>
         ${games.length ? scoreRows(games) : '<div class="card empty">No games scheduled for this week. Add them on the Games tab, or just advance.</div>'}
+        <div class="card"><details><summary><b>Update the Top 25 for ${last ? 'championship week' : `Week ${W + 1}`}</b> <span class="muted small">(optional — leave as-is to keep this week's rankings)</span></summary>${pollEditor(W)}</details></div>
         ${deskBlock()}
         <div class="card row"><button class="ghost" data-act="saveScores">Save scores only</button>
           <button data-act="advanceWeek">${last ? `Submit Week ${W} & end the regular season` : `Submit Week ${W} & advance to Week ${W + 1}`}</button></div>`;
@@ -137,6 +165,12 @@ const views = {
         <div style="flex:1 1 100%"><i class="sw" style="background:${esc(teamColor(t))};margin-right:6px"></i><b>${esc(t.name)}</b> <span class="muted small">${esc(t.coach || 'CPU')}</span></div>
         ${['ovr', 'off', 'def'].map(k => `<label style="margin:0;font-size:11px;text-align:center">${k.toUpperCase()}<br><input class="score" type="number" inputmode="numeric" min="40" max="99" data-k="${k}" value="${t[k] ?? ''}" style="width:64px"></label>`).join('')}</div>`).join('')}
       <div class="row" style="margin-top:12px"><button data-act="saveRatings">Save ratings</button></div></div>`;
+  },
+
+  top25() {
+    const lg = L(), wk = lg.week;
+    return `<div class="card"><h2>Top 25 · entering ${esc(weekLabel())}</h2><p class="muted small">The ranking shows as <b style="color:var(--gold)">#4</b> before the team name everywhere on the site: schedules, the betting board, odds, standings and bet slips. Each week's poll is saved, so past games keep that week's rankings. You can also update it from the Advance form each week.</p>
+      ${pollEditor(wk)}<div class="row" style="margin-top:12px"><button data-act="savePoll">Save Top 25</button><button class="ghost" data-act="clearPoll">Clear all</button></div></div>`;
   },
 
   coaches() {
@@ -226,17 +260,22 @@ const ACT = {
     const games = D.games.filter(g => g.season === L().season && g.week === L().week);
     const r = await saveScoresAndSettle(games); flash(`Saved ${r.saved} score${r.saved === 1 ? '' : 's'}; those games are locked and their wagers graded.`);
   },
+  async savePoll() { const arr = readPoll(); await put('meta', 'league', { polls: { [pollKey(L().week)]: arr } }); flash(`Top 25 saved (${arr.length} ranked teams).`); },
+  async clearPoll() { if (!confirm('Clear every ranking for this week?')) return; await put('meta', 'league', { polls: { [pollKey(L().week)]: [] } }); flash('Top 25 cleared for this week.'); },
   async advanceWeek() {
     const lg = L(), W = lg.week, games = D.games.filter(g => g.season === lg.season && g.week === W);
+    const poll = $$('[data-poll]').length ? readPoll() : null;
     const { missing } = readScores(games);
     if (missing.length && !confirm(`${missing.length} game(s) have no score. Advance anyway? Wagers on them stay open.`)) return;
     await saveScoresAndSettle(games);
     const desk = deskValue();
     if (W >= lg.finalWeek) {
+      if (poll && pollChanged(poll, W)) await put('meta', 'league', { polls: { [pollKey(W + 1)]: poll } });
       await put('meta', 'league', { week: W + 1, phase: PHASES.CCG, bettingOpen: false, desk, futures: { ...(lg.futures || {}), open: false }, winTotals: { season: 0, odds: {} }, awards: { open: false, season: lg.season, categories: lg.awards?.season === lg.season ? (lg.awards.categories || []) : [] } });
       await batch(settleOps([]));
       ST.desk = 'no'; flash('Regular season complete. Win-total bets are settled. Set up the championship game and awards ballot below.');
     } else {
+      if (poll && pollChanged(poll, W)) await put('meta', 'league', { polls: { [pollKey(W + 1)]: poll } });
       await put('meta', 'league', { week: W + 1, bettingOpen: true, desk });
       await batch(lineOps(W + 1));
       ST.desk = 'no'; flash(`Advanced to Week ${W + 1}. Lines posted, betting open, odds and power rankings updated.`);

@@ -2,8 +2,8 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey
-} from './core.js?v=24';
+  gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName
+} from './core.js?v=27';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['odds', 'Odds'], ['betting', 'Betting'],
@@ -39,7 +39,7 @@ function gameCard(g, opts = {}) {
   const status = `<b class="gstat">${done ? 'Final' : 'Week ' + g.week}</b>`;
   const coaches = `<div class="meta">${status}${[a, h].filter(isUserTeam).length ? ` · ${isUserTeam(a) ? esc(a.coach) : 'CPU'} ${g.neutral ? 'vs' : '@'} ${isUserTeam(h) ? esc(h.coach) : 'CPU'}` : ''}</div>`;
   return `<div class="card game${opts.gotw ? ' gotw' : ''}">${opts.gotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}<div class="teams">
-      <div class="matchup"><span class="mt ${done ? (aw ? 'w' : 'l') : ''}">${chip(a.id)}${sc('away', aw)}</span><span class="at">${g.neutral ? 'vs' : '@'}</span><span class="mt ${done ? (hw ? 'w' : 'l') : ''}">${chip(h.id)}${sc('home', hw)}</span>${tags.join('')}</div>
+      <div class="matchup"><span class="mt ${done ? (aw ? 'w' : 'l') : ''}">${chip(a.id, { season: g.season, week: g.week })}${sc('away', aw)}</span><span class="at">${g.neutral ? 'vs' : '@'}</span><span class="mt ${done ? (hw ? 'w' : 'l') : ''}">${chip(h.id, { season: g.season, week: g.week })}${sc('home', hw)}</span>${tags.join('')}</div>
       ${coaches}${meta ? `<div class="meta">${meta}</div>` : ''}${opts.extra || ''}</div></div>`;
 }
 const sortTh = (st, key, label, cls = '') => `<th data-sort="${key}" class="${cls}${st.key === key ? ' sorted' : ''}">${label}${st.key === key ? (st.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
@@ -185,7 +185,7 @@ const PAGES = {
         const home = g.home === id, opp = home ? g.away : g.home, done = played(g), l = lineOf(g);
         const my = home ? +g.homeScore : +g.awayScore, th = home ? +g.awayScore : +g.homeScore;
         const myLine = l ? (home ? l.spread : -l.spread) : null;
-        return `<tr><td>${g.week}</td><td>${g.neutral ? 'vs' : home ? 'vs' : '@'} ${chip(opp)}</td><td class="muted">${l ? fmtLine(myLine) + `<span class="hide-sm"> · ${fmtOdds(home ? l.mlHome : l.mlAway)}</span>` : ''}</td><td class="num">${done ? `<span class="${my > th ? 'win' : 'loss'}">${my > th ? 'W' : 'L'} ${g.forfeit ? '(forfeit)' : my + '-' + th}</span>` : '<span class="muted">—</span>'}</td></tr>`;
+        return `<tr><td>${g.week}</td><td>${g.neutral ? 'vs' : home ? 'vs' : '@'} ${chip(opp, { season: g.season, week: g.week })}</td><td class="muted">${l ? fmtLine(myLine) + `<span class="hide-sm"> · ${fmtOdds(home ? l.mlHome : l.mlAway)}</span>` : ''}</td><td class="num">${done ? `<span class="${my > th ? 'win' : 'loss'}">${my > th ? 'W' : 'L'} ${g.forfeit ? '(forfeit)' : my + '-' + th}</span>` : '<span class="muted">—</span>'}</td></tr>`;
       }).join('')}</table></div></div>`;
   },
 
@@ -279,7 +279,7 @@ function betRows(g) {
   const l = lineOf(g); if (!l) return '';
   const a = team(g.away), h = team(g.home);
   const b = (market, pick, top, odds) => `<button class="pick${UI.mode === 'parlay' && UI.legs.some(x => x.gameId === g.id && x.market === market && x.pick === pick) ? ' sel' : ''}" data-bet="${esc(g.id)}|${market}|${pick}">${top} <b>${fmtOdds(odds)}</b></button>`;
-  return `<div class="tm matchup">${chip(a.id)}<span class="at">${g.neutral ? 'vs' : '@'}</span>${chip(h.id)}${isUserTeam(a) && isUserTeam(h) ? '<span class="h2h">USER GAME</span>' : ''}</div>
+  return `<div class="tm matchup">${chip(a.id, { season: g.season, week: g.week })}<span class="at">${g.neutral ? 'vs' : '@'}</span>${chip(h.id, { season: g.season, week: g.week })}${isUserTeam(a) && isUserTeam(h) ? '<span class="h2h">USER GAME</span>' : ''}</div>
     <div style="display:grid;gap:4px">${b('spread', 'away', esc(a.abbr) + ' ' + fmtLine(-l.spread), juiceOf(l, 'spread', 'away'))}${b('spread', 'home', esc(h.abbr) + ' ' + fmtLine(l.spread), juiceOf(l, 'spread', 'home'))}</div>
     <div style="display:grid;gap:4px">${b('ml', 'away', esc(a.abbr), l.mlAway)}${b('ml', 'home', esc(h.abbr), l.mlHome)}</div>
     <div style="display:grid;gap:4px">${b('total', 'over', 'O ' + l.total, juiceOf(l, 'total', 'over'))}${b('total', 'under', 'U ' + l.total, juiceOf(l, 'total', 'under'))}</div>`;
@@ -378,12 +378,13 @@ function slipRows(w) {
   const legs = w.market === 'parlay' ? (w.legs || []) : [w];
   return legs.map(l => {
     const g = D.games.find(x => x.id === l.gameId), side = g ? (l.pick === 'home' ? g.home : g.away) : null;
-    const match = g ? `${team(g.away).name} @ ${team(g.home).name} · Week ${g.week}` : '';
-    if (l.market === 'ml') return { t: `${team(side).name} Moneyline`, s: match, o: l.odds };
-    if (l.market === 'spread') return { t: `${team(side).name} ${fmtLine(l.pick === 'home' ? l.line : -l.line)}`, s: 'Spread · ' + match, o: l.odds };
+    const rn = id => rankName(id, g.season, g.week);
+    const match = g ? `${rn(g.away)} @ ${rn(g.home)} · Week ${g.week}` : '';
+    if (l.market === 'ml') return { t: `${rn(side)} Moneyline`, s: match, o: l.odds };
+    if (l.market === 'spread') return { t: `${rn(side)} ${fmtLine(l.pick === 'home' ? l.line : -l.line)}`, s: 'Spread · ' + match, o: l.odds };
     if (l.market === 'total') return { t: `${l.pick === 'over' ? 'Over' : 'Under'} ${l.line} points`, s: 'Total · ' + match, o: l.odds };
-    if (l.market === 'future') return { t: `${team(l.pick).name} to win the title`, s: `League Champion · Season ${seasonNum(w.season)}`, o: l.odds };
-    if (l.market === 'wins') return { t: `${team(l.team).name} ${l.pick === 'over' ? 'Over' : 'Under'} ${l.line} wins`, s: `Regular-season win total · Season ${seasonNum(w.season)}`, o: l.odds };
+    if (l.market === 'future') return { t: `${rankName(l.pick)} to win the title`, s: `League Champion · Season ${seasonNum(w.season)}`, o: l.odds };
+    if (l.market === 'wins') return { t: `${rankName(l.team)} ${l.pick === 'over' ? 'Over' : 'Under'} ${l.line} wins`, s: `Regular-season win total · Season ${seasonNum(w.season)}`, o: l.odds };
     return { t: wagerLabel(l), s: '', o: l.odds };
   });
 }
