@@ -35,11 +35,12 @@ function gameCard(g, opts = {}) {
     const cov = m === 0 ? 'Push' : (m > 0 ? team(g.home).abbr : team(g.away).abbr) + ' covered';
     meta = `Line: ${l.spread === 0 ? 'PK' : esc(team(fav).abbr) + ' ' + fmtLine(-Math.abs(l.spread))} · ${esc(cov)} · Total ${+g.homeScore + +g.awayScore} (${+g.homeScore + +g.awayScore > l.total ? 'Over' : +g.homeScore + +g.awayScore < l.total ? 'Under' : 'Push'} ${l.total})`;
   }
+  const sc = (side, won) => done ? `<b class="msc ${won ? 'w' : 'l'}">${g.forfeit ? (won ? 'FW' : 'FL') : g[side + 'Score']}</b>` : '';
+  const status = `<b class="gstat">${done ? 'Final' : 'Week ' + g.week}</b>`;
+  const coaches = `<div class="meta">${status}${[a, h].filter(isUserTeam).length ? ` · ${isUserTeam(a) ? esc(a.coach) : 'CPU'} ${g.neutral ? 'vs' : '@'} ${isUserTeam(h) ? esc(h.coach) : 'CPU'}` : ''}</div>`;
   return `<div class="card game${opts.gotw ? ' gotw' : ''}">${opts.gotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}<div class="teams">
-      <div class="${done ? (aw ? 'w' : 'l') : ''}">${chip(a.id)}${coach(a)}</div>
-      <div class="${done ? (hw ? 'w' : 'l') : ''}">${g.neutral ? 'vs' : '@'} ${chip(h.id)}${coach(h)} ${tags.join(' ')}</div>
-      ${meta ? `<div class="meta">${meta}</div>` : ''}${opts.extra || ''}</div>
-    <div class="score">${done ? `<div class="${aw ? 'w' : 'l'}">${g.forfeit ? (aw ? 'FW' : 'FL') : g.awayScore}</div><div class="${hw ? 'w' : 'l'}">${g.forfeit ? (hw ? 'FW' : 'FL') : g.homeScore}</div>` : '<span class="muted small">Wk ' + g.week + '</span>'}</div></div>`;
+      <div class="matchup"><span class="mt ${done ? (aw ? 'w' : 'l') : ''}">${chip(a.id)}${sc('away', aw)}</span><span class="at">${g.neutral ? 'vs' : '@'}</span><span class="mt ${done ? (hw ? 'w' : 'l') : ''}">${chip(h.id)}${sc('home', hw)}</span>${tags.join('')}</div>
+      ${coaches}${meta ? `<div class="meta">${meta}</div>` : ''}${opts.extra || ''}</div></div>`;
 }
 const sortTh = (st, key, label, cls = '') => `<th data-sort="${key}" class="${cls}${st.key === key ? ' sorted' : ''}">${label}${st.key === key ? (st.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
 function sortRows(rows, st, getters) {
@@ -128,7 +129,7 @@ const PAGES = {
       games.length ? `<div class="row" style="margin-bottom:10px"><div class="seg"><button data-mode="single" class="${UI.mode === 'single' ? 'on' : ''}">Single bets</button><button data-mode="parlay" class="${UI.mode === 'parlay' ? 'on' : ''}">Parlay</button></div>
         ${UI.mode === 'parlay' ? `<span class="muted small">Tap 2–${MAX_LEGS} picks from any upcoming week, plus League Champion and Win Total picks below. Per game: a spread <i>or</i> moneyline, plus the O/U. All must hit; payouts multiply.</span>` : ''}</div>
         <div class="row" style="margin-bottom:10px"><b>Bet on</b><select data-betweek="1">${bwks.map(w => `<option value="${w}" ${w === bw ? 'selected' : ''}>Week ${w}${w === L.week ? ' (this week)' : ''}</option>`).join('')}</select>
-        <span class="muted small">${bw === L.week ? 'This week\'s games.' : 'Early lines: they move after every advance, but your bet keeps the line you took.'}</span></div><div class="card"><div class="betgrid"><div class="hdr tm">Matchup</div><div class="hdr">Spread</div><div class="hdr">Moneyline</div><div class="hdr">Total</div>
+        <span class="muted small">${bw === L.week ? 'This week\'s games.' : 'Early lines: they move after every advance, but your bet keeps the line you took.'}</span></div><div class="card"><div class="betgrid"><div class="hdr">Spread</div><div class="hdr">Moneyline</div><div class="hdr">Total</div>
         ${games.map(g => betRows(g)).join('')}</div></div>` : '<div class="card empty">No open games this week.</div>';
     html += futuresSection();
     html += winsSection();
@@ -278,7 +279,7 @@ function betRows(g) {
   const l = lineOf(g); if (!l) return '';
   const a = team(g.away), h = team(g.home);
   const b = (market, pick, top, odds) => `<button class="pick${UI.mode === 'parlay' && UI.legs.some(x => x.gameId === g.id && x.market === market && x.pick === pick) ? ' sel' : ''}" data-bet="${esc(g.id)}|${market}|${pick}">${top} <b>${fmtOdds(odds)}</b></button>`;
-  return `<div class="tm" style="padding-top:8px">${chip(a.id)}<br>${g.neutral ? 'vs' : '@'} ${chip(h.id)}${isUserTeam(a) && isUserTeam(h) ? ' <span class="h2h">USER GAME</span>' : ''}</div>
+  return `<div class="tm matchup">${chip(a.id)}<span class="at">${g.neutral ? 'vs' : '@'}</span>${chip(h.id)}${isUserTeam(a) && isUserTeam(h) ? '<span class="h2h">USER GAME</span>' : ''}</div>
     <div style="display:grid;gap:4px">${b('spread', 'away', esc(a.abbr) + ' ' + fmtLine(-l.spread), juiceOf(l, 'spread', 'away'))}${b('spread', 'home', esc(h.abbr) + ' ' + fmtLine(l.spread), juiceOf(l, 'spread', 'home'))}</div>
     <div style="display:grid;gap:4px">${b('ml', 'away', esc(a.abbr), l.mlAway)}${b('ml', 'home', esc(h.abbr), l.mlHome)}</div>
     <div style="display:grid;gap:4px">${b('total', 'over', 'O ' + l.total, juiceOf(l, 'total', 'over'))}${b('total', 'under', 'U ' + l.total, juiceOf(l, 'total', 'under'))}</div>`;

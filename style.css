@@ -250,3 +250,21 @@ td.wrap{white-space:normal;min-width:140px}
   table.stack-sm input,table.stack-sm select{width:100%!important}
 }
 @media (max-width:640px){ button.pick{line-height:1.25} button.pick b{display:block} }
+
+/* One-line matchups: [color] Team @ [color] Team  USER GAME */
+.matchup{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;font-size:15px}
+.matchup .at{color:var(--muted);font-weight:700}
+.matchup .mt{display:inline-flex;align-items:center;gap:6px}
+.matchup .h2h{margin-left:2px}
+.matchup .msc{font-size:16px;font-variant-numeric:tabular-nums}
+.matchup .mt.l .chip,.matchup .msc.l{color:var(--muted)}
+.matchup .msc.w{color:var(--text)}
+.game .score{align-self:flex-start}
+/* bet board: matchup row on top, then spread / moneyline / total */
+.betgrid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.betgrid .tm{grid-column:1/-1;padding-top:10px}
+.betgrid .tm:first-of-type{padding-top:0}
+
+.game .teams{width:100%}
+.gstat{color:var(--text);font-weight:800;text-transform:uppercase;font-size:11px;letter-spacing:.6px}
+@media (max-width:640px){ .matchup .h2h{font-size:9px;padding:1px 6px} .matchup{font-size:14.5px} }
