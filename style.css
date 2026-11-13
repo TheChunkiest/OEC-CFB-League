@@ -299,3 +299,7 @@ ul.review li{padding:4px 0;border-bottom:1px dashed var(--line)}
 .betgame.gotw .tm{padding-top:0}
 .boostpill{display:inline-block;background:var(--gold);color:#140b00;font-weight:900;font-size:12px;padding:4px 10px;border-radius:999px;margin:0 0 6px}
 .boosttag{display:inline-block;background:var(--gold);color:#140b00;font-weight:900;font-size:10px;padding:1px 6px;border-radius:999px;vertical-align:middle}
+#popular .popular{margin:16px 0 14px}
+.popular .row.spread{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px}
+.popular .row.spread > div:last-child{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.popular .big{line-height:1}

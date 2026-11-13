@@ -118,7 +118,7 @@ const PAGES = {
     const bw = bwks.includes(UI.betWeek) ? UI.betWeek : bwks[0];
     const games = D.games.filter(g => g.season === s && g.week === bw && !played(g));
     const open = L.bettingOpen && L.phase !== PHASES.PRE && L.phase !== PHASES.POST;
-    let html = `<h2>Sportsbook · ${esc(weekLabel())}</h2><div id="popular">${popularCard()}</div>`;
+    let html = `<h2>Sportsbook · ${esc(weekLabel())}</h2>`;
     if (!me) html += `<div class="notice">Every coach gets <b>${START_CREDITS.toLocaleString()} credits</b> per season. <a href="#account">Log in</a> to place wagers.</div>`;
     else if (!me.teamId) html += `<div class="notice">Your account isn't linked to a team yet. Ask the commissioner to link it.</div>`;
     if (me && me.teamId) {
@@ -129,7 +129,7 @@ const PAGES = {
       games.length ? `<div class="row" style="margin-bottom:10px"><div class="seg"><button data-mode="single" class="${UI.mode === 'single' ? 'on' : ''}">Single bets</button><button data-mode="parlay" class="${UI.mode === 'parlay' ? 'on' : ''}">Parlay</button></div>
         ${UI.mode === 'parlay' ? `<span class="muted small">Tap 2–${MAX_LEGS} picks from any upcoming week, plus League Champion and Win Total picks below. Per game: one spread, one moneyline and one O/U, but not the spread and moneyline on the same team. All must hit; payouts multiply.</span>` : ''}</div>
         <div class="row" style="margin-bottom:10px"><b>Bet on</b><select data-betweek="1">${bwks.map(w => `<option value="${w}" ${w === bw ? 'selected' : ''}>Week ${w}${w === L.week ? ' (this week)' : ''}</option>`).join('')}</select>
-        <span class="muted small">${bw === L.week ? 'This week\'s games.' : 'Early lines: they move after every advance, but your bet keeps the line you took.'}</span></div><div class="card"><div class="betgrid"><div class="hdr">Spread</div><div class="hdr">Moneyline</div><div class="hdr">Total</div>
+        <span class="muted small">${bw === L.week ? 'This week\'s games.' : 'Early lines: they move after every advance, but your bet keeps the line you took.'}</span></div><div id="popular">${popularCard()}</div><div class="card"><div class="betgrid"><div class="hdr">Spread</div><div class="hdr">Moneyline</div><div class="hdr">Total</div>
         ${games.slice().sort((x, y) => (y.id === gotwGameId()) - (x.id === gotwGameId())).map(g => betRows(g)).join('')}</div></div>` : '<div class="card empty">No open games this week.</div>';
     html += futuresSection();
     html += winsSection();
