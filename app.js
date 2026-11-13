@@ -2,8 +2,8 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime
-} from './core.js?v=18';
+  gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit
+} from './core.js?v=19';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['odds', 'Odds'], ['betting', 'Betting'],
@@ -136,7 +136,7 @@ const PAGES = {
       const mine = D.wagers.filter(w => w.uid === me.id && w.season === s).sort((a, b) => b.week - a.week || (b.ts || 0) - (a.ts || 0));
       html += `<h2>My Wagers</h2><div class="card">${mine.length ? `<div class="tablewrap"><table><tr><th>Wk</th><th>Bet</th><th>Placed</th><th class="num">Stake</th><th class="num">Result</th><th></th></tr>
         ${mine.map(w => { const g = D.games.find(x => x.id === w.gameId); const canCancel = w.status === 'open' && w.market !== 'parlay' && (w.market === 'future' || w.market === 'wins' ? futuresOpen() : open && g && !played(g));
-          return `<tr><td>${w.market === 'future' ? 'Fut' : w.market === 'wins' ? 'Wins' : w.market === 'parlay' ? 'Par' : (g ? g.week : w.week)}</td><td>${esc(wagerLabel(w))}${legsHtml(w)}</td><td class="muted small">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num"><span class="pill ${w.status}">${w.status === 'open' ? 'Open · to win ' + (w.market === 'parlay' ? parlayProfit(w.stake, w.legs || []) : Math.round(w.odds > 0 ? w.stake * w.odds / 100 : w.stake * 100 / -w.odds)) : w.status.toUpperCase() + (w.payout ? ' ' + (w.payout > 0 ? '+' : '') + w.payout : '')}</span></td><td>${canCancel ? `<button class="sm ghost" data-cancel="${esc(w.id)}">Cancel</button>` : ''}</td></tr>`; }).join('')}
+          return `<tr><td>${w.market === 'future' ? 'Fut' : w.market === 'wins' ? 'Wins' : w.market === 'parlay' ? 'Par' : (g ? g.week : w.week)}</td><td>${esc(wagerLabel(w))}${legsHtml(w)}</td><td class="muted small">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num"><span class="pill ${w.status}">${w.status === 'open' ? 'Open · to win ' + (w.market === 'parlay' ? parlayProfit(w.stake, w.legs || []) : Math.round(w.odds > 0 ? w.stake * w.odds / 100 : w.stake * 100 / -w.odds)) : (w.status === 'void' ? 'VOID · REFUNDED' : w.status.toUpperCase()) + (w.payout ? ' ' + (w.payout > 0 ? '+' : '') + w.payout : '')}</span></td><td class="row" style="flex-wrap:nowrap"><button class="sm ghost" data-slip="${esc(w.id)}" title="Bet slip image">🧾</button>${canCancel ? `<button class="sm ghost" data-cancel="${esc(w.id)}">Cancel</button>` : ''}</td></tr>`; }).join('')}
       </table></div>` : '<div class="muted">No wagers yet this season.</div>'}</div>`;
     }
     const board = D.users.filter(u => u.teamId).map(u => ({ u, b: bankroll(u.id) })).sort((a, b) => b.b.balance - a.b.balance);
@@ -315,6 +315,105 @@ function regRec(tid) {
   D.games.filter(g => g.season === D.league.season && (g.type || 'reg') === 'reg' && played(g) && (g.home === tid || g.away === tid)).forEach(g => ((+g.homeScore > +g.awayScore ? g.home : g.away) === tid ? w++ : l++));
   return { w, l };
 }
+/* ---------- Shareable bet slip image ---------- */
+async function placeWager(data) {
+  const id = newId();
+  await put('wagers', id, data, false);
+  UI.placed = { ...data, id };
+}
+function slipRows(w) {
+  const legs = w.market === 'parlay' ? (w.legs || []) : [w];
+  return legs.map(l => {
+    const g = D.games.find(x => x.id === l.gameId), side = g ? (l.pick === 'home' ? g.home : g.away) : null;
+    const match = g ? `${team(g.away).name} @ ${team(g.home).name} · Week ${g.week}` : '';
+    if (l.market === 'ml') return { t: `${team(side).name} Moneyline`, s: match, o: l.odds };
+    if (l.market === 'spread') return { t: `${team(side).name} ${fmtLine(l.pick === 'home' ? l.line : -l.line)}`, s: 'Spread · ' + match, o: l.odds };
+    if (l.market === 'total') return { t: `${l.pick === 'over' ? 'Over' : 'Under'} ${l.line} points`, s: 'Total · ' + match, o: l.odds };
+    if (l.market === 'future') return { t: `${team(l.pick).name} to win the title`, s: `League Champion · Season ${seasonNum(w.season)}`, o: l.odds };
+    if (l.market === 'wins') return { t: `${team(l.team).name} ${l.pick === 'over' ? 'Over' : 'Under'} ${l.line} wins`, s: `Regular-season win total · Season ${seasonNum(w.season)}`, o: l.odds };
+    return { t: wagerLabel(l), s: '', o: l.odds };
+  });
+}
+const loadImg = src => new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+function wrapText(ctx, text, maxW) {
+  const words = String(text).split(' '), lines = []; let cur = '';
+  words.forEach(wd => { const t = cur ? cur + ' ' + wd : wd; if (ctx.measureText(t).width > maxW && cur) { lines.push(cur); cur = wd; } else cur = t; });
+  if (cur) lines.push(cur); return lines;
+}
+async function drawSlip(w) {
+  const rows = slipRows(w), W = 1080, P = 64, F = '"Arial Black","Segoe UI Black",Impact,system-ui,sans-serif', B = 'system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
+  const toWin = w.market === 'parlay' ? parlayProfit(w.stake, w.legs || []) : profit(w.stake, w.odds);
+  const c = document.createElement('canvas'), ctx = c.getContext('2d');
+  // measure height
+  ctx.font = `700 40px ${B}`;
+  const rowH = rows.map(r => 40 + wrapText(ctx, r.t, W - P * 2 - 220).length * 50 + (r.s ? 44 : 0));
+  const H = 330 + 150 + rowH.reduce((a, b) => a + b, 0) + 300 + 170;
+  c.width = W; c.height = H;
+  // background
+  const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#1d0809'); bg.addColorStop(0.35, '#121011'); bg.addColorStop(1, '#09090a');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#d3121c'; ctx.fillRect(0, 300, W, 8); ctx.fillStyle = '#f5b82e'; ctx.fillRect(0, 314, W, 5);
+  // header
+  const logo = await loadImg('logo.png');
+  if (logo) { const lh = 220, lw = lh * logo.width / logo.height; ctx.drawImage(logo, P - 10, 40, lw, lh); }
+  ctx.textAlign = 'right'; ctx.fillStyle = '#fff'; ctx.font = `900 54px ${F}`; ctx.fillText('OEC SPORTSBOOK', W - P, 130);
+  ctx.fillStyle = '#f5b82e'; ctx.font = `700 34px ${B}`; ctx.fillText(`Season ${seasonNum(w.season)} · Placed in Week ${w.week}`, W - P, 185);
+  ctx.fillStyle = '#a69a9c'; ctx.font = `600 30px ${B}`; ctx.fillText(`Coach ${w.coach || ''}`, W - P, 235);
+  // title
+  let y = 400; ctx.textAlign = 'left';
+  ctx.fillStyle = '#43c97e'; ctx.font = `800 30px ${B}`; ctx.fillText('✓ BET PLACED', P, y);
+  y += 70; ctx.fillStyle = '#fff'; ctx.font = `900 50px ${F}`;
+  ctx.fillText(w.market === 'parlay' ? `${rows.length}-LEG PARLAY` : 'SINGLE BET', P, y);
+  ctx.textAlign = 'right'; ctx.fillStyle = '#f5b82e'; ctx.fillText(fmtOdds(w.odds), W - P, y); ctx.textAlign = 'left';
+  y += 40;
+  // legs
+  rows.forEach((r, i) => {
+    const top = y, h = rowH[i];
+    ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(P, top, W - P * 2, h - 16);
+    ctx.fillStyle = '#d3121c'; ctx.fillRect(P, top, 8, h - 16);
+    ctx.font = `700 40px ${B}`; ctx.fillStyle = '#fff';
+    const lines = wrapText(ctx, r.t, W - P * 2 - 220); let ly = top + 62;
+    lines.forEach(t => { ctx.fillText(t, P + 36, ly); ly += 50; });
+    if (r.s) { ctx.font = `500 28px ${B}`; ctx.fillStyle = '#a69a9c'; wrapText(ctx, r.s, W - P * 2 - 80).slice(0, 1).forEach(t => ctx.fillText(t, P + 36, ly - 4)); }
+    ctx.textAlign = 'right'; ctx.font = `900 40px ${F}`; ctx.fillStyle = '#f5b82e'; ctx.fillText(fmtOdds(r.o), W - P - 30, top + 62); ctx.textAlign = 'left';
+    y += h;
+  });
+  // money boxes
+  y += 30; const bw = (W - P * 2 - 40) / 3;
+  [['WAGER', w.stake], ['TO WIN', toWin], ['TOTAL PAYOUT', w.stake + toWin]].forEach(([k, v], i) => {
+    const x = P + i * (bw + 20);
+    ctx.fillStyle = i === 2 ? '#f5b82e' : 'rgba(255,255,255,0.07)'; ctx.fillRect(x, y, bw, 190);
+    ctx.fillStyle = i === 2 ? '#140b00' : '#a69a9c'; ctx.font = `800 26px ${B}`; ctx.textAlign = 'center'; ctx.fillText(k, x + bw / 2, y + 62);
+    ctx.fillStyle = i === 2 ? '#140b00' : '#fff'; ctx.font = `900 58px ${F}`; ctx.fillText(Number(v).toLocaleString(), x + bw / 2, y + 140);
+    ctx.font = `600 22px ${B}`; ctx.fillText('credits', x + bw / 2, y + 172);
+  });
+  ctx.textAlign = 'left'; y += 250;
+  // footer
+  ctx.strokeStyle = '#33242a'; ctx.lineWidth = 2; ctx.setLineDash([12, 10]); ctx.beginPath(); ctx.moveTo(P, y - 30); ctx.lineTo(W - P, y - 30); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle = '#d9d0d1'; ctx.font = `600 30px ${B}`; ctx.fillText('Placed ' + new Date(w.ts || Date.now()).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }), P, y + 20);
+  ctx.fillStyle = '#a69a9c'; ctx.font = `500 26px ${B}`; ctx.fillText('Bet ID ' + String(w.id || '').toUpperCase(), P, y + 70);
+  ctx.textAlign = 'right'; ctx.fillText('OEC CFB League Hub', W - P, y + 70); ctx.textAlign = 'left';
+  return c;
+}
+async function showSlipImage(w) {
+  if (!w) return;
+  const c = await drawSlip(w), url = c.toDataURL('image/png');
+  UI.slipCanvas = c;
+  $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card" style="max-width:460px;max-height:92vh;overflow:auto">
+    <h2>${w.status === 'open' || !w.status ? 'Bet placed!' : 'Bet slip'}</h2><img src="${url}" alt="Bet slip" style="width:100%;border-radius:10px;display:block">
+    <div class="row" style="margin-top:12px"><button class="gold" data-act="saveSlip">⬇ Save image</button><button class="ghost" data-close="1">Done</button></div>
+    <p class="muted small">On iPhone, you can also press and hold the image → <b>Save to Photos</b>.</p></div></div>`;
+}
+function showPlacedSlip() { const w = UI.placed; UI.placed = null; if (w) showSlipImage(w); }
+async function saveSlip() {
+  const c = UI.slipCanvas; if (!c) return;
+  const blob = await new Promise(r => c.toBlob(r, 'image/png')), name = 'oec-bet-slip.png';
+  try {
+    const file = new File([blob], name, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'OEC bet slip' }); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+}
 function showWinsSlip(tid, pick) {
   const me = auth.profile;
   if (!me) { location.hash = '#account'; return; }
@@ -415,31 +514,31 @@ async function placeBet() {
     if (bad || UI.legs.length < 2) return $('#smsg').textContent = 'One of these games is locked. Remove it and try again.';
     try {
       const legs = UI.legs.map(l => ({ gameId: l.gameId, market: l.market, pick: l.pick, line: l.line, odds: l.odds, ...(l.team ? { team: l.team } : {}) }));
-      await put('wagers', newId(), { uid: me.id, coach: me.name, season: L.season, week: L.week, gameId: '', market: 'parlay', pick: '', line: null, odds: parlayOdds(legs), legs, stake, status: 'open', payout: 0, ts: Date.now() }, false);
-      UI.legs = []; $('#modal').innerHTML = ''; await reload();
+      await placeWager({ uid: me.id, coach: me.name, season: L.season, week: L.week, gameId: '', market: 'parlay', pick: '', line: null, odds: parlayOdds(legs), legs, stake, status: 'open', payout: 0, ts: Date.now() });
+      UI.legs = []; await reload(); showPlacedSlip();
     } catch (e) { $('#smsg').textContent = 'Could not place parlay. ' + friendlyError(e); }
     return;
   }
   if (UI.slip.wins) {
     if (!(futuresOpen() && winsPosted())) return $('#smsg').textContent = 'Win totals are locked.';
     try {
-      await put('wagers', newId(), { uid: me.id, coach: me.name, season: L.season, week: L.week, gameId: '', market: 'wins', team: UI.slip.team, pick, line: UI.slip.line, odds, stake, status: 'open', payout: 0, ts: Date.now() }, false);
-      $('#modal').innerHTML = ''; await reload();
+      await placeWager({ uid: me.id, coach: me.name, season: L.season, week: L.week, gameId: '', market: 'wins', team: UI.slip.team, pick, line: UI.slip.line, odds, stake, status: 'open', payout: 0, ts: Date.now() });
+      await reload(); showPlacedSlip();
     } catch (e) { $('#smsg').textContent = 'Could not place wager. ' + friendlyError(e); }
     return;
   }
   if (UI.slip.future) {
     if (!futuresOpen()) return $('#smsg').textContent = 'Futures are locked.';
     try {
-      await put('wagers', newId(), { uid: me.id, coach: me.name, season: L.season, week: L.week, gameId: '', market: 'future', pick, line: null, odds, stake, status: 'open', payout: 0, ts: Date.now() }, false);
-      $('#modal').innerHTML = ''; await reload();
+      await placeWager({ uid: me.id, coach: me.name, season: L.season, week: L.week, gameId: '', market: 'future', pick, line: null, odds, stake, status: 'open', payout: 0, ts: Date.now() });
+      await reload(); showPlacedSlip();
     } catch (e) { $('#smsg').textContent = 'Could not place wager. ' + friendlyError(e); }
     return;
   }
   if (!L.bettingOpen || played(g) || g.week < L.week || g.season !== L.season) return $('#smsg').textContent = 'This game is locked.';
   try {
-    await put('wagers', newId(), { uid: me.id, coach: me.name, season: L.season, week: L.week, gameId: g.id, market, pick, line, odds, stake, status: 'open', payout: 0, ts: Date.now() }, false);
-    $('#modal').innerHTML = ''; await reload();
+    await placeWager({ uid: me.id, coach: me.name, season: L.season, week: L.week, gameId: g.id, market, pick, line, odds, stake, status: 'open', payout: 0, ts: Date.now() });
+    await reload(); showPlacedSlip();
   } catch (e) { $('#smsg').textContent = 'Could not place wager. ' + friendlyError(e); }
 }
 
@@ -526,7 +625,7 @@ async function reload() { await loadAll(); refreshProfile(); if (D.league.awards
 document.addEventListener('click', async e => {
   const lx = e.target.closest('[data-livex]');
   if (lx) { try { sessionStorage.setItem('oecLiveDismissed', lx.dataset.livex); } catch (err) { /* ignore */ } showLive(); return; }
-  const t = e.target.closest('[data-sort],[data-metric],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-act],[data-close],[data-stake],[data-acct],[data-cancel]');
+  const t = e.target.closest('[data-sort],[data-metric],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-slip],[data-act],[data-close],[data-stake],[data-acct],[data-cancel]');
   if (!t) return;
   const page = (location.hash.slice(1) || 'home').split('/')[0];
   if (t.dataset.sort) {
@@ -545,6 +644,8 @@ document.addEventListener('click', async e => {
   else if (t.dataset.close && e.target === t) $('#modal').innerHTML = '';
   else if (t.dataset.cancel) { if (confirm('Cancel this wager and refund the stake?')) { try { await del('wagers', t.dataset.cancel); await reload(); } catch (err) { alert(err.message); } } }
   else if (t.dataset.act === 'place') placeBet();
+  else if (t.dataset.act === 'saveSlip') saveSlip();
+  else if (t.dataset.slip) showSlipImage(D.wagers.find(x => x.id === t.dataset.slip));
   else if (t.dataset.act === 'clearLegs') { UI.legs = []; route(); }
   else if (t.dataset.act === 'reviewParlay') showParlaySlip();
   else if (t.dataset.act === 'logout') logout();
