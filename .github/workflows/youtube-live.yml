@@ -10,29 +10,54 @@ concurrency:
   cancel-in-progress: false
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Check channel
         id: check
         shell: python
+        env:
+          YT_API_KEY: ${{ secrets.YT_API_KEY }}
         run: |
-          import json, os, re, urllib.request
-          URL = "https://www.youtube.com/@originalentertainingcrackers/live"
-          req = urllib.request.Request(URL, headers={
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36",
-              "Accept-Language": "en-US,en;q=0.9", "Cookie": "CONSENT=YES+1; SOCS=CAI"})
-          try:
+          import json, os, re, urllib.request, urllib.parse
+          HANDLE = "@originalentertainingcrackers"
+          key = (os.environ.get("YT_API_KEY") or "").strip()
+
+          def via_api():
+              def api(path, **q):
+                  q["key"] = key
+                  url = "https://www.googleapis.com/youtube/v3/" + path + "?" + urllib.parse.urlencode(q)
+                  return json.load(urllib.request.urlopen(url, timeout=20))
+              ch = api("channels", part="contentDetails", forHandle=HANDLE)["items"][0]
+              uploads = ch["contentDetails"]["relatedPlaylists"]["uploads"]
+              items = api("playlistItems", part="contentDetails", playlistId=uploads, maxResults=10)["items"]
+              ids = [i["contentDetails"]["videoId"] for i in items]
+              vids = api("videos", part="snippet", id=",".join(ids))["items"] if ids else []
+              for v in vids:
+                  if v["snippet"].get("liveBroadcastContent") == "live":
+                      return {"live": True, "videoId": v["id"], "url": "https://www.youtube.com/watch?v=" + v["id"], "title": v["snippet"]["title"]}
+              return {"live": False}
+
+          def via_page():
+              req = urllib.request.Request("https://www.youtube.com/" + HANDLE + "/live", headers={
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36",
+                  "Accept-Language": "en-US,en;q=0.9", "Cookie": "CONSENT=YES+1; SOCS=CAI"})
               html = urllib.request.urlopen(req, timeout=20).read().decode("utf-8", "ignore")
+              t = re.search(r"<title>(.*?)</title>", html, re.S)
+              print("Page title:", t.group(1).strip() if t else "?", "| bot check:", "not a bot" in html)
+              vid = re.search(r'<link rel="canonical" href="https://www\.youtube\.com/watch\?v=([\w-]{11})"', html)
+              live = vid is not None and ('"isLiveNow":true' in html or '"isLive":true' in html)
+              if not live:
+                  return {"live": False}
+              title = re.search(r'<meta name="title" content="([^"]*)"', html)
+              return {"live": True, "videoId": vid.group(1), "url": "https://www.youtube.com/watch?v=" + vid.group(1),
+                      "title": (title.group(1) if title else "Live on YouTube").replace("&amp;", "&").replace("&#39;", "'").replace("&quot;", '"')}
+
+          try:
+              new = via_api() if key else via_page()
+              print("Method:", "YouTube API" if key else "page check (add YT_API_KEY secret for reliability)")
           except Exception as e:
-              print("Fetch failed, leaving live.json alone:", e); raise SystemExit(0)
-          vid = re.search(r'<link rel="canonical" href="https://www\.youtube\.com/watch\?v=([\w-]{11})"', html)
-          live = '"isLiveNow":true' in html and vid is not None
-          title = re.search(r'<meta name="title" content="([^"]*)"', html)
-          new = {"live": live}
-          if live:
-              new.update(videoId=vid.group(1), url="https://www.youtube.com/watch?v=" + vid.group(1),
-                         title=(title.group(1) if title else "Live on YouTube").replace("&amp;", "&").replace("&#39;", "'").replace("&quot;", '"'))
+              print("Check failed, leaving live.json alone:", e); raise SystemExit(0)
           old = {}
           if os.path.exists("live.json"):
               try: old = json.load(open("live.json"))
