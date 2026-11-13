@@ -575,44 +575,134 @@ export function coachStats() {
 
 /* ---------------- Storylines ---------------- */
 export function storylines() {
-  const L = D.league, s = L.season, out = [];
+  const L = D.league, s = L.season, out = [], pool = [];
   const lw = lastPlayedWeek(s);
+  const poss = n => /s$/i.test(n) ? n + "'" : n + "'s";
+  const name = id => { const t = team(id); return isUserTeam(t) ? `${poss(t.coach)} ${t.name}` : t.name; };
   const nextGames = D.games.filter(g => g.season === s && g.week === L.week && !played(g));
-  const userGame = g => isUserTeam(team(g.home)) || isUserTeam(team(g.away));
-  const name = id => { const t = team(id); return isUserTeam(t) ? `${t.coach}'s ${t.name}` : t.name; };
+  const upNext = () => {
+    const g = gotwTally(s, L.week).game || nextGames.filter(x => isUserTeam(team(x.home)) && isUserTeam(team(x.away))).sort((a, b) => Math.abs(lineOf(a)?.spread ?? 99) - Math.abs(lineOf(b)?.spread ?? 99))[0];
+    if (!g) return null;
+    const l = lineOf(g), fav = l.spread <= 0 ? g.home : g.away, isG = gotwTally(s, L.week).game === g;
+    return { tag: isG ? 'Game of the Week' : 'Up Next', title: `Week ${L.week}: ${team(g.away).name} at ${team(g.home).name}`, body: `${name(g.away)} visits ${name(g.home)}. ${l.spread === 0 ? "Pick'em" : `${team(fav).name} ${fmtLine(-Math.abs(l.spread))}`}, total ${l.total}.` };
+  };
   if (lw == null) {
     const sim = simulate(s, L.week);
-    const fav = Object.entries(sim).sort((a, b) => b[1].titlePct - a[1].titlePct).slice(0, 2);
-    if (fav.length) out.push({ tag: 'Preseason', title: `${team(fav[0][0]).name} enters as the title favorite`, body: `The model gives ${name(fav[0][0])} a ${pctStr(fav[0][1].titlePct)} shot at the league title (most likely record ${fav[0][1].likely})${fav[1] ? `, with ${name(fav[1][0])} next at ${pctStr(fav[1][1].titlePct)}` : ''}.` });
-  } else {
-    D.games.filter(g => g.season === s && g.week === lw && played(g) && g.forfeit).forEach(g => { const w = +g.homeScore > +g.awayScore ? g.home : g.away, l = w === g.home ? g.away : g.home; if (isUserTeam(team(w))) out.push({ tag: 'Forfeit', title: `${team(w).name} wins by forfeit`, body: `${name(w)} picks up a forfeit win over ${name(l)} in Week ${lw}.` }); });
-    const wk = D.games.filter(g => g.season === s && g.week === lw && played(g) && !g.forfeit);
-    const R = ratings(s, lw);
-    const info = wk.map(g => { const l = (g.lines && g.lines.spread != null) ? lineOf(g) : lineFrom(R, g); const hw = +g.homeScore > +g.awayScore; return { g, l, hw, w: hw ? g.home : g.away, lo: hw ? g.away : g.home, ws: Math.max(+g.homeScore, +g.awayScore), ls: Math.min(+g.homeScore, +g.awayScore), pw: l ? (hw ? l.pHome : 1 - l.pHome) : 0.5, surprise: l ? Math.abs((+g.homeScore - +g.awayScore) + l.spread) : 0 }; });
-    info.filter(x => isUserTeam(team(x.g.home)) && isUserTeam(team(x.g.away))).forEach(x => {
-      const cover = x.l ? (x.pw < 0.5 ? ' as the underdog' : '') : '';
-      out.push({ tag: 'User Game', title: `${team(x.w).coach} over ${team(x.lo).coach}`, body: `${name(x.w)} beat ${name(x.lo)} ${x.ws}-${x.ls}${cover} in Week ${lw}.` });
-    });
-    const upset = info.filter(x => userGame(x.g) && x.pw < 0.42).sort((a, b) => a.pw - b.pw)[0];
-    if (upset) out.push({ tag: 'Upset', title: `Upset: ${team(upset.w).name} stuns ${team(upset.lo).name}`, body: `${name(upset.w)} entered with only a ${pctStr(upset.pw)} win probability (${fmtOdds(upset.w === upset.g.home ? upset.l.mlHome : upset.l.mlAway)}) and won ${upset.ws}-${upset.ls}.` });
-    const big = info.filter(x => userGame(x.g) && x !== upset).sort((a, b) => b.surprise - a.surprise)[0];
-    if (big && big.surprise >= 10) {
-      const over = (big.hw ? 1 : -1) * ((+big.g.homeScore - +big.g.awayScore) + big.l.spread) > 0;
-      out.push({ tag: 'Statement', title: over ? `${team(big.w).name} blows past the number` : `${team(big.w).name} survives a scare`, body: `${name(big.w)} won ${big.ws}-${big.ls} against ${team(big.lo).name}, ${Math.round(big.surprise)} points ${over ? 'better' : 'worse'} than the spread expected.` });
-    }
-    const recs = records(s);
-    const st = userTeams().map(t => ({ t, s: streak(recs[t.id]) })).filter(x => /^[WL]\d+$/.test(x.s) && +x.s.slice(1) >= 3);
-    const hotT = st.filter(x => x.s[0] === 'W').sort((a, b) => b.s.slice(1) - a.s.slice(1))[0];
-    const coldT = st.filter(x => x.s[0] === 'L').sort((a, b) => b.s.slice(1) - a.s.slice(1))[0];
-    if (hotT) out.push({ tag: 'Hot Streak', title: `${hotT.t.name} has won ${hotT.s.slice(1)} straight`, body: `${hotT.t.coach} is ${rec(recs[hotT.t.id])} and rolling into Week ${L.week}.` });
-    if (coldT) out.push({ tag: 'Cold Streak', title: `${coldT.t.name} has dropped ${coldT.s.slice(1)} in a row`, body: `${coldT.t.coach} needs a response — currently ${rec(recs[coldT.t.id])}.` });
-    const before = simulate(s, lw), after = simulate(s, lw + 1);
-    const mv = Object.keys(after).map(id => ({ id, d: after[id].titlePct - before[id].titlePct })).filter(x => isUserTeam(team(x.id))).sort((a, b) => b.d - a.d);
-    if (mv.length && mv[0].d >= 0.04) out.push({ tag: 'Odds Movers', title: `${team(mv[0].id).name}'s title odds jump to ${pctStr(after[mv[0].id].titlePct)}`, body: `Up ${Math.round(mv[0].d * 100)} points this week.${mv[mv.length - 1].d <= -0.04 ? ` Biggest drop: ${name(mv[mv.length - 1].id)}, down ${Math.round(-mv[mv.length - 1].d * 100)} to ${pctStr(after[mv[mv.length - 1].id].titlePct)}.` : ''}` });
-    const unbeaten = leagueTeams().filter(t => recs[t.id].l === 0 && recs[t.id].w >= 3);
-    if (unbeaten.length && unbeaten.length <= 3) out.push({ tag: 'Unbeaten Watch', title: unbeaten.length === 1 ? `${unbeaten[0].name} is the last unbeaten team` : `${unbeaten.length} teams still unbeaten`, body: unbeaten.map(t => `${name(t.id)} (${rec(recs[t.id])})`).join(', ') + '.' });
+    Object.entries(sim).sort((a, b) => b[1].titlePct - a[1].titlePct).slice(0, 2).forEach(([id, o], i) => out.push({ tag: i ? 'Contender' : 'Preseason', title: `${team(id).name} ${i ? 'is right behind' : 'enters as the title favorite'}`, body: `The model gives ${name(id)} a ${pctStr(o.titlePct)} shot at the league title (most likely record ${o.likely}).` }));
+    const u = upNext(); if (u) out.push(u);
+    return out.slice(0, 5);
   }
-  const g = gotwTally(s, L.week).game || nextGames.filter(x => isUserTeam(team(x.home)) && isUserTeam(team(x.away))).sort((a, b) => Math.abs(lineOf(a).spread) - Math.abs(lineOf(b).spread))[0];
-  if (g) { const l = lineOf(g); const fav = l.spread <= 0 ? g.home : g.away; out.push({ tag: 'Up Next', title: `Week ${L.week}: ${team(g.away).name} at ${team(g.home).name}`, body: `${name(g.away)} visits ${name(g.home)}. ${l.spread === 0 ? 'Pick\'em' : `${team(fav).name} ${fmtLine(-Math.abs(l.spread))}`}, total ${l.total}.` }); }
+  const wk = D.games.filter(g => g.season === s && g.week === lw && played(g));
+  const real = wk.filter(g => !g.forfeit);
+  const R = ratings(s, lw);
+  const lineAt = g => (g.lines && g.lines.spread != null) ? lineOf(g) : lineFrom(R, g);
+  const wkIds = new Set(wk.map(g => g.id));
+
+  // 1) Bad Beat of the Week — the closest losing bet on last week's games.
+  const miss = l => {
+    const g = D.games.find(x => x.id === l.gameId); if (!g || !played(g) || g.forfeit) return null;
+    const hs = +g.homeScore, as = +g.awayScore;
+    if (l.market === 'spread') { const v = hs - as + l.line; return Math.abs(v); }
+    if (l.market === 'total') return Math.abs(hs + as - l.line);
+    if (l.market === 'ml') return Math.abs(hs - as);
+    return null;
+  };
+  const beats = [];
+  D.wagers.filter(w => w.season === s && w.status === 'lost').forEach(w => {
+    if (w.market === 'parlay') {
+      const lost = (w.legs || []).filter(l => l.result === 'lost');
+      if (lost.length !== 1 || !wkIds.has(lost[0].gameId) || (w.legs || []).length < 2) return;
+      const m = miss(lost[0]); if (m == null) return;
+      beats.push({ w, m, leg: lost[0], missed: parlayProfit(w.stake, (w.legs || []).filter(l => l.result !== 'push' && l.result !== 'void')) });
+    } else if (wkIds.has(w.gameId)) {
+      const m = miss(w); if (m == null) return;
+      beats.push({ w, m, leg: w, missed: profit(w.stake, w.odds) });
+    }
+  });
+  beats.sort((a, b) => a.m - b.m || b.missed - a.missed);
+  if (beats.length) {
+    const b = beats[0], g = D.games.find(x => x.id === b.leg.gameId), sc = `${team(g.away).abbr || team(g.away).name} ${g.awayScore}, ${team(g.home).abbr || team(g.home).name} ${g.homeScore}`;
+    const by = b.leg.market === 'ml' ? `lost by ${b.m}` : `missed by ${b.m}`;
+    out.push({ tag: 'Bad Beat of the Week', title: b.w.market === 'parlay' ? `${poss(b.w.coach)} ${b.w.legs.length}-leg parlay dies on the last leg` : `${b.w.coach} gets burned by ${b.m} point${b.m === 1 ? '' : 's'}`,
+      body: b.w.market === 'parlay'
+        ? `Every other leg hit, but ${wagerLabel(b.leg)} ${by} (${sc}). That ${fmtOdds(b.w.odds)} ticket would have paid ${b.missed.toLocaleString()} credits.`
+        : `${wagerLabel(b.leg)} ${by} (${sc}). It would have paid ${b.missed.toLocaleString()} credits.` });
+  }
+
+  // 2) Worth Noting — something rare or happening for the first time.
+  const notes = [];
+  const prior = D.games.filter(g => played(g) && !g.forfeit && (g.season < s || (g.season === s && g.week < lw)));
+  if (prior.length >= 10) {
+    const maxTot = Math.max(...prior.map(g => +g.homeScore + +g.awayScore)), maxMar = Math.max(...prior.map(g => Math.abs(g.homeScore - g.awayScore)));
+    const maxPts = Math.max(...prior.map(g => Math.max(+g.homeScore, +g.awayScore)));
+    real.forEach(g => {
+      const tot = +g.homeScore + +g.awayScore, mar = Math.abs(g.homeScore - g.awayScore), hw = +g.homeScore > +g.awayScore, w = hw ? g.home : g.away, top = Math.max(+g.homeScore, +g.awayScore);
+      if (tot > maxTot) notes.push({ p: 100, title: 'Highest-scoring game in league history', body: `${team(g.away).name} ${g.awayScore}, ${team(g.home).name} ${g.homeScore}. Those ${tot} combined points top the old record of ${maxTot}.` });
+      if (top > maxPts) notes.push({ p: 98, title: `${team(w).name} sets the league scoring record`, body: `${name(w)} hung ${top} points, the most by any team in league history (old mark: ${maxPts}).` });
+      if (mar > maxMar) notes.push({ p: 96, title: 'Largest margin of victory in league history', body: `${name(w)} won by ${mar}, beating the old record of ${maxMar}.` });
+      if (Math.min(+g.homeScore, +g.awayScore) === 0 && !prior.some(x => Math.min(+x.homeScore, +x.awayScore) === 0)) notes.push({ p: 94, title: 'First shutout in league history', body: `${name(w)} held ${team(hw ? g.away : g.home).name} scoreless, ${top}-0.` });
+    });
+  }
+  // First-ever win for one coach over another.
+  wk.forEach(g => {
+    const hw = +g.homeScore > +g.awayScore, wc = coachOf(g, hw ? 'home' : 'away'), lc = coachOf(g, hw ? 'away' : 'home');
+    if (!wc || !lc || wc === 'CPU' || lc === 'CPU') return;
+    const meet = D.games.filter(x => played(x) && x !== g && (x.season < s || (x.season === s && x.week < lw)) && [coachOf(x, 'home'), coachOf(x, 'away')].sort().join('|') === [wc, lc].sort().join('|'));
+    const wins = meet.filter(x => coachOf(x, +x.homeScore > +x.awayScore ? 'home' : 'away') === wc).length;
+    if (meet.length >= 1 && wins === 0) notes.push({ p: 90 + Math.min(meet.length, 5), title: `${wc} finally beats ${lc}`, body: `${wc} had lost all ${meet.length} previous meeting${meet.length === 1 ? '' : 's'} with ${lc}, across every season. Not anymore.` });
+  });
+  // First win over a top-5 team this season.
+  const top5At = w => new Set(powerRankings(s, w).slice(0, 5).map(x => x.id));
+  real.forEach(g => {
+    const hw = +g.homeScore > +g.awayScore, w = hw ? g.home : g.away, l = hw ? g.away : g.home, t5 = top5At(lw);
+    if (!t5.has(l) || t5.has(w) || !isUserTeam(team(w))) return;
+    const before = D.games.filter(x => x.season === s && played(x) && !x.forfeit && x.week < lw && (x.home === w || x.away === w));
+    const tries = before.filter(x => top5At(x.week).has(x.home === w ? x.away : x.home));
+    const beat = tries.filter(x => (+x.homeScore > +x.awayScore ? x.home : x.away) === w);
+    if (beat.length === 0) notes.push({ p: tries.length ? 88 : 80, title: `${poss(team(w).name)} first win over a top-5 team`, body: `${name(w)} knocked off #${powerRankings(s, lw).find(x => x.id === l).rank} ${team(l).name}${tries.length ? `, after going 0-${tries.length} against the top 5 earlier this season` : ' for the first time this season'}.` });
+  });
+  // Long streak snapped / first win of the season.
+  const recBefore = records(s, lw), recNow = records(s, lw + 1);
+  userTeams().forEach(t => {
+    const b = recBefore[t.id], n = recNow[t.id]; if (!b || !n || n.w + n.l === b.w + b.l) return;
+    const st = streak(b), justLost = n.l > b.l, justWon = n.w > b.w;
+    if (justLost && /^W\d+$/.test(st) && +st.slice(1) >= 4) notes.push({ p: 70 + +st.slice(1), title: `${poss(t.name)} ${st.slice(1)}-game win streak is over`, body: `${t.coach} had won ${st.slice(1)} straight before last week's loss. Now ${rec(n)}.` });
+    if (justWon && b.w === 0 && b.l >= 3) notes.push({ p: 72, title: `${t.name} is in the win column`, body: `${t.coach} snaps an 0-${b.l} start with the first win of the season.` });
+  });
+  // Season-high score.
+  const seasonPrior = prior.filter(g => g.season === s);
+  if (seasonPrior.length >= 4) {
+    const hi = Math.max(...seasonPrior.map(g => Math.max(+g.homeScore, +g.awayScore)));
+    real.forEach(g => { const top = Math.max(+g.homeScore, +g.awayScore), w = +g.homeScore > +g.awayScore ? g.home : g.away; if (top > hi) notes.push({ p: 60, title: `Season high: ${top} points`, body: `${name(w)} posted the most points by any team this season (previous high: ${hi}).` }); });
+  }
+  notes.sort((a, b) => b.p - a.p);
+  if (notes.length) out.push({ tag: 'Worth Noting', title: notes[0].title, body: notes[0].body });
+
+  // 3) Upset of the Week.
+  const info = real.map(g => { const l = lineAt(g), hw = +g.homeScore > +g.awayScore; return { g, l, w: hw ? g.home : g.away, lo: hw ? g.away : g.home, ws: Math.max(+g.homeScore, +g.awayScore), ls: Math.min(+g.homeScore, +g.awayScore), pw: l ? (hw ? l.pHome : 1 - l.pHome) : 0.5 }; });
+  const upset = info.filter(x => x.pw < 0.45).sort((a, b) => a.pw - b.pw)[0];
+  if (upset) out.push({ tag: 'Upset of the Week', title: `${team(upset.w).name} stuns ${team(upset.lo).name}`, body: `${name(upset.w)} entered with a ${pctStr(upset.pw)} chance to win (${fmtOdds(upset.w === upset.g.home ? upset.l.mlHome : upset.l.mlAway)}) and won ${upset.ws}-${upset.ls}.` });
+
+  // 4) Big Cash — the biggest winning bet that settled on last week's games.
+  const lastWeekOf = w => w.market === 'parlay' ? Math.max(...(w.legs || []).map(l => D.games.find(x => x.id === l.gameId)?.week ?? -1)) : (D.games.find(x => x.id === w.gameId)?.week ?? -1);
+  const cash = D.wagers.filter(w => w.season === s && w.status === 'won' && lastWeekOf(w) === lw).sort((a, b) => (b.payout || 0) - (a.payout || 0))[0];
+  if (cash) out.push({ tag: 'Big Cash', title: `${cash.coach} cashes for ${(cash.payout || 0).toLocaleString()} credits`, body: `${wagerLabel(cash)}${cash.market === 'parlay' ? ' hit every leg' : ' came through'}. ${cash.stake.toLocaleString()} risked, ${(cash.stake + (cash.payout || 0)).toLocaleString()} returned.` });
+
+  // 5) Up Next (always last).
+  const u = upNext();
+
+  // Fallbacks so there are always five.
+  const before = simulate(s, lw), after = simulate(s, lw + 1);
+  const mv = Object.keys(after).map(id => ({ id, d: after[id].titlePct - before[id].titlePct })).filter(x => isUserTeam(team(x.id))).sort((a, b) => b.d - a.d);
+  if (mv.length && mv[0].d >= 0.03) pool.push({ tag: 'Odds Movers', title: `${poss(team(mv[0].id).name)} title odds jump to ${pctStr(after[mv[0].id].titlePct)}`, body: `Up ${Math.round(mv[0].d * 100)} points this week.${mv[mv.length - 1].d <= -0.03 ? ` Biggest drop: ${name(mv[mv.length - 1].id)}, down ${Math.round(-mv[mv.length - 1].d * 100)} to ${pctStr(after[mv[mv.length - 1].id].titlePct)}.` : ''}` });
+  notes.slice(1, 3).forEach(n => pool.push({ tag: 'Worth Noting', title: n.title, body: n.body }));
+  const recs = records(s);
+  const hot = userTeams().map(t => ({ t, st: streak(recs[t.id]) })).filter(x => /^W\d+$/.test(x.st) && +x.st.slice(1) >= 3).sort((a, b) => b.st.slice(1) - a.st.slice(1))[0];
+  if (hot) pool.push({ tag: 'Hot Streak', title: `${hot.t.name} has won ${hot.st.slice(1)} straight`, body: `${hot.t.coach} is ${rec(recs[hot.t.id])} and rolling into Week ${L.week}.` });
+  const unbeaten = leagueTeams().filter(t => recs[t.id].l === 0 && recs[t.id].w >= 3);
+  if (unbeaten.length && unbeaten.length <= 3) pool.push({ tag: 'Unbeaten Watch', title: unbeaten.length === 1 ? `${unbeaten[0].name} is the last unbeaten team` : `${unbeaten.length} teams still unbeaten`, body: unbeaten.map(t => `${name(t.id)} (${rec(recs[t.id])})`).join(', ') + '.' });
+  wk.filter(g => isUserTeam(team(g.home)) && isUserTeam(team(g.away))).forEach(g => { const hw = +g.homeScore > +g.awayScore, w = hw ? g.home : g.away, l = hw ? g.away : g.home; pool.push({ tag: 'User Game', title: `${team(w).coach} over ${team(l).coach}`, body: g.forfeit ? `${name(w)} won by forfeit over ${name(l)}.` : `${name(w)} beat ${name(l)} ${Math.max(+g.homeScore, +g.awayScore)}-${Math.min(+g.homeScore, +g.awayScore)} in Week ${lw}.` }); });
+  while (out.length < (u ? 4 : 5) && pool.length) out.push(pool.shift());
+  if (u) out.push(u);
   return out.slice(0, 5);
 }
