@@ -384,6 +384,10 @@ export function settleOps(gameIds) {
     const st = g.forfeit ? 'void' : grade(w, g), payout = st === 'won' ? profit(w.stake, w.odds) : st === 'lost' ? -w.stake : 0;
     ops.push({ op: 'set', col: 'wagers', id: w.id, data: { status: st, payout } });
   });
+  D.wagers.filter(w => w.status === 'open' && w.market === 'wins').forEach(w => {
+    const st = winsResult(w, w.season); if (st === 'open') return;
+    ops.push({ op: 'set', col: 'wagers', id: w.id, data: { status: st, payout: st === 'won' ? profit(w.stake, w.odds) : -w.stake } });
+  });
   return ops.concat(parlayOps());
 }
 /* ---- Parlays: 2-6 legs, one per game. Any loss loses; pushes/voids drop out; pays when all legs are final. ---- */
@@ -394,6 +398,7 @@ export const parlayOdds = legs => amerOf(legs.reduce((p, l) => p * decOf(l.odds)
 export const parlayProfit = (stake, legs) => Math.round(stake * (legs.reduce((p, l) => p * decOf(l.odds), 1) - 1));
 function evalParlay(w) {
   const legs = (w.legs || []).map(l => {
+    if (l.market === 'wins') return { ...l, result: winsResult(l, w.season) };
     if (l.market === 'future') {
       const ccg = D.games.find(g => g.season === w.season && g.type === 'ccg' && played(g));
       if (ccg) return { ...l, result: (+ccg.homeScore > +ccg.awayScore ? ccg.home : ccg.away) === l.pick ? 'won' : 'lost' };
@@ -441,7 +446,7 @@ export function futuresPosted() { const L = D.league, F = L.futures; return DEMO
 export function boardOps(week, season = D.league.season) {
   const L = D.league;
   const ops = D.games.filter(g => g.season === season && g.week >= week && !played(g)).map(g => ({ op: 'set', col: 'games', id: g.id, data: { lines: freshLine(g) } }));
-  if (season === L.season && week === L.week && L.phase === PHASES.REG) ops.push({ op: 'set', col: 'meta', id: 'league', data: { futures: futuresSnapshot() } });
+  if (season === L.season && week === L.week && L.phase === PHASES.REG) ops.push({ op: 'set', col: 'meta', id: 'league', data: { futures: futuresSnapshot(), winTotals: winTotalsSnapshot() } });
   return ops;
 }
 // Commissioner's browser fills in anything missing from the board (lines for upcoming games, futures odds).
@@ -449,7 +454,7 @@ export async function ensureFutures() {
   const L = D.league;
   if (DEMO || !isCommish() || (L.phase !== PHASES.REG && L.phase !== PHASES.CCG)) return false;
   const missingLines = D.games.some(g => g.season === L.season && g.week >= L.week && !played(g) && !(g.lines && g.lines.spread != null && g.lines.spreadOddsHome != null));
-  if (!missingLines && (L.phase !== PHASES.REG || futuresPosted())) return false;
+  if (!missingLines && (L.phase !== PHASES.REG || (futuresPosted() && winsPosted()))) return false;
   await batch(boardOps(L.week)); return true;
 }
 export function friendlyError(e) {
@@ -468,6 +473,47 @@ export function futuresSnapshot() {
   leagueTeams().forEach(t => odds[t.id] = futuresOdds(sim[t.id]?.titlePct || 0));
   return { season: L.season, week: L.week, open: true, odds };
 }
+/* ---- Season win totals (regular season wins). Line = the .5 mark closest to a 50/50 split in the simulation. ---- */
+const winOdds = p => { const q = clamp(p + 0.0238, 0.03, 0.97); return q >= 0.5 ? -Math.max(100, round5(100 * q / (1 - q))) : Math.max(100, round5(100 * (1 - q) / q)); };
+export function regWinsInfo(season, tid) {
+  let w = 0, rem = 0;
+  D.games.filter(g => g.season === season && (g.type || 'reg') === 'reg' && (g.home === tid || g.away === tid)).forEach(g => {
+    if (!played(g)) { rem++; return; }
+    if ((+g.homeScore > +g.awayScore ? g.home : g.away) === tid) w++;
+  });
+  return { w, rem };
+}
+export function winTotalsSnapshot() {
+  const L = D.league, sim = simulate(L.season, L.week), odds = {};
+  leagueTeams().forEach(t => {
+    const o = sim[t.id], info = regWinsInfo(L.season, t.id);
+    if (!o || info.rem < 1) { odds[t.id] = null; return; }
+    const n = o.dist.reduce((a, b) => a + b, 0) || 1;
+    let best = null;
+    for (let k = info.w; k < info.w + info.rem; k++) {
+      const p = o.dist.slice(k + 1).reduce((a, b) => a + b, 0) / n;
+      if (!best || Math.abs(p - 0.5) < Math.abs(best.p - 0.5)) best = { line: k + 0.5, p };
+    }
+    odds[t.id] = best.p < 0.07 || best.p > 0.93 ? null : { line: best.line, over: winOdds(best.p), under: winOdds(1 - best.p) };
+  });
+  return { season: L.season, week: L.week, odds };
+}
+export function winsPosted() { const L = D.league, W = L.winTotals; return DEMO || !!(W && W.season === L.season && W.odds); }
+export function winsBoard() {
+  const L = D.league; if (L.phase !== PHASES.REG) return [];
+  const sim = simulate(L.season, L.week), W = L.winTotals, posted = W && W.season === L.season && W.odds ? W.odds : null;
+  const snap = posted ? null : winTotalsSnapshot().odds;
+  return leagueTeams().map(t => ({ id: t.id, proj: sim[t.id]?.expW || 0, ...regWinsInfo(L.season, t.id), o: posted ? (posted[t.id] || null) : snap[t.id] }))
+    .sort((a, b) => b.proj - a.proj);
+}
+// Decided as soon as it's mathematically settled; otherwise at the end of the regular season.
+export function winsResult(l, season) {
+  const { w, rem } = regWinsInfo(season, l.team);
+  const final = season < D.league.season || D.league.phase !== PHASES.REG;
+  const over = w > l.line ? true : (w + rem < l.line ? false : (final ? w > l.line : null));
+  if (over === null) return 'open';
+  return (over === (l.pick === 'over')) ? 'won' : 'lost';
+}
 export function settleFuturesOps(season, champId) {
   return D.wagers.filter(w => w.market === 'future' && w.season === season && w.status === 'open').map(w => {
     const st = !champId ? 'void' : w.pick === champId ? 'won' : 'lost';
@@ -475,6 +521,7 @@ export function settleFuturesOps(season, champId) {
   });
 }
 export function wagerLabel(w) {
+  if (w.market === 'wins') return `${team(w.team).name} ${w.pick === 'over' ? 'Over' : 'Under'} ${w.line} wins (${fmtOdds(w.odds)})`;
   if (w.market === 'parlay') return `${(w.legs || []).length}-leg parlay (${fmtOdds(w.odds)})`;
   if (w.market === 'future') return `${team(w.pick).name} to win Season ${seasonNum(w.season ?? D.league.season)} title (${fmtOdds(w.odds)})`;
   const g = D.games.find(x => x.id === w.gameId) || {}, side = w.pick === 'home' ? g.home : g.away;

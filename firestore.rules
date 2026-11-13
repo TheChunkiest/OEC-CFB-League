@@ -47,8 +47,14 @@ service cloud.firestore {
         && d.pick in L.futures.odds && d.odds is int && d.odds == L.futures.odds[d.pick];
     }
     // Parlay: 2-6 legs, each checked like a single bet (game line or League Champion odds).
+    function validWins(d, L) {
+      let o = L.winTotals.odds[d.team];
+      return L.phase == 'Regular Season' && L.winTotals.season == L.season && d.team is string && d.team in L.winTotals.odds
+        && d.line == o.line && ((d.pick == 'over' && d.odds == o.over) || (d.pick == 'under' && d.odds == o.under));
+    }
     function validLeg(leg, L) {
-      return (leg.market == 'future' && validFuture(leg, L)) || (leg.market != 'future' && validGameWager(leg));
+      return (leg.market == 'future' && validFuture(leg, L)) || (leg.market == 'wins' && validWins(leg, L))
+        || (leg.market != 'future' && leg.market != 'wins' && validGameWager(leg));
     }
     function validParlay(d, L) {
       let n = d.legs.size();
@@ -60,8 +66,9 @@ service cloud.firestore {
     function validWager(d) {
       let L = league();
       return baseWager(d, L) && ((d.market == 'future' && validFuture(d, L))
+        || (d.market == 'wins' && validWins(d, L))
         || (d.market == 'parlay' && validParlay(d, L))
-        || (d.market != 'future' && d.market != 'parlay' && validGameWager(d)));
+        || (d.market != 'future' && d.market != 'wins' && d.market != 'parlay' && validGameWager(d)));
     }
     match /wagers/{id} {
       allow read: if true;
@@ -69,8 +76,8 @@ service cloud.firestore {
       allow update: if isCommish();
       allow delete: if isCommish() || (signedIn() && resource.data.uid == request.auth.uid && resource.data.status == 'open'
         && league().bettingOpen == true
-        && ((resource.data.market == 'future' && league().phase == 'Regular Season')
-          || (resource.data.market != 'future' && resource.data.market != 'parlay' && gameOf(resource.data.gameId).homeScore == null)));
+        && (((resource.data.market == 'future' || resource.data.market == 'wins') && league().phase == 'Regular Season')
+          || (resource.data.market != 'future' && resource.data.market != 'wins' && resource.data.market != 'parlay' && gameOf(resource.data.gameId).homeScore == null)));
     }
 
     // Game of the Week votes: cast during week N for a game in week N+1. Doc id = season_week_uid.
