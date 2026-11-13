@@ -177,7 +177,7 @@ function american(p) {
 }
 function baseRating(t) {
   const ovr = +t.ovr || 72;
-  return { o: ((+t.off || ovr) - BASE) * SCALE, d: ((+t.def || ovr) - BASE) * SCALE, perf: [] };
+  return { o: ((+t.off || ovr) - BASE) * SCALE, d: ((+t.def || ovr) - BASE) * SCALE, perf: [], perfT: [] };
 }
 function expect(H, A, neutral) {
   const hf = neutral ? 0 : HFA;
@@ -195,15 +195,48 @@ export function ratings(season, upto) {
       const eh = clamp(g.homeScore - e.h, -17, 17), ea = clamp(g.awayScore - e.a, -17, 17);
       const mv = (g.homeScore - g.awayScore) - (e.h - e.a);
       H.perf.push({ week: g.week, v: mv }); A.perf.push({ week: g.week, v: -mv });
+      const tv = (+g.homeScore + +g.awayScore) - (e.h + e.a); H.perfT.push({ week: g.week, v: tv }); A.perfT.push({ week: g.week, v: tv });
       H.o += K * eh; A.d -= K * eh; A.o += K * ea; H.d -= K * ea;
     });
     return R;
   });
 }
+// Spread/total payouts ("juice") move off -110 based on the model:
+//  1) how far the posted line sits from the model's projected margin/total,
+//  2) key numbers (3, 7, 10, 14) where games land more often, so pushes are likelier,
+//  3) recent form — teams beating expectations draw "public" money, so their side costs more.
+const KEYS = { 3: 0.09, 7: 0.06, 10: 0.04, 14: 0.035 }, SIG_T = 15.5;
+const avgLast = (arr, n = 3) => { const a = arr.slice(-n); return a.length ? a.reduce((s, x) => s + x.v, 0) / a.length : 0; };
+function juicePair(q) {
+  const one = x => { const v = clamp(x + 0.0238, 0.43, 0.6); return v >= 0.5 ? -Math.max(100, round5(100 * v / (1 - v))) : Math.max(100, round5(100 * (1 - v) / v)); };
+  return [one(q), one(1 - q)];
+}
+function spreadCover(m, L) {
+  const t = -L; // home must win by more than t
+  if (Number.isInteger(t)) {
+    let home = 1 - Phi((t + 0.5 - m) / SIG), away = Phi((t - 0.5 - m) / SIG);
+    const push0 = 1 - home - away, push = Math.max(push0, KEYS[Math.abs(t)] || 0), k = (1 - push) / (home + away);
+    home *= k; away *= k;
+    return home / (home + away);
+  }
+  return 1 - Phi((t - m) / SIG);
+}
 export function lineFrom(R, g) {
   const H = R[g.home], A = R[g.away]; if (!H || !A) return null;
-  const e = expect(H, A, g.neutral), m = e.h - e.a, p = Phi(m / SIG);
-  return { spread: half(-m), total: half(e.h + e.a), mlHome: american(p), mlAway: american(1 - p), pHome: p };
+  const e = expect(H, A, g.neutral), m = e.h - e.a, p = Phi(m / SIG), T = e.h + e.a;
+  let spread = half(-m);
+  for (const k of [3, 7, 10, 14]) if (Math.abs(Math.abs(m) - k) <= 0.6) { spread = m > 0 ? -k : k; break; }
+  if (spread === 0) spread = 0;
+  const qh = clamp(spreadCover(m, spread) + clamp(0.004 * (avgLast(H.perf) - avgLast(A.perf)), -0.03, 0.03), 0.3, 0.7);
+  const total = half(T);
+  const qo = clamp(1 - Phi((total - T) / SIG_T) + clamp(0.004 * (avgLast(H.perfT) + avgLast(A.perfT)) / 2, -0.03, 0.03), 0.3, 0.7);
+  const [spreadOddsHome, spreadOddsAway] = juicePair(qh), [overOdds, underOdds] = juicePair(qo);
+  return { spread, total, mlHome: american(p), mlAway: american(1 - p), pHome: p, spreadOddsHome, spreadOddsAway, overOdds, underOdds };
+}
+// Payout for a spread/total pick (older posted lines without juice fields pay -110).
+export function juiceOf(l, market, pick) {
+  const k = market === 'spread' ? (pick === 'home' ? 'spreadOddsHome' : 'spreadOddsAway') : (pick === 'over' ? 'overOdds' : 'underOdds');
+  return l && l[k] != null ? l[k] : -110;
 }
 // Line shown for a game: frozen line if posted, else projection from the latest results.
 export function lineOf(g) {
@@ -384,7 +417,7 @@ export function boardOps(week, season = D.league.season) {
 export async function ensureFutures() {
   const L = D.league;
   if (DEMO || !isCommish() || (L.phase !== PHASES.REG && L.phase !== PHASES.CCG)) return false;
-  const missingLines = D.games.some(g => g.season === L.season && g.week >= L.week && !played(g) && !(g.lines && g.lines.spread != null));
+  const missingLines = D.games.some(g => g.season === L.season && g.week >= L.week && !played(g) && !(g.lines && g.lines.spread != null && g.lines.spreadOddsHome != null));
   if (!missingLines && (L.phase !== PHASES.REG || futuresPosted())) return false;
   await batch(boardOps(L.week)); return true;
 }
@@ -415,7 +448,7 @@ export function wagerLabel(w) {
   const g = D.games.find(x => x.id === w.gameId) || {}, side = w.pick === 'home' ? g.home : g.away;
   if (w.market === 'ml') return `${team(side).name} ML ${fmtOdds(w.odds)}`;
   if (w.market === 'spread') return `${team(side).name} ${fmtLine(w.pick === 'home' ? w.line : -w.line)} (${fmtOdds(w.odds)})`;
-  return `${w.pick === 'over' ? 'Over' : 'Under'} ${w.line} — ${team(g.away).abbr || team(g.away).name} @ ${team(g.home).abbr || team(g.home).name}`;
+  return `${w.pick === 'over' ? 'Over' : 'Under'} ${w.line} (${fmtOdds(w.odds)}) — ${team(g.away).abbr || team(g.away).name} @ ${team(g.home).abbr || team(g.home).name}`;
 }
 
 /* ---------------- Game of the Week ---------------- */

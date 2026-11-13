@@ -2,8 +2,8 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive
-} from './core.js?v=10';
+  gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf
+} from './core.js?v=11';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['odds', 'Odds'], ['betting', 'Betting'],
@@ -15,7 +15,8 @@ const S = () => D.league.season;
 const lineText = (g, l = lineOf(g)) => {
   if (!l) return '';
   const fav = l.spread <= 0 ? g.home : g.away;
-  return `${l.spread === 0 ? 'PK' : esc(team(fav).abbr || team(fav).name) + ' ' + fmtLine(-Math.abs(l.spread))} · O/U ${l.total} · ML ${esc(team(g.away).abbr)} ${fmtOdds(l.mlAway)} / ${esc(team(g.home).abbr)} ${fmtOdds(l.mlHome)}`;
+  const fj = juiceOf(l, 'spread', fav === g.home ? 'home' : 'away');
+  return `${l.spread === 0 ? 'PK' : esc(team(fav).abbr || team(fav).name) + ' ' + fmtLine(-Math.abs(l.spread))}${fj !== -110 ? ` (${fmtOdds(fj)})` : ''} · O/U ${l.total} · ML ${esc(team(g.away).abbr)} ${fmtOdds(l.mlAway)} / ${esc(team(g.home).abbr)} ${fmtOdds(l.mlHome)}`;
 };
 function gameCard(g, opts = {}) {
   const h = team(g.home), a = team(g.away), done = played(g);
@@ -246,7 +247,7 @@ const PAGES = {
     const L = D.league;
     return `<h2>League Rules</h2><div class="card"><ul class="clean">${((L.rules && L.rules.length) ? L.rules : DEFAULT_RULES).map(r => `<li>${esc(r)}</li>`).join('') || '<li class="muted">No rules posted.</li>'}</ul></div>
       <h2>How Betting Works</h2><div class="card"><ul class="clean"><li>Every linked coach starts each season with ${START_CREDITS.toLocaleString()} credits. Credits don't carry over.</li>
-      <li>Lines are posted for every upcoming game, so you can bet future weeks early. Spreads and totals pay −110; moneylines pay the listed +/− odds.</li>
+      <li>Lines are posted for every upcoming game, so you can bet future weeks early. Every bet pays the listed +/− odds. Spread and total payouts move around −110 based on the model's edge on the line, key numbers (3, 7, 10, 14) and each team's recent form.</li>
       <li>Each advance re-rates every team from the results, so lines for all later weeks move. Your bet keeps the line it was placed at.</li>
       <li>A game locks once the commissioner enters its score or locks betting.</li></ul></div>
       ${(L.links || []).length ? `<h2>Links</h2><div class="card"><ul class="clean">${L.links.map(l => `<li><a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a></li>`).join('')}</ul></div>` : ''}`;
@@ -275,9 +276,9 @@ function betRows(g) {
   const a = team(g.away), h = team(g.home);
   const b = (market, pick, top, odds) => `<button class="pick" data-bet="${esc(g.id)}|${market}|${pick}">${top} <b>${fmtOdds(odds)}</b></button>`;
   return `<div class="tm" style="padding-top:8px">${chip(a.id)}<br>${g.neutral ? 'vs' : '@'} ${chip(h.id)}${isUserTeam(a) && isUserTeam(h) ? ' <span class="h2h">USER GAME</span>' : ''}</div>
-    <div style="display:grid;gap:4px">${b('spread', 'away', esc(a.abbr) + ' ' + fmtLine(-l.spread), -110)}${b('spread', 'home', esc(h.abbr) + ' ' + fmtLine(l.spread), -110)}</div>
+    <div style="display:grid;gap:4px">${b('spread', 'away', esc(a.abbr) + ' ' + fmtLine(-l.spread), juiceOf(l, 'spread', 'away'))}${b('spread', 'home', esc(h.abbr) + ' ' + fmtLine(l.spread), juiceOf(l, 'spread', 'home'))}</div>
     <div style="display:grid;gap:4px">${b('ml', 'away', esc(a.abbr), l.mlAway)}${b('ml', 'home', esc(h.abbr), l.mlHome)}</div>
-    <div style="display:grid;gap:4px">${b('total', 'over', 'O ' + l.total, -110)}${b('total', 'under', 'U ' + l.total, -110)}</div>`;
+    <div style="display:grid;gap:4px">${b('total', 'over', 'O ' + l.total, juiceOf(l, 'total', 'over'))}${b('total', 'under', 'U ' + l.total, juiceOf(l, 'total', 'under'))}</div>`;
 }
 function futuresSection() {
   const L = D.league, n = seasonNum();
@@ -310,7 +311,7 @@ function showSlip(gid, market, pick) {
   if (!me) { location.hash = '#account'; return; }
   if (!me.teamId) return alert('Your account is not linked to a team yet.');
   const g = D.games.find(x => x.id === gid), l = lineOf(g);
-  const odds = market === 'ml' ? (pick === 'home' ? l.mlHome : l.mlAway) : -110;
+  const odds = market === 'ml' ? (pick === 'home' ? l.mlHome : l.mlAway) : juiceOf(l, market, pick);
   const line = market === 'spread' ? l.spread : market === 'total' ? l.total : null;
   UI.slip = { g, market, pick, odds, line };
   const bal = bankroll(me.id).balance;
