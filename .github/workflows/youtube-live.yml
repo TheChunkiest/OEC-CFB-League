@@ -1,0 +1,52 @@
+name: YouTube live check
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: youtube-live
+  cancel-in-progress: false
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check channel
+        id: check
+        shell: python
+        run: |
+          import json, os, re, urllib.request
+          URL = "https://www.youtube.com/@originalentertainingcrackers/live"
+          req = urllib.request.Request(URL, headers={
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36",
+              "Accept-Language": "en-US,en;q=0.9", "Cookie": "CONSENT=YES+1; SOCS=CAI"})
+          try:
+              html = urllib.request.urlopen(req, timeout=20).read().decode("utf-8", "ignore")
+          except Exception as e:
+              print("Fetch failed, leaving live.json alone:", e); raise SystemExit(0)
+          vid = re.search(r'<link rel="canonical" href="https://www\.youtube\.com/watch\?v=([\w-]{11})"', html)
+          live = '"isLiveNow":true' in html and vid is not None
+          title = re.search(r'<meta name="title" content="([^"]*)"', html)
+          new = {"live": live}
+          if live:
+              new.update(videoId=vid.group(1), url="https://www.youtube.com/watch?v=" + vid.group(1),
+                         title=(title.group(1) if title else "Live on YouTube").replace("&amp;", "&").replace("&#39;", "'").replace("&quot;", '"'))
+          old = {}
+          if os.path.exists("live.json"):
+              try: old = json.load(open("live.json"))
+              except Exception: pass
+          if old.get("live") == new["live"] and old.get("videoId") == new.get("videoId"):
+              print("No change:", new); raise SystemExit(0)
+          json.dump(new, open("live.json", "w"), indent=1)
+          open(os.environ["GITHUB_OUTPUT"], "a").write("changed=true\n")
+          print("Updated:", new)
+      - name: Save
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          git config user.name "oec-live-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add live.json
+          git commit -m "YouTube live status update"
+          git push
