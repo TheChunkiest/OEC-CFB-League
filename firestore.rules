@@ -46,18 +46,21 @@ service cloud.firestore {
       return L.phase == 'Regular Season' && L.futures.season == L.season && L.futures.open == true
         && d.pick in L.futures.odds && d.odds is int && d.odds == L.futures.odds[d.pick];
     }
-    // Parlay: 2-6 legs, each checked against its game's posted line like a single bet.
-    function validParlay(d) {
+    // Parlay: 2-6 legs, each checked like a single bet (game line or League Champion odds).
+    function validLeg(leg, L) {
+      return (leg.market == 'future' && validFuture(leg, L)) || (leg.market != 'future' && validGameWager(leg));
+    }
+    function validParlay(d, L) {
       let n = d.legs.size();
       return d.legs is list && n >= 2 && n <= 6
-        && validGameWager(d.legs[0]) && validGameWager(d.legs[1])
-        && (n < 3 || validGameWager(d.legs[2])) && (n < 4 || validGameWager(d.legs[3]))
-        && (n < 5 || validGameWager(d.legs[4])) && (n < 6 || validGameWager(d.legs[5]));
+        && validLeg(d.legs[0], L) && validLeg(d.legs[1], L)
+        && (n < 3 || validLeg(d.legs[2], L)) && (n < 4 || validLeg(d.legs[3], L))
+        && (n < 5 || validLeg(d.legs[4], L)) && (n < 6 || validLeg(d.legs[5], L));
     }
     function validWager(d) {
       let L = league();
       return baseWager(d, L) && ((d.market == 'future' && validFuture(d, L))
-        || (d.market == 'parlay' && validParlay(d))
+        || (d.market == 'parlay' && validParlay(d, L))
         || (d.market != 'future' && d.market != 'parlay' && validGameWager(d)));
     }
     match /wagers/{id} {

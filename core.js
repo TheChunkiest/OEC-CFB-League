@@ -394,6 +394,11 @@ export const parlayOdds = legs => amerOf(legs.reduce((p, l) => p * decOf(l.odds)
 export const parlayProfit = (stake, legs) => Math.round(stake * (legs.reduce((p, l) => p * decOf(l.odds), 1) - 1));
 function evalParlay(w) {
   const legs = (w.legs || []).map(l => {
+    if (l.market === 'future') {
+      const ccg = D.games.find(g => g.season === w.season && g.type === 'ccg' && played(g));
+      if (ccg) return { ...l, result: (+ccg.homeScore > +ccg.awayScore ? ccg.home : ccg.away) === l.pick ? 'won' : 'lost' };
+      return { ...l, result: D.history.some(h => h.season === w.season) ? 'void' : 'open' };
+    }
     const g = D.games.find(x => x.id === l.gameId);
     return { ...l, result: !g ? 'void' : !played(g) ? 'open' : g.forfeit ? 'void' : grade(l, g) };
   });
@@ -471,7 +476,7 @@ export function settleFuturesOps(season, champId) {
 }
 export function wagerLabel(w) {
   if (w.market === 'parlay') return `${(w.legs || []).length}-leg parlay (${fmtOdds(w.odds)})`;
-  if (w.market === 'future') return `${team(w.pick).name} to win Season ${seasonNum(w.season)} title (${fmtOdds(w.odds)})`;
+  if (w.market === 'future') return `${team(w.pick).name} to win Season ${seasonNum(w.season ?? D.league.season)} title (${fmtOdds(w.odds)})`;
   const g = D.games.find(x => x.id === w.gameId) || {}, side = w.pick === 'home' ? g.home : g.away;
   if (w.market === 'ml') return `${team(side).name} ML ${fmtOdds(w.odds)}`;
   if (w.market === 'spread') return `${team(side).name} ${fmtLine(w.pick === 'home' ? w.line : -w.line)} (${fmtOdds(w.odds)})`;

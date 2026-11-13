@@ -2,7 +2,7 @@ import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps
-} from './core.js?v=12';
+} from './core.js?v=13';
 import { lookupColor } from './teamcolors.js';
 
 const TABS = [['advance', 'Advance'], ['preseason', 'Preseason'], ['games', 'Games'], ['ratings', 'Ratings'], ['coaches', 'Coaches & Accounts'], ['betting', 'Betting'], ['awards', 'Awards'], ['settings', 'Settings & History']];
@@ -282,6 +282,7 @@ const ACT = {
     if (!confirm(`Finalize ${s}? This writes ${s} to History and moves the league to the offseason.`)) return;
     await put('history', String(s), H, false);
     await batch(settleFuturesOps(s, ccg ? H.champTeam : null));
+    await batch(parlayOps());
     await put('meta', 'league', { phase: PHASES.PRE, bettingOpen: false, desk: deskValue() });
     ST.desk = 'no'; ST.tab = 'preseason'; flash(`${s} is in the books. Set up next season below.`);
   },
