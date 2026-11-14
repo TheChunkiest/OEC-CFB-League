@@ -3,7 +3,7 @@ import {
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
   gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName
-} from './core.js?v=30';
+} from './core.js?v=31';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['betting', 'Betting'], ['odds', 'Odds'],
@@ -119,7 +119,7 @@ const PAGES = {
     const games = D.games.filter(g => g.season === s && g.week === bw && !played(g));
     const open = L.bettingOpen && L.phase !== PHASES.PRE && L.phase !== PHASES.POST;
     let html = `<h2>Sportsbook · ${esc(weekLabel())}</h2>`;
-    if (!me) html += `<div class="notice">Every coach gets <b>${START_CREDITS.toLocaleString()} credits</b> per season. <a href="#account">Log in</a> to place wagers.</div>`;
+    if (!me) html += `<div class="notice">Every coach gets <b>${START_CREDITS.toLocaleString()} Crackers</b> per season. <a href="#account">Log in</a> to place wagers.</div>`;
     else if (!me.teamId) html += `<div class="notice">Your account isn't linked to a team yet. Ask the commissioner to link it.</div>`;
     if (me && me.teamId) {
       const b = bankroll(me.id);
@@ -199,7 +199,7 @@ const PAGES = {
     return `<p><a href="#history">← History</a></p><div class="card" ${t ? `style="border-left:6px solid ${esc(teamColor(t))}"` : ''}><h2>Coach ${esc(name)}</h2>
       <div class="muted">${t ? 'Current team: ' + chip(t.id) : ''}</div>
       <div class="stat" style="margin-top:10px"><div><span>Career</span><b>${c ? c.w + '-' + c.l : '0-0'}</b></div><div><span>Win %</span><b>${c && c.w + c.l ? (c.w / (c.w + c.l) * 100).toFixed(1) + '%' : '–'}</b></div>
-      <div><span>League titles</span><b>${c ? c.titles : 0}</b></div><div><span>Seasons</span><b>${c ? c.seasons.size : 0}</b></div>${b ? `<div><span>${S()} betting</span><b>${b.w}-${b.l}-${b.p} · ${b.balance.toLocaleString()} cr</b></div>` : ''}</div></div>
+      <div><span>League titles</span><b>${c ? c.titles : 0}</b></div><div><span>Seasons</span><b>${c ? c.seasons.size : 0}</b></div>${b ? `<div><span>${S()} betting</span><b>${b.w}-${b.l}-${b.p} · ${b.balance.toLocaleString()} Crackers</b></div>` : ''}</div></div>
       <div class="card"><h3 style="margin-top:0">Head-to-head vs coaches</h3>${vs.length ? `<table><tr><th>Opponent</th><th class="num">W-L</th></tr>${vs.map(([o, r]) => `<tr><td><a href="#coach/${slug(o)}">${esc(o)}</a></td><td class="num">${r.w}-${r.l}</td></tr>`).join('')}</table>` : '<div class="muted">No coach-vs-coach games yet.</div>'}</div>`;
   },
 
@@ -250,7 +250,7 @@ const PAGES = {
   rules() {
     const L = D.league;
     return `<h2>League Rules</h2><div class="card"><ul class="clean">${((L.rules && L.rules.length) ? L.rules : DEFAULT_RULES).map(r => `<li>${esc(r)}</li>`).join('') || '<li class="muted">No rules posted.</li>'}</ul></div>
-      <h2>How Betting Works</h2><div class="card"><ul class="clean"><li>Every linked coach starts each season with ${START_CREDITS.toLocaleString()} credits. Credits don't carry over.</li>
+      <h2>How Betting Works</h2><div class="card"><ul class="clean"><li>Every linked coach starts each season with ${START_CREDITS.toLocaleString()} Crackers. Crackers don't carry over.</li>
       <li>Lines are posted for every upcoming game, so you can bet future weeks early. Every bet pays the listed +/− odds. Spread and total payouts move around −110 based on the model's edge on the line, key numbers (3, 7, 10, 14) and each team's recent form.</li>
       <li>Each advance re-rates every team from the results, so lines for all later weeks move. Your bet keeps the line it was placed at.</li>
       <li>A game locks once the commissioner enters its score or locks betting.</li></ul></div>
@@ -403,7 +403,7 @@ async function drawSlip(w) {
   const toWin = winProfit(w);
   const legRes = w.market === 'parlay' ? (w.legs || []).map(l => l.result || 'open') : [st];
   const icons = settled || legRes.some(r => r !== 'open');
-  const band = { won: ['#1f9d55', `WINNER · +${(w.payout || 0).toLocaleString()} CREDITS`], lost: ['#a3141c', 'LOST'], push: ['#4a4245', 'PUSH · STAKE REFUNDED'], void: ['#4a4245', 'VOID · STAKE REFUNDED'] }[st];
+  const band = { won: ['#1f9d55', `WINNER · +${(w.payout || 0).toLocaleString()} CRACKERS`], lost: ['#a3141c', 'LOST'], push: ['#4a4245', 'PUSH · STAKE REFUNDED'], void: ['#4a4245', 'VOID · STAKE REFUNDED'] }[st];
   const c = document.createElement('canvas'), ctx = c.getContext('2d');
   const tx = P + (icons ? 92 : 36);
   ctx.font = `700 40px ${B}`;
@@ -470,7 +470,7 @@ async function drawSlip(w) {
     ctx.fillStyle = hi ? hiCol : 'rgba(255,255,255,0.07)'; ctx.fillRect(x, y, bw, 190);
     ctx.fillStyle = hi ? hiText : '#a69a9c'; ctx.font = `800 ${k.length > 12 ? 21 : 26}px ${B}`; ctx.textAlign = 'center'; ctx.fillText(k, x + bw / 2, y + 62);
     ctx.fillStyle = hi ? hiText : '#fff'; ctx.font = `900 ${typeof v === 'string' ? 44 : 58}px ${F}`; ctx.fillText(typeof v === 'string' ? v : Number(v).toLocaleString(), x + bw / 2, y + 140);
-    if (typeof v !== 'string') { ctx.font = `600 22px ${B}`; ctx.fillText('credits', x + bw / 2, y + 172); }
+    if (typeof v !== 'string') { ctx.font = `600 22px ${B}`; ctx.fillText('Crackers', x + bw / 2, y + 172); }
   });
   ctx.textAlign = 'left'; y += 250;
   ctx.strokeStyle = '#33242a'; ctx.lineWidth = 2; ctx.setLineDash([12, 10]); ctx.beginPath(); ctx.moveTo(P, y - 30); ctx.lineTo(W - P, y - 30); ctx.stroke(); ctx.setLineDash([]);
@@ -513,7 +513,7 @@ async function renderResult() {
   const lost = R.others.filter(x => x.status === 'lost').length, ref = R.others.filter(x => x.status === 'push' || x.status === 'void').length;
   $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card" style="max-width:460px;max-height:92vh;overflow:auto">
     <h2>🎉 ${R.wins.length === 1 ? 'Your bet cashed!' : `${R.wins.length} bets cashed!`}</h2>
-    <p style="margin-top:0">You won <b class="win">+${total.toLocaleString()} credits</b> since your last visit.${lost || ref ? ` <span class="muted small">Also settled: ${[lost ? lost + ' lost' : '', ref ? ref + ' refunded' : ''].filter(Boolean).join(', ')}.</span>` : ''}</p>
+    <p style="margin-top:0">You won <b class="win">+${total.toLocaleString()} Crackers</b> since your last visit.${lost || ref ? ` <span class="muted small">Also settled: ${[lost ? lost + ' lost' : '', ref ? ref + ' refunded' : ''].filter(Boolean).join(', ')}.</span>` : ''}</p>
     <img src="${c.toDataURL('image/png')}" alt="Winning bet slip" style="width:100%;border-radius:10px;display:block">
     ${R.wins.length > 1 ? `<div class="row spread" style="margin-top:10px"><button class="sm ghost" data-res="-1" ${R.i === 0 ? 'disabled' : ''}>‹ Prev</button><span class="muted small">${R.i + 1} of ${R.wins.length}</span><button class="sm ghost" data-res="1" ${R.i === R.wins.length - 1 ? 'disabled' : ''}>Next ›</button></div>` : ''}
     <div class="row" style="margin-top:12px"><button class="gold" data-act="saveSlip">⬇ Save image</button><a class="btn ghost" style="padding:8px 14px;border-radius:8px" href="#betting" data-close="1">My bets</a><button class="ghost" data-close="1">Close</button></div></div></div>`;
@@ -634,7 +634,7 @@ async function placeBet() {
   const { g, market, pick, odds, line } = UI.slip, me = auth.profile, stake = Math.floor(+$('#stake').value || 0), L = D.league;
   const bal = bankroll(me.id).balance;
   if (stake < 1) return $('#smsg').textContent = 'Enter a stake.';
-  if (stake > bal) return $('#smsg').textContent = 'Not enough credits.';
+  if (stake > bal) return $('#smsg').textContent = 'Not enough Crackers.';
   if (UI.slip.parlay) {
     if (!L.bettingOpen) return $('#smsg').textContent = 'Betting is locked.';
     const bad = UI.legs.find(l => { if (l.market === 'future') return !(futuresOpen() && futuresPosted());
@@ -740,7 +740,7 @@ function header() {
   $('#sub').textContent = `College Football 27 Online Dynasty · ${L.conference} · ${L.phase}${DEMO ? ' · DEMO DATA' : ''}`;
   const p = auth.profile;
   $('#acct').innerHTML = auth.user
-    ? `<span><span class="hide-sm">${esc(p?.name || auth.user.email)}${p?.teamId ? ` · ${esc(team(p.teamId).name)} · ` : ''}</span>${p?.teamId ? `<b>${bankroll(p.id).balance.toLocaleString()} cr</b>` : ''}</span>${isCommish() ? '<a class="btn gold" style="padding:5px 10px;border-radius:8px" href="admin.html">Commissioner</a>' : ''}<a class="btn ghost" style="padding:5px 10px;border-radius:8px" href="#account">Account</a>`
+    ? `<span><span class="hide-sm">${esc(p?.name || auth.user.email)}${p?.teamId ? ` · ${esc(team(p.teamId).name)} · ` : ''}</span>${p?.teamId ? `<b>${bankroll(p.id).balance.toLocaleString()} Crackers</b>` : ''}</span>${isCommish() ? '<a class="btn gold" style="padding:5px 10px;border-radius:8px" href="admin.html">Commissioner</a>' : ''}<a class="btn ghost" style="padding:5px 10px;border-radius:8px" href="#account">Account</a>`
     : '<a class="btn" style="padding:6px 14px;border-radius:8px" href="#account">Coach Login</a>';
   $('#footAdmin').innerHTML = isCommish() ? ' · <a href="admin.html">Commissioner Tools</a>' : '';
 }

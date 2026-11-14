@@ -39,7 +39,7 @@ All forms are on the **Advance** tab, and it always shows the right one for wher
 
 | When | Form | What it does |
 |---|---|---|
-| Offseason | **Preseason** | Coaches, team ratings, schedule. Publishing posts preseason odds, opens Week 0 betting and resets the odds chart. Each coach gets 1,000 credits. |
+| Offseason | **Preseason** | Coaches, team ratings, schedule. Publishing posts preseason odds, opens Week 0 betting and resets the odds chart. Each coach gets 1,000 Crackers. |
 | Each week | **Week N Results** | Enter scores. A Yes/No asks for a Commissioner's Desk note. Submitting grades wagers, re-rates every team (so lines for all later weeks move), posts next week's lines, and updates power rankings, odds and storylines. |
 | After the final regular-season week | **End of Regular Season** | Sets the league championship game (pre-filled from standings) and the awards ballot (3 finalists per category). Opens championship-week betting and awards voting. |
 | Championship week | **Championship Results** | Enter the title game score. Closes awards voting and tallies the winners. |
