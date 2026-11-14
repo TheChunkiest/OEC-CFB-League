@@ -651,12 +651,24 @@ export function settleFuturesOps(season, champId) {
 }
 // When a bet was placed, in the viewer's own time zone (e.g. "Nov 12, 9:41 PM").
 export const fmtTime = ts => ts ? new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
-// Leg-by-leg breakdown for a parlay (HTML), with ✅ ❌ ➖ ⏳ status icons.
+// Short label for one parlay leg, using team abbreviations.
+const ab = id => team(id).abbr || team(id).name;
+export function legLabel(l) {
+  if (l.market === 'wins') return `${ab(l.team)} ${l.pick === 'over' ? 'Over' : 'Under'} ${l.line} wins`;
+  if (l.market === 'future') return `${ab(l.pick)} to win title`;
+  const g = D.games.find(x => x.id === l.gameId) || {}, side = l.pick === 'home' ? g.home : g.away;
+  if (l.market === 'ml') return `${ab(side)} ML`;
+  if (l.market === 'spread') return `${ab(side)} ${fmtLine(l.pick === 'home' ? l.line : -l.line)}`;
+  return `${l.pick === 'over' ? 'Over' : 'Under'} ${l.line} · ${ab(g.away)} @ ${ab(g.home)}`;
+}
+// Parlay legs as a tap-to-open dropdown. The closed row shows one status icon per leg.
 export function legsHtml(w) {
   if (w.market !== 'parlay') return '';
-  const wk = l => l.market === 'future' ? 'Title' : l.market === 'wins' ? 'Wins' : 'Wk ' + (D.games.find(x => x.id === l.gameId)?.week ?? '?');
+  const legs = w.legs || [];
+  const wk = l => l.market === 'future' ? 'Title' : l.market === 'wins' ? 'Season' : 'Wk ' + (D.games.find(x => x.id === l.gameId)?.week ?? '?');
   const ic = r => r === 'won' ? '✅' : r === 'lost' ? '❌' : r === 'push' || r === 'void' ? '➖' : '⏳';
-  return `<div class="muted small" style="white-space:normal">${(w.legs || []).map(l => `${ic(l.result)} ${wk(l)}: ${esc(wagerLabel({ ...l, season: w.season }))}`).join('<br>')}</div>`;
+  return `<details class="legs"><summary><span class="lgic">${legs.map(l => ic(l.result)).join('')}</span><span class="lgtx">${legs.length} legs</span></summary>
+    <ul>${legs.map(l => `<li><span class="li">${ic(l.result)}</span><span class="lt">${esc(legLabel(l))} <span class="lw">${wk(l)}</span></span><span class="lo">${fmtOdds(l.odds)}</span></li>`).join('')}</ul></details>`;
 }
 export function wagerLabel(w) {
   if (w.market === 'wins') return `${team(w.team).name} ${w.pick === 'over' ? 'Over' : 'Under'} ${w.line} wins (${fmtOdds(w.odds)})`;

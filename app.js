@@ -3,7 +3,7 @@ import {
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
   gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ratings, powerRankings, lastPlayedWeek, clinchScenarios
-} from './core.js?v=33';
+} from './core.js?v=34';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['betting', 'Betting'], ['odds', 'Odds'],
@@ -74,11 +74,10 @@ function raceHtml(r, order) {
     const parts = [];
     if (t.clinch.length) parts.push(`<div><span class="rl">Clinches in ${wk} if</span> ${scenText(t.clinch)}</div>`);
     if (t.elim.length) parts.push(`<div><span class="rl bad">Eliminated in ${wk} if</span> ${scenText(t.elim)}</div>`);
-    if (!parts.length) parts.push(`<div class="muted">Can't clinch or be eliminated in ${wk}.</div>`);
     return `<li><div class="rh">${chip(t.id)}${tag}</div>${parts.join('')}</li>`;
   };
   return `<div class="race"><h4>Clinching scenarios · ${wk}</h4><p class="muted small">The race for ${berthOf(r)}. Ties that reach point differential can't be predicted, so those count as still open.</p>
-    <ul class="racelist">${live.map(line).join('')}</ul>${out.length ? `<p class="small muted" style="margin-bottom:0">Eliminated: ${out.map(t => abT(t.id)).join(', ')}</p>` : ''}</div>`;
+    <ul class="racelist">${live.map(line).join('')}</ul>${(() => { const q = live.filter(t => t.status === 'alive' && !t.clinch.length && !t.elim.length); return q.length ? `<p class="small muted" style="margin:0 0 4px">${q.length === live.length ? 'Nobody' : q.map(t => abT(t.id)).join(', ')} can't clinch or be eliminated in ${wk}.</p>` : ''; })()}${out.length ? `<p class="small muted" style="margin-bottom:0">Eliminated: ${out.map(t => abT(t.id)).join(', ')}</p>` : ''}</div>`;
 }
 // One sentence for a game preview: does this result clinch or eliminate anyone?
 function clinchNote(g) {
