@@ -2,8 +2,8 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName
-} from './core.js?v=31';
+  gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ratings, powerRankings, lastPlayedWeek
+} from './core.js?v=32';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['betting', 'Betting'], ['odds', 'Odds'],
@@ -16,7 +16,7 @@ const lineText = (g, l = lineOf(g)) => {
   if (!l) return '';
   const fav = l.spread <= 0 ? g.home : g.away;
   const fj = juiceOf(l, 'spread', fav === g.home ? 'home' : 'away');
-  return `${l.spread === 0 ? 'PK' : esc(team(fav).abbr || team(fav).name) + ' ' + fmtLine(-Math.abs(l.spread))}${fj !== -110 ? ` (${fmtOdds(fj)})` : ''} · O/U ${l.total} · ML ${esc(team(g.away).abbr)} ${fmtOdds(l.mlAway)} / ${esc(team(g.home).abbr)} ${fmtOdds(l.mlHome)}`;
+  return `${l.spread === 0 ? 'PK' : esc(team(fav).abbr || team(fav).name) + ' ' + fmtLine(-Math.abs(l.spread))}${fj !== -110 ? ` (${fmtOdds(fj)})` : ''} · O/U ${l.total} · ${esc(team(g.away).abbr)} ${fmtOdds(l.mlAway)} / ${esc(team(g.home).abbr)} ${fmtOdds(l.mlHome)}`;
 };
 function gameCard(g, opts = {}) {
   const h = team(g.home), a = team(g.away), done = played(g);
@@ -25,22 +25,22 @@ function gameCard(g, opts = {}) {
   if (isUserTeam(h) && isUserTeam(a)) tags.push('<span class="h2h">USER GAME</span>');
   if (g.type === 'ccg') tags.push('<span class="tag gold">League Championship</span>');
   if (g.type === 'bowl') tags.push('<span class="tag">Postseason</span>');
-  const coach = t => isUserTeam(t) ? ` <span class="muted small">${esc(t.coach)}</span>` : '';
   const l = lineOf(g);
-  let meta = '';
-  if (done && g.forfeit) meta = 'Forfeit win';
-  else if (l && !done) meta = (g.lines ? '' : 'Projected: ') + lineText(g, l);
+  let odds = '';
+  if (done && g.forfeit) odds = 'Forfeit win';
+  else if (l && !done) odds = (g.lines ? '' : 'Proj. ') + lineText(g, l);
   else if (l && done) {
-    const m = +g.homeScore - +g.awayScore + l.spread, fav = l.spread <= 0 ? g.home : g.away;
+    const m = +g.homeScore - +g.awayScore + l.spread, fav = l.spread <= 0 ? g.home : g.away, tot = +g.homeScore + +g.awayScore;
     const cov = m === 0 ? 'Push' : (m > 0 ? team(g.home).abbr : team(g.away).abbr) + ' covered';
-    meta = `Line: ${l.spread === 0 ? 'PK' : esc(team(fav).abbr) + ' ' + fmtLine(-Math.abs(l.spread))} · ${esc(cov)} · Total ${+g.homeScore + +g.awayScore} (${+g.homeScore + +g.awayScore > l.total ? 'Over' : +g.homeScore + +g.awayScore < l.total ? 'Under' : 'Push'} ${l.total})`;
+    odds = `${l.spread === 0 ? 'PK' : esc(team(fav).abbr) + ' ' + fmtLine(-Math.abs(l.spread))} · ${esc(cov)} · ${tot > l.total ? 'Over' : tot < l.total ? 'Under' : 'Push'} ${l.total}`;
   }
   const sc = (side, won) => done ? `<b class="msc ${won ? 'w' : 'l'}">${g.forfeit ? (won ? 'FW' : 'FL') : g[side + 'Score']}</b>` : '';
   const status = `<b class="gstat">${done ? 'Final' : 'Week ' + g.week}</b>`;
-  const coaches = `<div class="meta">${status}${[a, h].filter(isUserTeam).length ? ` · ${isUserTeam(a) ? esc(a.coach) : 'CPU'} ${g.neutral ? 'vs' : '@'} ${isUserTeam(h) ? esc(h.coach) : 'CPU'}` : ''}</div>`;
-  return `<div class="card game${opts.gotw ? ' gotw' : ''}">${opts.gotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}<div class="teams">
+  const who = [a, h].filter(isUserTeam).length ? ` · ${isUserTeam(a) ? esc(a.coach) : 'CPU'} ${g.neutral ? 'vs' : '@'} ${isUserTeam(h) ? esc(h.coach) : 'CPU'}` : '';
+  return `<div class="card game clickable${opts.gotw ? ' gotw' : ''}" data-game="${esc(g.id)}">${opts.gotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}<span class="go" aria-hidden="true">›</span><div class="teams">
       <div class="matchup"><span class="mt ${done ? (aw ? 'w' : 'l') : ''}">${chip(a.id, { season: g.season, week: g.week })}${sc('away', aw)}</span><span class="at">${g.neutral ? 'vs' : '@'}</span><span class="mt ${done ? (hw ? 'w' : 'l') : ''}">${chip(h.id, { season: g.season, week: g.week })}${sc('home', hw)}</span>${tags.join('')}</div>
-      ${coaches}${meta ? `<div class="meta">${meta}</div>` : ''}${g.forfeit ? '' : winLine(g, l, done)}${opts.extra || ''}</div></div>`;
+      <div class="meta">${status}${who}</div>
+      ${odds ? `<div class="meta">${odds}</div>` : ''}${g.forfeit ? '' : probBar(g, l, done)}${opts.extra || ''}</div></div>`;
 }
 const sortTh = (st, key, label, cls = '') => `<th data-sort="${key}" class="${cls}${st.key === key ? ' sorted' : ''}">${label}${st.key === key ? (st.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
 function sortRows(rows, st, getters) {
@@ -50,6 +50,13 @@ function sortRows(rows, st, getters) {
 // Model win chance for each side (no vig), rounded so the pair adds to 100.
 const winPct = (g, l = lineOf(g)) => { if (!l || l.pHome == null) return null; const h = Math.max(1, Math.min(99, Math.round(l.pHome * 100))); return { h, a: 100 - h }; };
 const winLine = (g, l, pre, cls = '') => { const p = winPct(g, l); if (!p) return ''; return `<div class="meta winp ${cls}">${pre ? 'Pre-game win chance' : 'Win chance'}: ${esc(team(g.away).abbr || team(g.away).name)} <b>${p.a}%</b> · ${esc(team(g.home).abbr || team(g.home).name)} <b>${p.h}%</b></div>`; };
+// Thin two-color win-chance bar (ESPN-style matchup predictor).
+function probBar(g, l, pre, cls = '') {
+  const p = winPct(g, l); if (!p) return '';
+  const A = team(g.away), H = team(g.home);
+  return `<div class="pbar ${pre ? 'pre' : ''} ${cls}" title="${pre ? 'Pre-game win chance' : 'Win chance'}"><span>${esc(A.abbr || A.name)} <b>${p.a}%</b></span>
+    <div class="pb"><i style="width:${p.a}%;background:${esc(teamColor(A))}"></i><i style="width:${p.h}%;background:${esc(teamColor(H))}"></i></div><span><b>${p.h}%</b> ${esc(H.abbr || H.name)}</span>${pre ? '<em>pre-game</em>' : ''}</div>`;
+}
 const subSm = txt => txt ? `<div class="show-sm muted small">${txt}</div>` : '';
 const mvHtml = m => m > 0 ? `<span class="up">+${m}</span>` : m < 0 ? `<span class="down">${m}</span>` : '<span class="muted">–</span>';
 
@@ -188,7 +195,7 @@ const PAGES = {
         const home = g.home === id, opp = home ? g.away : g.home, done = played(g), l = lineOf(g);
         const my = home ? +g.homeScore : +g.awayScore, th = home ? +g.awayScore : +g.homeScore;
         const myLine = l ? (home ? l.spread : -l.spread) : null;
-        return `<tr><td>${g.week}</td><td>${g.neutral ? 'vs' : home ? 'vs' : '@'} ${chip(opp, { season: g.season, week: g.week })}</td><td class="muted wrap-sm">${l ? fmtLine(myLine) + `<span class="hide-sm"> · ${fmtOdds(home ? l.mlHome : l.mlAway)}</span>` + (winPct(g, l) && !g.forfeit ? ` · <span title="${done ? 'Pre-game win chance' : 'Win chance'}">${home ? winPct(g, l).h : winPct(g, l).a}%</span>` : '') : ''}</td><td class="num">${done ? `<span class="${my > th ? 'win' : 'loss'}">${my > th ? 'W' : 'L'} ${g.forfeit ? '(forfeit)' : my + '-' + th}</span>` : '<span class="muted">—</span>'}</td></tr>`;
+        return `<tr class="clickable" data-game="${esc(g.id)}"><td>${g.week}</td><td>${g.neutral ? 'vs' : home ? 'vs' : '@'} ${chip(opp, { season: g.season, week: g.week })}</td><td class="muted wrap-sm">${l ? fmtLine(myLine) + `<span class="hide-sm"> · ${fmtOdds(home ? l.mlHome : l.mlAway)}</span>` + (winPct(g, l) && !g.forfeit ? ` · <span title="${done ? 'Pre-game win chance' : 'Win chance'}">${home ? winPct(g, l).h : winPct(g, l).a}%</span>` : '') : ''}</td><td class="num">${done ? `<span class="${my > th ? 'win' : 'loss'}">${my > th ? 'W' : 'L'} ${g.forfeit ? '(forfeit)' : my + '-' + th}</span>` : '<span class="muted">—</span>'}</td></tr>`;
       }).join('')}</table></div></div>`;
   },
 
@@ -283,7 +290,7 @@ function betRows(g) {
   const a = team(g.away), h = team(g.home);
   const b = (market, pick, top, odds) => `<button class="pick${UI.mode === 'parlay' && UI.legs.some(x => x.gameId === g.id && x.market === market && x.pick === pick) ? ' sel' : ''}" data-bet="${esc(g.id)}|${market}|${pick}">${top} <b>${fmtOdds(odds)}</b></button>`;
   const isG = gotwGameId() === g.id;
-  return `<div class="betgame${isG ? ' gotw' : ''}">${isG ? `<span class="ribbon">★ Game of the Week · +${Math.round((GOTW_BOOST - 1) * 100)}% profit boost</span>` : ''}<div class="tm matchup">${chip(a.id, { season: g.season, week: g.week })}<span class="at">${g.neutral ? 'vs' : '@'}</span>${chip(h.id, { season: g.season, week: g.week })}${isUserTeam(a) && isUserTeam(h) ? '<span class="h2h">USER GAME</span>' : ''}</div>${winLine(g, l, false, 'tm')}
+  return `<div class="betgame${isG ? ' gotw' : ''}">${isG ? `<span class="ribbon">★ Game of the Week · +${Math.round((GOTW_BOOST - 1) * 100)}% profit boost</span>` : ''}<div class="tm matchup">${chip(a.id, { season: g.season, week: g.week })}<span class="at">${g.neutral ? 'vs' : '@'}</span>${chip(h.id, { season: g.season, week: g.week })}${isUserTeam(a) && isUserTeam(h) ? '<span class="h2h">USER GAME</span>' : ''}<a class="prevlink" href="#game/${esc(g.id)}">Preview ›</a></div>${probBar(g, l, false, 'tm')}
     <div style="display:grid;gap:4px">${b('spread', 'away', esc(a.abbr) + ' ' + fmtLine(-l.spread), juiceOf(l, 'spread', 'away'))}${b('spread', 'home', esc(h.abbr) + ' ' + fmtLine(l.spread), juiceOf(l, 'spread', 'home'))}</div>
     <div style="display:grid;gap:4px">${b('ml', 'away', esc(a.abbr), l.mlAway)}${b('ml', 'home', esc(h.abbr), l.mlHome)}</div>
     <div style="display:grid;gap:4px">${b('total', 'over', 'O ' + l.total, juiceOf(l, 'total', 'over'))}${b('total', 'under', 'U ' + l.total, juiceOf(l, 'total', 'under'))}</div></div>`;
@@ -732,6 +739,149 @@ function showLive() {
 }
 setInterval(async () => { await refreshLive(); checkLive(); }, 60000);
 
+/* ---------- Game preview / recap page ---------- */
+const pct0 = p => Math.round(p * 100) + '%';
+const possN = n => /s$/i.test(n) ? n + "'" : n + "'s";
+// Season numbers for one team: ATS, O/U, scoring, underdog record (forfeits skipped).
+function teamProfile(tid, s) {
+  const out = { gp: 0, pf: 0, pa: 0, ats: [0, 0, 0], ou: [0, 0, 0], dog: [0, 0], fav: [0, 0] };
+  D.games.filter(g => g.season === s && played(g) && !g.forfeit && (g.home === tid || g.away === tid)).forEach(g => {
+    const home = g.home === tid, my = home ? +g.homeScore : +g.awayScore, th = home ? +g.awayScore : +g.homeScore, l = lineOf(g);
+    out.gp++; out.pf += my; out.pa += th;
+    if (!l) return;
+    const myLine = home ? l.spread : -l.spread, cov = my - th + myLine, tot = my + th - l.total;
+    out.ats[cov > 0 ? 0 : cov < 0 ? 1 : 2]++; out.ou[tot > 0 ? 0 : tot < 0 ? 1 : 2]++;
+    const pw = home ? l.pHome : 1 - l.pHome, won = my > th;
+    if (pw < 0.5) out.dog[won ? 0 : 1]++; else out.fav[won ? 0 : 1]++;
+  });
+  return out;
+}
+function coachMeetings(c1, c2, exceptId) {
+  if (!c1 || !c2 || c1 === 'CPU' || c2 === 'CPU') return [];
+  const key = [c1, c2].sort().join('|');
+  return D.games.filter(g => played(g) && g.id !== exceptId && [coachOf(g, 'home'), coachOf(g, 'away')].sort().join('|') === key)
+    .sort((a, b) => b.season - a.season || b.week - a.week);
+}
+function meetingWinner(g) { const hw = +g.homeScore > +g.awayScore; return { coach: coachOf(g, hw ? 'home' : 'away'), team: hw ? g.home : g.away, ws: Math.max(+g.homeScore, +g.awayScore), ls: Math.min(+g.homeScore, +g.awayScore), lteam: hw ? g.away : g.home, lcoach: coachOf(g, hw ? 'away' : 'home') }; }
+
+PAGES.game = function (id) {
+  const g = D.games.find(x => x.id === id); if (!g) return '<div class="card empty">Game not found.</div>';
+  const L = D.league, s = g.season, A = team(g.away), H = team(g.home), done = played(g), l = lineOf(g), p = winPct(g, l);
+  const rk = t => rankOf(t.id, s, g.week), rn = t => (rk(t) ? '#' + rk(t) + ' ' : '') + t.name;
+  const recs = records(s), ra = recs[A.id], rh = recs[H.id];
+  const ca = isUserTeam(A) ? A.coach : (g.awayCoach || 'CPU'), ch = isUserTeam(H) ? H.coach : (g.homeCoach || 'CPU');
+  const coachA = done ? coachOf(g, 'away') : ca, coachH = done ? coachOf(g, 'home') : ch;
+  const PA = teamProfile(A.id, s), PH = teamProfile(H.id, s);
+  const R = ratings(s, nowUpto()), formOf = t => { const r = R[t.id]; if (!r || !r.perf.length) return null; const x = r.perf.slice(-3); return x.reduce((a, b) => a + b.v, 0) / x.length; };
+  const fav = l ? (l.spread <= 0 ? H : A) : null, dog = fav ? (fav === H ? A : H) : null;
+  const meets = coachMeetings(coachA, coachH, g.id);
+  const mw = meets.reduce((o, m) => { const w = meetingWinner(m).coach; o[w] = (o[w] || 0) + 1; return o; }, {});
+  const isGotw = gotwTally(s, g.week).game?.id === g.id;
+  const same = A.conf === L.conference && H.conf === L.conference && A.div && A.div === H.div && divisions().length > 1;
+  const divOrder = same ? orderGroup(leagueTeams().filter(t => t.div === A.div).map(t => t.id), s) : [];
+  const where = g.neutral ? 'at a neutral site' : `at ${H.name}`;
+
+  // ----- headline -----
+  let title;
+  if (done) {
+    const w = +g.homeScore > +g.awayScore ? H : A, lo = w === H ? A : H, mar = Math.abs(g.homeScore - g.awayScore), pw = p ? (w === H ? p.h : p.a) : 50;
+    title = g.forfeit ? `${w.name} Takes a Forfeit Win Over ${lo.name}` : pw < 40 ? `Shock in Week ${g.week}: ${rn(w)} Stuns ${rn(lo)}` : mar >= 28 ? `${w.name} Rolls Past ${lo.name}` : mar <= 3 ? `${w.name} Survives ${lo.name} in a Thriller` : `${w.name} Handles ${lo.name}`;
+    if (g.type === 'ccg') title = `${w.name} Wins the League Championship`;
+  } else {
+    const cand = [];
+    if (g.type === 'ccg') cand.push([100, `For All the Marbles: ${rn(A)} vs. ${rn(H)}`]);
+    if (rk(A) && rk(H)) cand.push([90, `Top-25 Clash: ${rn(A)} at ${rn(H)}`]);
+    if (same && divOrder.indexOf(A.id) < 2 && divOrder.indexOf(H.id) < 2) cand.push([86, `Showdown for the ${A.div} Crown`]);
+    const lead = Object.entries(mw).sort((x, y) => y[1] - x[1])[0];
+    if (lead && meets.length >= 3 && lead[1] === meets.length) { const loser = lead[0] === coachA ? coachH : coachA; cand.push([80, `Can ${loser} Finally Solve ${lead[0]}?`]); }
+    if (meets.length) { const lm = meetingWinner(meets[0]); cand.push([70, `Revenge Game: ${lm.lcoach} Gets Another Shot at ${lm.coach}`]); }
+    if (l && Math.abs(l.spread) <= 2.5) cand.push([66, `Coin Flip: ${A.name} and ${H.name} Are Dead Even`]);
+    if (l && Math.abs(l.spread) >= 17) cand.push([60, `Upset Alert? ${dog.name} Tries to Shock ${rn(fav)}`]);
+    const sa = streak(ra), sh = streak(rh);
+    [[A, sa], [H, sh]].forEach(([t, st]) => { if (/^W\d+$/.test(st) && +st.slice(1) >= 3) cand.push([55, `Can Anyone Stop ${t.name}?`]); if (/^L\d+$/.test(st) && +st.slice(1) >= 3) cand.push([50, `Desperation Time for ${t.name}`]); });
+    cand.push([0, `${A.name} at ${H.name}: What to Watch`]);
+    title = cand.sort((x, y) => y[0] - x[0])[0][1];
+  }
+
+  // ----- story paragraphs -----
+  const paras = [];
+  const recTxt = t => { const r = recs[t.id]; return `${r.w}-${r.l}${t.conf === L.conference && (r.cw + r.cl) ? `, ${r.cw}-${r.cl} ${t.div || L.conference}` : ''}`; };
+  const cTxt = c => c && c !== 'CPU' ? `${possN(c)} ` : '';
+  if (done) {
+    const w = +g.homeScore > +g.awayScore ? H : A, lo = w === H ? A : H, ws = Math.max(+g.homeScore, +g.awayScore), ls = Math.min(+g.homeScore, +g.awayScore);
+    if (g.forfeit) paras.push(`${cTxt(w === H ? coachH : coachA)}${w.name} was awarded a forfeit win over ${lo.name} in Week ${g.week}. All bets on this game were refunded.`);
+    else {
+      let t = `${cTxt(w === H ? coachH : coachA)}${rn(w)} beat ${cTxt(lo === H ? coachH : coachA)}${rn(lo)} ${ws}-${ls} in Week ${g.week}${g.type === 'ccg' ? ' to win the league championship' : ''}.`;
+      if (l) { const m = +g.homeScore - +g.awayScore + l.spread, tot = ws + ls; t += ` ${fav ? `${fav.name} closed as a ${Math.abs(l.spread)}-point favorite` : 'It closed as a pick\'em'}; ${m === 0 ? 'the spread pushed' : `${(m > 0 ? H : A).name} covered`}, and the ${tot} combined points went ${tot > l.total ? 'over' : tot < l.total ? 'under' : 'right on'} the ${l.total} total.`; }
+      if (p) { const pw = w === H ? p.h : p.a; t += pw < 40 ? ` The model gave ${w.name} only a ${pw}% chance before kickoff.` : ` ${w.name} went in with a ${pw}% chance to win.`; }
+      paras.push(t);
+    }
+  } else {
+    let t = `${cTxt(coachA)}${rn(A)} (${recTxt(A)}) ${g.neutral ? 'meets' : 'visits'} ${cTxt(coachH)}${rn(H)} (${recTxt(H)}) in Week ${g.week}${g.neutral ? ' at a neutral site' : ''}.`;
+    if (l && p) t += ` ${fav ? `${fav.name} is a ${Math.abs(l.spread)}-point favorite with a ${Math.max(p.a, p.h)}% chance to win` : 'The line is a pick\'em'}, and the total sits at ${l.total}.`;
+    if (same) t += ` Both teams play in the ${A.div}, where ${team(divOrder[0]).name} currently leads the division${divOrder.indexOf(A.id) < 2 && divOrder.indexOf(H.id) < 2 ? ', so the division race runs straight through this game' : ''}.`;
+    if (isGotw) t += ` The league voted it Game of the Week, and bets on it get a +10% profit boost.`;
+    paras.push(t);
+    if (L.phase === PHASES.REG && s === L.season && (g.type || 'reg') === 'reg' && A.conf === L.conference && H.conf === L.conference) {
+      const u = nowUpto(), base = simulate(s, u), hW = simulate(s, u, 1500, { [g.id]: true }), aW = simulate(s, u, 1500, { [g.id]: false });
+      const move = (t, win, lose) => { const b = base[t.id].titlePct, w = win[t.id].titlePct, lo = lose[t.id].titlePct;
+        return `a win would move its title odds to ${pctStr(w)} (from ${pctStr(b)}), while a loss would ${lo < b - 0.005 ? 'drop them to' : 'leave them at'} ${pctStr(lo)}`; };
+      paras.push(`What's at stake: for ${H.name}, ${move(H, hW, aW)}. For ${A.name}, ${move(A, aW, hW)}.`);
+    }
+    const form = t => { const f = formOf(t), P = t === A ? PA : PH; if (!P.gp) return ''; const atsT = `${P.ats[0]}-${P.ats[1]}${P.ats[2] ? '-' + P.ats[2] : ''} against the spread`;
+      return `${t.name} ${f == null ? 'comes in' : f >= 4 ? 'comes in hot' : f <= -4 ? 'comes in cold' : 'comes in steady'}${f == null ? '' : `, playing ${Math.abs(f).toFixed(1)} points per game ${f >= 0 ? 'better' : 'worse'} than expected over its last three`}. It's averaging ${(P.pf / P.gp).toFixed(1)} points while allowing ${(P.pa / P.gp).toFixed(1)}, and it's ${atsT} this season.`; };
+    const fa = form(A), fh = form(H); if (fa || fh) paras.push([fa, fh].filter(Boolean).join(' '));
+  }
+  if (coachA !== 'CPU' && coachH !== 'CPU') {
+    if (!meets.length) paras.push(`This ${done ? 'was' : 'is'} the first meeting ever between ${coachA} and ${coachH}.`);
+    else {
+      const lm = meetingWinner(meets[0]), wa = mw[coachA] || 0, wh = mw[coachH] || 0;
+      const lead = wa === wh ? `The series is tied ${wa}-${wh}` : `${wa > wh ? coachA : coachH} leads the all-time series ${Math.max(wa, wh)}-${Math.min(wa, wh)}`;
+      const tg = meets.filter(m => m.type === 'ccg').map(m => { const w = meetingWinner(m); return `the Season ${seasonNum(m.season)} title game, won by ${w.coach} ${w.ws}-${w.ls}`; });
+      paras.push(`${coachA} and ${coachH} have met ${meets.length} time${meets.length === 1 ? '' : 's'}${done ? ' before this one' : ''}. ${lead}${tg.length ? `. Their meetings include ${tg.join(' and ')}` : ''}. Last time: Season ${seasonNum(meets[0].season)}${meets[0].type === 'ccg' ? ' title game' : `, Week ${meets[0].week}`}, ${possN(lm.coach)} ${team(lm.team).name} won ${lm.ws}-${lm.ls}.`);
+    }
+  }
+
+  // ----- trends to watch -----
+  const trends = [];
+  [[A, PA], [H, PH]].forEach(([t, P]) => {
+    if (P.ats[0] + P.ats[1] >= 3) trends.push(`${t.name} is <b>${P.ats[0]}-${P.ats[1]}${P.ats[2] ? '-' + P.ats[2] : ''}</b> against the spread this season.`);
+    if (P.ou[0] + P.ou[1] >= 3 && Math.abs(P.ou[0] - P.ou[1]) >= 2) trends.push(`The ${P.ou[0] > P.ou[1] ? 'Over' : 'Under'} is <b>${Math.max(P.ou[0], P.ou[1])}-${Math.min(P.ou[0], P.ou[1])}</b> in ${t.name} games.`);
+    if (P.dog[0] + P.dog[1] >= 2) trends.push(`${t.name} is <b>${P.dog[0]}-${P.dog[1]}</b> straight up as an underdog.`);
+    const st = streak(recs[t.id]); if (/^[WL]\d+$/.test(st) && +st.slice(1) >= 3) trends.push(`${t.name} has ${st[0] === 'W' ? 'won' : 'lost'} <b>${st.slice(1)} straight</b>.`);
+  });
+  if (meets.length >= 2) { const wa = mw[coachA] || 0, wh = mw[coachH] || 0; trends.push(`${coachA} is <b>${wa}-${wh}</b> all-time against ${coachH}.`); }
+
+  // ----- render -----
+  const pr = currentPower(s), prOf = t => pr.find(x => x.id === t.id)?.rank;
+  const sim = L.phase === PHASES.REG && s === L.season ? simulate(s, nowUpto()) : null;
+  const row = (label, fa, fh) => `<tr><td class="num">${fa}</td><th style="text-align:center">${label}</th><td>${fh}</td></tr>`;
+  const ppg = P => P.gp ? (P.pf / P.gp).toFixed(1) : '–', papg = P => P.gp ? (P.pa / P.gp).toFixed(1) : '–', rec3 = a => a[0] + a[1] + a[2] ? `${a[0]}-${a[1]}${a[2] ? '-' + a[2] : ''}` : '–';
+  const side = (t, coach, scr, won) => `<div class="gp-team ${done && !won ? 'l' : ''}"><i class="sw big" style="background:${esc(teamColor(t))}"></i><div><div class="gp-name">${rk(t) ? `<span class="rk">#${rk(t)}</span>` : ''}<a href="#team/${esc(t.id)}">${esc(t.name)}</a></div>
+    <div class="muted small">${rec(recs[t.id])}${coach && coach !== 'CPU' ? ` · <a href="#coach/${slug(coach)}">${esc(coach)}</a>` : ' · CPU'}</div></div>${done ? `<div class="gp-score">${g.forfeit ? (won ? 'FW' : 'FL') : scr}</div>` : ''}</div>`;
+  const hw = +g.homeScore > +g.awayScore;
+  const canBet = !done && s === L.season && g.week >= L.week && L.bettingOpen && L.phase !== PHASES.POST;
+  return `<p><a href="#schedule/${g.week}">← Week ${g.week} schedule</a></p>
+    <div class="card gp-head${isGotw ? ' gotw' : ''}">${isGotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}
+      <div class="muted small" style="text-transform:uppercase;letter-spacing:.8px;font-weight:800">Season ${seasonNum(s)} · ${g.type === 'ccg' ? 'League Championship' : g.type === 'bowl' ? 'Postseason' : 'Week ' + g.week}${done ? ' · Final' : ''}${isUserTeam(A) && isUserTeam(H) ? ' · <span class="h2h">USER GAME</span>' : ''}</div>
+      ${side(A, coachA, g.awayScore, !hw)}<div class="gp-at">${g.neutral ? 'vs' : '@'}</div>${side(H, coachH, g.homeScore, hw)}
+      ${l && !g.forfeit ? `<div class="gp-odds"><div><span>Spread</span><b>${l.spread === 0 ? 'PK' : esc(fav.abbr || fav.name) + ' ' + fmtLine(-Math.abs(l.spread))}</b></div><div><span>Total</span><b>O/U ${l.total}</b></div>
+        <div><span>Moneyline</span><b>${esc(A.abbr)} ${fmtOdds(l.mlAway)} · ${esc(H.abbr)} ${fmtOdds(l.mlHome)}</b></div></div>${probBar(g, l, done)}` : ''}
+      ${canBet ? `<button class="gold" data-betgame="${g.week}" style="margin-top:12px">Bet this game${isGotw ? ' · +10% boost' : ''} →</button>` : ''}</div>
+    <div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(title)}</h2>${paras.map(t => `<p>${esc(t)}</p>`).join('')}</div>
+    ${trends.length ? `<div class="card"><h3 style="margin-top:0">Trends to watch</h3><ul class="clean gp-trends">${trends.slice(0, 6).map(t => `<li>${t}</li>`).join('')}</ul></div>` : ''}
+    <div class="card"><h3 style="margin-top:0">Tale of the tape</h3><div class="tablewrap"><table class="gp-tape">
+      <tr><td class="num"><b>${esc(A.abbr || A.name)}</b></td><th></th><td><b>${esc(H.abbr || H.name)}</b></td></tr>
+      ${row('Record', rec(recs[A.id]), rec(recs[H.id]))}${row('Points / game', ppg(PA), ppg(PH))}${row('Allowed / game', papg(PA), papg(PH))}
+      ${row('Against the spread', rec3(PA.ats), rec3(PH.ats))}${row('Over-Under', rec3(PA.ou), rec3(PH.ou))}${row('Streak', streak(recs[A.id]), streak(recs[H.id]))}
+      ${row('Top 25', rk(A) ? '#' + rk(A) : '–', rk(H) ? '#' + rk(H) : '–')}${row('Power rank', prOf(A) ? '#' + prOf(A) : '–', prOf(H) ? '#' + prOf(H) : '–')}
+      ${row('OVR / OFF / DEF', `${A.ovr || '–'} / ${A.off || '–'} / ${A.def || '–'}`, `${H.ovr || '–'} / ${H.off || '–'} / ${H.def || '–'}`)}
+      ${sim && sim[A.id] && sim[H.id] ? row('Title odds', pctStr(sim[A.id].titlePct), pctStr(sim[H.id].titlePct)) : ''}
+    </table></div></div>
+    ${coachA !== 'CPU' && coachH !== 'CPU' ? `<div class="card"><h3 style="margin-top:0">Past meetings: ${esc(coachA)} vs. ${esc(coachH)}</h3>${meets.length ? `<p class="muted small" style="margin-top:0">${mw[coachA] || 0}-${mw[coachH] || 0} all-time${done ? ' before this game' : ''}. Coaches' records follow them from team to team.</p><div class="tablewrap"><table>
+      <tr><th>When</th><th>Result</th></tr>${meets.map(m => { const w = meetingWinner(m); return `<tr class="clickable" data-game="${esc(m.id)}"><td class="muted">S${seasonNum(m.season)} · ${m.type === 'ccg' ? '<b class="win">Title game</b>' : 'Wk ' + m.week}</td><td class="wrap"><b>${esc(w.coach)}</b> (${esc(team(w.team).name)}) ${m.forfeit ? 'by forfeit over' : `${w.ws}-${w.ls} over`} ${esc(w.lcoach)} (${esc(team(w.lteam).name)})</td></tr>`; }).join('')}</table></div>` : `<p class="muted">First meeting ever between these two coaches.</p>`}</div>` : ''}`;
+};
+
 /* ---------- shell ---------- */
 function header() {
   const L = D.league;
@@ -749,7 +899,7 @@ function header() {
 }
 function route() {
   const [page, arg] = (location.hash.slice(1) || 'home').split('/');
-  const active = page === 'team' ? 'teams' : page === 'coach' ? 'history' : page;
+  const active = page === 'team' ? 'teams' : page === 'coach' ? 'history' : page === 'game' ? 'schedule' : page;
   $('#nav').innerHTML = NAV.map(([k, label]) => `<a href="#${k}" class="${k === active ? 'on' : ''}">${label}</a>`).join('');
   header();
   try { $('#view').innerHTML = (PAGES[page] || PAGES.home)(decodeURIComponent(arg || '')); parlayBar(); }
@@ -758,6 +908,10 @@ function route() {
 async function reload() { await loadAll(); refreshProfile(); if (D.league.awards?.open && auth.user) await loadBallots(false); route(); }
 
 document.addEventListener('click', async e => {
+  const bg = e.target.closest('[data-betgame]');
+  if (bg) { UI.betWeek = +bg.dataset.betgame; location.hash = '#betting'; return; }
+  const gc = e.target.closest('[data-game]');
+  if (gc && !e.target.closest('a,button,input,select,label')) { location.hash = '#game/' + gc.dataset.game; window.scrollTo(0, 0); return; }
   const lx = e.target.closest('[data-livex]');
   if (lx) { try { localStorage.setItem('oecLiveDismissed', lx.dataset.livex); } catch (err) { /* ignore */ } showLive(); return; }
   const t = e.target.closest('[data-sort],[data-metric],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-slip],[data-popular],[data-res],[data-act],[data-close],[data-stake],[data-acct],[data-cancel]');

@@ -314,8 +314,9 @@ export function divisions() {
 /* ---------------- Season simulation ---------------- */
 function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 
-export function simulate(season, upto, n = 1500) {
-  return cached(`sim|${season}|${upto}|${n}`, () => {
+// force: { gameId: true (home wins) | false (away wins) } to ask "what if" for one game.
+export function simulate(season, upto, n = 1500, force = null) {
+  return cached(`sim|${season}|${upto}|${n}|${force ? JSON.stringify(force) : ''}`, () => {
     const R = ratings(season, upto), lt = leagueTeams(), ids = lt.map(t => t.id), conf = new Set(ids);
     const divs = divisions(), byDiv = divs.map(d => lt.filter(t => !d || t.div === d).map(t => t.id));
     const games = D.games.filter(g => g.season === season && (g.type || 'reg') === 'reg' && R[g.home] && R[g.away]);
@@ -335,7 +336,7 @@ export function simulate(season, upto, n = 1500) {
         if (conf.has(w) && conf.has(l)) { CW[w]++; CL[l]++; H[w + '|' + l] = (H[w + '|' + l] || 0) + 1; }
       };
       fixed.forEach(g => apply(g, +g.homeScore > +g.awayScore));
-      sims.forEach(x => apply(x.g, rand() < x.p));
+      sims.forEach(x => { const r = rand(); apply(x.g, force && x.g.id in force ? force[x.g.id] : r < x.p); });
       const tie = ids.reduce((o, id) => (o[id] = rand(), o), {});
       const order = grp => grp.slice().sort((a, b) => pctOf(CW[b], CL[b]) - pctOf(CW[a], CL[a]) || CW[b] - CW[a] ||
         ((H[b + '|' + a] || 0) - (H[a + '|' + b] || 0)) || W[b] - W[a] || tie[b] - tie[a]);
