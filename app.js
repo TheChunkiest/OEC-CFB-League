@@ -8,7 +8,7 @@ import {
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['betting', 'Betting'], ['odds', 'Odds'],
   ['rankings', 'Power Rankings'], ['teams', 'Teams'], ['vote', 'Vote'], ['history', 'History'], ['rules', 'Rules']];
-const UI = { stSort: { key: 'place', dir: 1 }, prSort: { key: 'rank', dir: 1 }, prUsers: false, oddsSort: { key: 'titlePct', dir: -1 }, metric: 'titlePct', acct: 'login', slip: null, msg: '', betWeek: null, mode: 'single', legs: [] };
+const UI = { stSort: { key: 'place', dir: 1 }, prSort: { key: 'rank', dir: 1 }, prUsers: false, oddsSort: { key: 'titlePct', dir: -1 }, lbSort: { key: 'balance', dir: -1 }, wkSort: { key: 'ts', dir: -1 }, metric: 'titlePct', acct: 'login', slip: null, msg: '', betWeek: null, mode: 'single', legs: [] };
 
 /* ---------- small renderers ---------- */
 const S = () => D.league.season;
@@ -42,7 +42,7 @@ function gameCard(g, opts = {}) {
       <div class="meta">${status}${who}</div>
       ${!done && odds ? `<div class="meta">${odds}</div>` : ''}${done || g.forfeit ? '' : probBar(g, l, done)}${opts.extra || ''}</div></div>`;
 }
-const sortTh = (st, key, label, cls = '') => `<th data-sort="${key}" class="${cls}${st.key === key ? ' sorted' : ''}">${label}${st.key === key ? (st.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
+const sortTh = (st, key, label, cls = '', tbl = '') => `<th data-sort="${key}"${tbl ? ` data-st="${tbl}"` : ''} class="${cls}${st.key === key ? ' sorted' : ''}">${label}${st.key === key ? (st.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
 function sortRows(rows, st, getters) {
   const f = getters[st.key] || (r => r[st.key]);
   return rows.slice().sort((a, b) => { const x = f(a), y = f(b); return (typeof x === 'string' ? x.localeCompare(y) : x - y) * st.dir; });
@@ -195,12 +195,20 @@ const PAGES = {
           return `<tr><td class="hide-sm">${w.market === 'future' ? 'Fut' : w.market === 'wins' ? 'Wins' : w.market === 'parlay' ? 'Par' : (g ? g.week : w.week)}</td><td class="wrap">${esc(wagerLabel(w))}${w.boost ? ' <span class="boosttag">⚡ +10%</span>' : ''}${legsHtml(w)}${subSm(fmtTime(w.ts))}</td><td class="muted small hide-sm">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num"><span class="pill ${w.status}">${w.status === 'open' ? 'Open · to win ' + winProfit(w) : (w.status === 'void' ? 'VOID · REFUNDED' : w.status.toUpperCase()) + (w.payout ? ' ' + (w.payout > 0 ? '+' : '') + w.payout : '')}</span></td><td class="row" style="flex-wrap:nowrap"><button class="sm ghost" data-slip="${esc(w.id)}" title="Bet slip image">🧾</button>${canCancel ? `<button class="sm ghost" data-cancel="${esc(w.id)}">Cancel</button>` : ''}</td></tr>`; }).join('')}
       </table></div>` : '<div class="muted">No wagers yet this season.</div>'}</div>`;
     }
-    const board = D.users.filter(u => u.teamId).map(u => ({ u, b: bankroll(u.id) })).sort((a, b) => b.b.balance - a.b.balance);
-    html += `<h2>Season ${seasonNum()} Leaderboard</h2><div class="card"><div class="tablewrap"><table><tr><th>#</th><th>Coach</th><th class="num">W-L-P</th><th class="num hide-xs">Net</th><th class="num hide-sm">ROI</th><th class="num">Balance</th></tr>
-      ${board.map((x, i) => `<tr class="${me && me.id === x.u.id ? 'me' : ''}"><td class="rank">${i + 1}</td><td><a href="#coach/${slug(x.u.name)}">${esc(x.u.name)}</a> <span class="muted small hide-sm">${esc(team(x.u.teamId).name)}</span>${subSm(esc(team(x.u.teamId).name))}</td><td class="num">${x.b.w}-${x.b.l}-${x.b.p}</td><td class="num hide-xs ${x.b.net >= 0 ? 'win' : 'loss'}">${x.b.net >= 0 ? '+' : ''}${x.b.net}</td><td class="num hide-sm">${x.b.risked ? Math.round(x.b.net / x.b.risked * 100) + '%' : '–'}</td><td class="num"><b>${x.b.balance.toLocaleString()}</b></td></tr>`).join('')}
+    const lb = UI.lbSort, ws = UI.wkSort;
+    const board0 = D.users.filter(u => u.teamId).map(u => ({ u, b: bankroll(u.id) })).sort((a, b) => b.b.balance - a.b.balance)
+      .map((x, i) => ({ ...x, place: i + 1, name: x.u.name, rec: x.b.w + x.b.l ? x.b.w / (x.b.w + x.b.l) : 0, net: x.b.net, roi: x.b.risked ? x.b.net / x.b.risked : -Infinity, balance: x.b.balance }));
+    const board = sortRows(board0, lb, { rec: r => r.rec * 1000 + r.b.w });
+    html += `<h2>Season ${seasonNum()} Leaderboard</h2><p class="muted small" style="margin-top:-6px">Tap a column header to sort.</p><div class="card"><div class="tablewrap"><table><tr>${sortTh(lb, 'place', '#', '', 'lbSort')}${sortTh(lb, 'name', 'Coach', '', 'lbSort')}${sortTh(lb, 'rec', 'W-L-P', 'num', 'lbSort')}${sortTh(lb, 'net', 'Net', 'num hide-xs', 'lbSort')}${sortTh(lb, 'roi', 'ROI', 'num hide-sm', 'lbSort')}${sortTh(lb, 'balance', 'Balance', 'num', 'lbSort')}</tr>
+      ${board.map(x => `<tr class="${me && me.id === x.u.id ? 'me' : ''}"><td class="rank">${x.place}</td><td><a href="#coach/${slug(x.u.name)}">${esc(x.u.name)}</a> <span class="muted small hide-sm">${esc(team(x.u.teamId).name)}</span>${subSm(esc(team(x.u.teamId).name))}</td><td class="num">${x.b.w}-${x.b.l}-${x.b.p}</td><td class="num hide-xs ${x.b.net >= 0 ? 'win' : 'loss'}">${x.b.net >= 0 ? '+' : ''}${x.b.net}</td><td class="num hide-sm">${x.b.risked ? Math.round(x.b.net / x.b.risked * 100) + '%' : '–'}</td><td class="num"><b>${x.b.balance.toLocaleString()}</b></td></tr>`).join('')}
     </table></div></div>`;
-    const wk = D.wagers.filter(w => w.season === s && w.week === L.week);
-    if (wk.length) html += `<h2>Bets Placed This Week</h2><div class="card"><div class="tablewrap"><table class="bets"><tr><th>Coach</th><th>Bet</th><th class="hide-sm">Placed</th><th class="num">Stake</th><th class="num hide-xs">Status</th></tr>${wk.slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)).map(w => `<tr><td>${esc(w.coach || '')}</td><td class="wrap">${esc(wagerLabel(w))}${legsHtml(w)}${subSm(fmtTime(w.ts))}</td><td class="muted small hide-sm">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num hide-xs"><span class="pill ${w.status}">${w.status}</span></td></tr>`).join('')}</table></div></div>`;
+    // Potential payout = stake back + profit (boost included). Pushes and voids just return the stake.
+    const payOf = w => w.status === 'push' || w.status === 'void' ? w.stake : w.stake + winProfit(w);
+    const payCell = w => { const v = payOf(w).toLocaleString(); return w.status === 'lost' ? `<s class="muted">${v}</s>` : w.status === 'won' ? `<b class="win">${v}</b>` : v; };
+    const STO = { open: 0, won: 1, push: 2, void: 3, lost: 4 };
+    const wk = sortRows(D.wagers.filter(w => w.season === s && w.week === L.week), ws,
+      { coach: w => (w.coach || '').toLowerCase(), bet: w => wagerLabel(w).toLowerCase(), ts: w => w.ts || 0, stake: w => w.stake, payout: payOf, status: w => STO[w.status] ?? 9 });
+    if (wk.length) html += `<h2>Bets Placed This Week</h2><p class="muted small" style="margin-top:-6px">Payout is the stake plus winnings if the bet hits. Tap a column header to sort.</p><div class="card"><div class="tablewrap"><table class="bets"><tr>${sortTh(ws, 'coach', 'Coach', '', 'wkSort')}${sortTh(ws, 'bet', 'Bet', '', 'wkSort')}${sortTh(ws, 'ts', 'Placed', 'hide-sm', 'wkSort')}${sortTh(ws, 'stake', 'Stake', 'num', 'wkSort')}${sortTh(ws, 'payout', 'Payout', 'num', 'wkSort')}${sortTh(ws, 'status', 'Status', 'num hide-xs', 'wkSort')}</tr>${wk.map(w => `<tr><td>${esc(w.coach || '')}</td><td class="wrap">${esc(wagerLabel(w))}${legsHtml(w)}${subSm(fmtTime(w.ts))}</td><td class="muted small hide-sm">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num">${payCell(w)}</td><td class="num hide-xs"><span class="pill ${w.status}">${w.status}</span></td></tr>`).join('')}</table></div></div>`;
     return html;
   },
 
@@ -994,8 +1002,8 @@ document.addEventListener('click', async e => {
   if (!t) return;
   const page = (location.hash.slice(1) || 'home').split('/')[0];
   if (t.dataset.sort) {
-    const st = page === 'rankings' ? UI.prSort : page === 'odds' ? UI.oddsSort : UI.stSort;
-    if (st.key === t.dataset.sort) st.dir *= -1; else { st.key = t.dataset.sort; st.dir = ['place', 'rank', 'name', 'coach'].includes(st.key) ? 1 : -1; }
+    const st = t.dataset.st && UI[t.dataset.st] ? UI[t.dataset.st] : page === 'rankings' ? UI.prSort : page === 'odds' ? UI.oddsSort : UI.stSort;
+    if (st.key === t.dataset.sort) st.dir *= -1; else { st.key = t.dataset.sort; st.dir = ['place', 'rank', 'name', 'coach', 'bet', 'status'].includes(st.key) ? 1 : -1; }
     route();
   } else if (t.dataset.metric) { UI.metric = t.dataset.metric; route(); }
   else if (t.dataset.pr) { UI.prUsers = t.dataset.pr === 'users'; route(); }
