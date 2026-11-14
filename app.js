@@ -40,7 +40,7 @@ function gameCard(g, opts = {}) {
   return `<div class="card game clickable${opts.gotw ? ' gotw' : ''}" data-game="${esc(g.id)}">${opts.gotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}<span class="go" aria-hidden="true">›</span><div class="teams">
       <div class="matchup"><span class="mt ${done ? (aw ? 'w' : 'l') : ''}">${chip(a.id, { season: g.season, week: g.week })}${sc('away', aw)}</span><span class="at">${g.neutral ? 'vs' : '@'}</span><span class="mt ${done ? (hw ? 'w' : 'l') : ''}">${chip(h.id, { season: g.season, week: g.week })}${sc('home', hw)}</span>${tags.join('')}</div>
       <div class="meta">${status}${who}</div>
-      ${odds ? `<div class="meta">${odds}</div>` : ''}${g.forfeit ? '' : probBar(g, l, done)}${opts.extra || ''}</div></div>`;
+      ${!done && odds ? `<div class="meta">${odds}</div>` : ''}${done || g.forfeit ? '' : probBar(g, l, done)}${opts.extra || ''}</div></div>`;
 }
 const sortTh = (st, key, label, cls = '') => `<th data-sort="${key}" class="${cls}${st.key === key ? ' sorted' : ''}">${label}${st.key === key ? (st.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
 function sortRows(rows, st, getters) {
@@ -855,7 +855,16 @@ PAGES.game = function (id) {
   // ----- render -----
   const pr = currentPower(s), prOf = t => pr.find(x => x.id === t.id)?.rank;
   const sim = L.phase === PHASES.REG && s === L.season ? simulate(s, nowUpto()) : null;
-  const row = (label, fa, fh) => `<tr><td class="num">${fa}</td><th style="text-align:center">${label}</th><td>${fh}</td></tr>`;
+  // dir: +1 higher is better, -1 lower is better, 0 no comparison. Green = edge, red = behind.
+  const row = (label, fa, fh, va, vh, dir = 0) => {
+    let ca = '', ch = '';
+    if (dir && va != null && vh != null && isFinite(va) && isFinite(vh) && va !== vh) { const aBetter = (va - vh) * dir > 0; ca = aBetter ? 'tb' : 'tw'; ch = aBetter ? 'tw' : 'tb'; }
+    const ck = '<span class="ck" aria-label="edge">✓</span>';
+    return `<tr><td class="num ${ca}">${ca === 'tb' ? ck : ''}${fa}</td><th style="text-align:center">${label}</th><td class="${ch}">${fh}${ch === 'tb' ? ck : ''}</td></tr>`;
+  };
+  const wpct = r => r && r.w + r.l ? r.w / (r.w + r.l) : null, ap = a => a[0] + a[1] ? a[0] / (a[0] + a[1]) : null;
+  const stv = r => { const x = streak(r); return /^[WL]\d+$/.test(x) ? (x[0] === 'W' ? 1 : -1) * +x.slice(1) : null; };
+  const num = (P, k) => P.gp ? P[k] / P.gp : null, rkv = v => v || 999, nz = v => +v || null;
   const ppg = P => P.gp ? (P.pf / P.gp).toFixed(1) : '–', papg = P => P.gp ? (P.pa / P.gp).toFixed(1) : '–', rec3 = a => a[0] + a[1] + a[2] ? `${a[0]}-${a[1]}${a[2] ? '-' + a[2] : ''}` : '–';
   const side = (t, coach, scr, won) => `<div class="gp-team ${done && !won ? 'l' : ''}"><i class="sw big" style="background:${esc(teamColor(t))}"></i><div><div class="gp-name">${rk(t) ? `<span class="rk">#${rk(t)}</span>` : ''}<a href="#team/${esc(t.id)}">${esc(t.name)}</a></div>
     <div class="muted small">${rec(recs[t.id])}${coach && coach !== 'CPU' ? ` · <a href="#coach/${slug(coach)}">${esc(coach)}</a>` : ' · CPU'}</div></div>${done ? `<div class="gp-score">${g.forfeit ? (won ? 'FW' : 'FL') : scr}</div>` : ''}</div>`;
@@ -870,13 +879,13 @@ PAGES.game = function (id) {
       ${canBet ? `<button class="gold" data-betgame="${g.week}" style="margin-top:12px">Bet this game${isGotw ? ' · +10% boost' : ''} →</button>` : ''}</div>
     <div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(title)}</h2>${paras.map(t => `<p>${esc(t)}</p>`).join('')}</div>
     ${trends.length ? `<div class="card"><h3 style="margin-top:0">Trends to watch</h3><ul class="clean gp-trends">${trends.slice(0, 6).map(t => `<li>${t}</li>`).join('')}</ul></div>` : ''}
-    <div class="card"><h3 style="margin-top:0">Tale of the tape</h3><div class="tablewrap"><table class="gp-tape">
+    <div class="card"><h3 style="margin-top:0">Tale of the tape</h3><p class="muted small" style="margin-top:0"><span class="tb">✓ Green</span> = the edge in that category, <span class="tw">red</span> = behind.</p><div class="tablewrap"><table class="gp-tape">
       <tr><td class="num"><b>${esc(A.abbr || A.name)}</b></td><th></th><td><b>${esc(H.abbr || H.name)}</b></td></tr>
-      ${row('Record', rec(recs[A.id]), rec(recs[H.id]))}${row('Points / game', ppg(PA), ppg(PH))}${row('Allowed / game', papg(PA), papg(PH))}
-      ${row('Against the spread', rec3(PA.ats), rec3(PH.ats))}${row('Over-Under', rec3(PA.ou), rec3(PH.ou))}${row('Streak', streak(recs[A.id]), streak(recs[H.id]))}
-      ${row('Top 25', rk(A) ? '#' + rk(A) : '–', rk(H) ? '#' + rk(H) : '–')}${row('Power rank', prOf(A) ? '#' + prOf(A) : '–', prOf(H) ? '#' + prOf(H) : '–')}
-      ${row('OVR / OFF / DEF', `${A.ovr || '–'} / ${A.off || '–'} / ${A.def || '–'}`, `${H.ovr || '–'} / ${H.off || '–'} / ${H.def || '–'}`)}
-      ${sim && sim[A.id] && sim[H.id] ? row('Title odds', pctStr(sim[A.id].titlePct), pctStr(sim[H.id].titlePct)) : ''}
+      ${row('Record', rec(recs[A.id]), rec(recs[H.id]), wpct(recs[A.id]), wpct(recs[H.id]), 1)}${row('Points / game', ppg(PA), ppg(PH), num(PA, 'pf'), num(PH, 'pf'), 1)}${row('Allowed / game', papg(PA), papg(PH), num(PA, 'pa'), num(PH, 'pa'), -1)}
+      ${row('Against the spread', rec3(PA.ats), rec3(PH.ats), ap(PA.ats), ap(PH.ats), 1)}${row('Over-Under', rec3(PA.ou), rec3(PH.ou))}${row('Streak', streak(recs[A.id]), streak(recs[H.id]), stv(recs[A.id]), stv(recs[H.id]), 1)}
+      ${row('Top 25', rk(A) ? '#' + rk(A) : '–', rk(H) ? '#' + rk(H) : '–', rk(A) || rk(H) ? rkv(rk(A)) : null, rkv(rk(H)), -1)}${row('Power rank', prOf(A) ? '#' + prOf(A) : '–', prOf(H) ? '#' + prOf(H) : '–', prOf(A), prOf(H), -1)}
+      ${row('Overall', A.ovr || '–', H.ovr || '–', nz(A.ovr), nz(H.ovr), 1)}${row('Offense', A.off || '–', H.off || '–', nz(A.off), nz(H.off), 1)}${row('Defense', A.def || '–', H.def || '–', nz(A.def), nz(H.def), 1)}
+      ${sim && sim[A.id] && sim[H.id] ? row('Title odds', pctStr(sim[A.id].titlePct), pctStr(sim[H.id].titlePct), sim[A.id].titlePct, sim[H.id].titlePct, 1) : ''}
     </table></div></div>
     ${coachA !== 'CPU' && coachH !== 'CPU' ? `<div class="card"><h3 style="margin-top:0">Past meetings: ${esc(coachA)} vs. ${esc(coachH)}</h3>${meets.length ? `<p class="muted small" style="margin-top:0">${mw[coachA] || 0}-${mw[coachH] || 0} all-time${done ? ' before this game' : ''}. Coaches' records follow them from team to team.</p><div class="tablewrap"><table>
       <tr><th>When</th><th>Result</th></tr>${meets.map(m => { const w = meetingWinner(m); return `<tr class="clickable" data-game="${esc(m.id)}"><td class="muted">S${seasonNum(m.season)} · ${m.type === 'ccg' ? '<b class="win">Title game</b>' : 'Wk ' + m.week}</td><td class="wrap"><b>${esc(w.coach)}</b> (${esc(team(w.team).name)}) ${m.forfeit ? 'by forfeit over' : `${w.ws}-${w.ls} over`} ${esc(w.lcoach)} (${esc(team(w.lteam).name)})</td></tr>`; }).join('')}</table></div>` : `<p class="muted">First meeting ever between these two coaches.</p>`}</div>` : ''}`;
