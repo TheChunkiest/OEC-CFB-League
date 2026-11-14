@@ -950,10 +950,28 @@ function header() {
   $('#bWeekLbl').textContent = L.phase === PHASES.REG ? 'Current Week' : 'Phase';
   $('#sub').textContent = `College Football 27 Online Dynasty · ${L.conference} · ${L.phase}${DEMO ? ' · DEMO DATA' : ''}`;
   const p = auth.profile;
-  $('#acct').innerHTML = auth.user
-    ? `<span><span class="hide-sm">${esc(p?.name || auth.user.email)}${p?.teamId ? ` · ${esc(team(p.teamId).name)} · ` : ''}</span>${p?.teamId ? `<b>${bankroll(p.id).balance.toLocaleString()} Crackers</b>` : ''}</span>${isCommish() ? '<a class="btn gold" style="padding:5px 10px;border-radius:8px" href="admin.html">Commissioner</a>' : ''}<a class="btn ghost" style="padding:5px 10px;border-radius:8px" href="#account">Account</a>`
-    : '<a class="btn" style="padding:6px 14px;border-radius:8px" href="#account">Coach Login</a>';
+  $('#acct').innerHTML = auth.user ? acctHtml(p) : '<a class="btn" href="#account">Coach Login</a>';
   $('#footAdmin').innerHTML = isCommish() ? ' · <a href="admin.html">Commissioner Tools</a>' : '';
+}
+// Header greeting: time of day on the viewer's device, their balance and next game.
+function greeting() { const h = new Date().getHours(); return h >= 4 && h < 12 ? 'Good morning' : h >= 12 && h < 17 ? 'Good afternoon' : 'Good evening'; }
+function nextGameOf(tid) {
+  const L = D.league;
+  return D.games.filter(g => g.season === L.season && !played(g) && (g.home === tid || g.away === tid) && g.week >= L.week).sort((a, b) => a.week - b.week)[0] || null;
+}
+function acctHtml(p) {
+  const T = p?.teamId ? team(p.teamId) : null, name = (T && T.coach) || p?.name || '';
+  const hello = `${greeting()}${name ? `, <b>Coach ${esc(name)}</b>` : ''}`;
+  const bits = [];
+  if (T) bits.push(`<span class="bal"><b>${bankroll(p.id).balance.toLocaleString()}</b> Crackers</span>`);
+  const g = T && nextGameOf(T.id);
+  if (g) {
+    const home = g.home === T.id, opp = team(home ? g.away : g.home);
+    const wk = g.type === 'ccg' ? 'Title game' : g.type === 'bowl' ? 'Bowl' : `Week ${g.week}`;
+    bits.push(`<a class="nextg" href="#game/${esc(g.id)}">Next: ${wk} ${g.neutral ? 'vs' : home ? 'vs' : '@'} ${esc(opp.abbr || opp.name)} ›</a>`);
+  }
+  return `<div class="greet"><div class="hello">${hello}</div>${bits.length ? `<div class="gsub">${bits.join('')}</div>` : ''}</div>
+    <div class="acctbtns">${isCommish() ? '<a class="btn gold" href="admin.html">Commissioner</a>' : ''}<a class="btn ghost" href="#account">Account</a></div>`;
 }
 function route() {
   const [page, arg] = (location.hash.slice(1) || 'home').split('/');

@@ -31,7 +31,17 @@ h3{margin:14px 0 8px;font-size:13px;color:var(--muted);text-transform:uppercase;
 .badge b{display:block;font-family:"Arial Black",Impact,sans-serif;font-size:26px;line-height:1.1}
 .badge.gold{background:linear-gradient(160deg,#ffd463,var(--gold2));color:#140b00;box-shadow:0 0 0 2px var(--gold2),0 6px 18px rgba(0,0,0,.5)}
 .badge.gold b{font-size:22px}
-.acct{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;font-size:13px}
+.acct{display:flex;gap:10px 14px;align-items:center;flex-wrap:wrap;justify-content:flex-end;font-size:13px}
+a.btn{display:inline-flex;align-items:center;justify-content:center;line-height:1.1}
+.acct .btn{padding:0 14px;border-radius:9px;min-height:34px;font-size:13px}
+.acctbtns{display:flex;gap:8px}
+.greet{text-align:right;line-height:1.3;min-width:0}
+.greet .hello{font-size:14px;color:var(--muted)}
+.greet .hello b{color:var(--text);font-weight:800}
+.gsub{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;margin-top:4px}
+.gsub .bal,.gsub .nextg{font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--card2);border:1px solid var(--line);color:var(--text);white-space:nowrap}
+.gsub .bal b{color:var(--gold)}
+.gsub .nextg:hover{border-color:var(--gold);text-decoration:none}
 .social{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
 .sbtn{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;font-weight:700;font-size:13px;color:#fff;border:1px solid transparent}
 .sbtn:hover{text-decoration:none;filter:brightness(1.15)}
@@ -189,8 +199,15 @@ td.wrap{white-space:normal;min-width:140px}
   .badge span{font-size:9px;letter-spacing:1px}
   .badge b{font-size:18px}
   .badge.gold b{font-size:16px}
-  .acct{font-size:12px;gap:6px;justify-content:flex-end}
-  .acct .btn{padding:5px 9px!important;font-size:12px}
+  .acct{font-size:12px;gap:8px;justify-content:space-between;flex-wrap:nowrap}
+  .acct:has(.greet){width:100%}
+  .acct .btn{padding:0 11px;font-size:12px;min-height:32px}
+  .greet{text-align:left}
+  .greet .hello{font-size:13px}
+  .gsub{justify-content:flex-start}
+  .gsub .bal,.gsub .nextg{font-size:11px;padding:2px 8px}
+  .acctbtns{flex-direction:column;gap:6px}
+  .acctbtns .btn{width:100%}
   nav{padding:8px 10px;justify-content:flex-start}
   nav a{font-size:13.5px;padding:8px 11px}
   /* tables */
