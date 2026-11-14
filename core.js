@@ -311,6 +311,90 @@ export function divisions() {
   return divs.length > 1 && divs.every(Boolean) ? divs.sort() : [''];
 }
 
+/* ---------------- Clinching scenarios ---------------- */
+// Exact enumeration of every remaining regular-season outcome for each division (when there are
+// 16 or fewer games left that involve its teams). Tiebreakers follow orderGroup: conference %,
+// conference wins, head-to-head, overall %. Point differential can't be predicted, so a tie that
+// reaches it counts as "could go either way": not clinched, not eliminated.
+// Result per division: { div, k (berths), now: [games this week], teams: [{ id, status, destiny, clinch, elim }] }
+// clinch/elim are lists of scenarios; each scenario is a list of { g, homeWon } results this week.
+export function clinchScenarios(season = D.league.season) {
+  const L = D.league;
+  return cached(`clinch|${season}|${L.week}|${L.phase}`, () => {
+    if (L.phase !== PHASES.REG || season !== L.season) return [];
+    const lt = leagueTeams(), divs = divisions(), K = divs.length > 1 ? 1 : 2;
+    const reg = g => g.season === season && (g.type || 'reg') === 'reg';
+    return divs.map(d => {
+      const ids = lt.filter(t => !d || t.div === d).map(t => t.id), m = ids.length, ix = {};
+      ids.forEach((id, i) => ix[id] = i);
+      const games = D.games.filter(g => reg(g) && !played(g) && (g.home in ix || g.away in ix)).sort((a, b) => a.week - b.week);
+      const now = games.filter(g => g.week <= L.week), later = games.filter(g => g.week > L.week);
+      const G = [...now, ...later], n = G.length, k = now.length;
+      if (!n || n > 16 || k > 8) return { div: d, k: K, skip: n ? 'early' : 'done', ids };
+      // Base records from played regular-season games.
+      const cw = new Array(m).fill(0), cl = new Array(m).fill(0), w = new Array(m).fill(0), l = new Array(m).fill(0);
+      const h2h = Array.from({ length: m }, () => new Array(m).fill(0));
+      const add = (g, homeWon, C, CL, W, Lo, Hh) => {
+        const win = homeWon ? g.home : g.away, lose = homeWon ? g.away : g.home, a = ix[win], b = ix[lose];
+        if (a != null) W[a]++; if (b != null) Lo[b]++;
+        if (isConfGame(g)) { if (a != null) C[a]++; if (b != null) CL[b]++; }
+        if (a != null && b != null) Hh[a][b]++;
+      };
+      D.games.filter(g => reg(g) && played(g)).forEach(g => add(g, +g.homeScore > +g.awayScore, cw, cl, w, l, h2h));
+      const N = 1 << n, certain = new Uint32Array(N), possible = new Uint32Array(N);
+      for (let o = 0; o < N; o++) {
+        const C = cw.slice(), CL = cl.slice(), W = w.slice(), Lo = l.slice(), Hh = h2h.map(r => r.slice());
+        for (let i = 0; i < n; i++) add(G[i], !!(o >> i & 1), C, CL, W, Lo, Hh);
+        const cmp = (a, b) => pctOf(C[b], CL[b]) - pctOf(C[a], CL[a]) || (C[b] - C[a]) || (Hh[b][a] - Hh[a][b]) || pctOf(W[b], Lo[b]) - pctOf(W[a], Lo[a]);
+        let cert = 0, poss = 0;
+        for (let t = 0; t < m; t++) {
+          let def = 0, may = 0;
+          for (let u = 0; u < m; u++) if (u !== t) { const c = cmp(u, t); if (c < 0) def++; if (c <= 0) may++; }
+          if (may < K) cert |= 1 << t;
+          if (def < K) poss |= 1 << t;
+        }
+        certain[o] = cert; possible[o] = poss;
+      }
+      // Fold the later weeks into each full assignment of this week's games.
+      const A = 1 << k, certAnd = new Uint32Array(A).fill(0xFFFFFFFF), possOr = new Uint32Array(A);
+      for (let o = 0; o < N; o++) { const a = o & (A - 1); certAnd[a] &= certain[o]; possOr[a] |= possible[o]; }
+      // All partial assignments of this week's games: digit 0 = open, 1 = home wins, 2 = away wins.
+      const P = 3 ** k, pc = new Uint32Array(P), pp = new Uint32Array(P), digits = p => { const r = []; for (let i = 0; i < k; i++) { r.push(p % 3); p = Math.floor(p / 3); } return r; };
+      for (let p = 0; p < P; p++) {
+        const dg = digits(p); let c = 0xFFFFFFFF, q = 0;
+        for (let a = 0; a < A; a++) { if (dg.every((v, i) => !v || (v === 1) === !!(a >> i & 1))) { c &= certAnd[a]; q |= possOr[a]; } }
+        pc[p] = c; pp[p] = q;
+      }
+      const pow3 = i => 3 ** i;
+      const minimal = test => {
+        const out = [];
+        for (let p = 1; p < P; p++) {
+          if (!test(p)) continue;
+          const dg = digits(p);
+          if (dg.some((v, i) => v && test(p - v * pow3(i)))) continue; // a smaller set already does it
+          out.push(dg.map((v, i) => v ? { g: now[i], homeWon: v === 1 } : null).filter(Boolean));
+        }
+        return out.sort((x, y) => x.length - y.length);
+      };
+      const teams = ids.map((id, t) => {
+        const bit = 1 << t, clinched = !!(pc[0] & bit), elim = !(pp[0] & bit);
+        // Controls its own destiny: winning every remaining game guarantees the berth.
+        let destiny = !clinched && !elim;
+        if (destiny) for (let o = 0; o < N && destiny; o++) {
+          const winsOut = G.every((g, i) => (g.home !== id && g.away !== id) || (!!(o >> i & 1)) === (g.home === id));
+          if (winsOut && !(certain[o] & bit)) destiny = false;
+        }
+        return {
+          id, status: clinched ? 'clinched' : elim ? 'eliminated' : 'alive', destiny,
+          clinch: clinched || elim ? [] : minimal(p => !!(pc[p] & bit)),
+          elim: clinched || elim ? [] : minimal(p => !(pp[p] & bit)),
+        };
+      });
+      return { div: d, k: K, now, teams };
+    });
+  });
+}
+
 /* ---------------- Season simulation ---------------- */
 function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 

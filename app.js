@@ -2,8 +2,8 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ratings, powerRankings, lastPlayedWeek
-} from './core.js?v=32';
+  gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ratings, powerRankings, lastPlayedWeek, clinchScenarios
+} from './core.js?v=33';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['betting', 'Betting'], ['odds', 'Odds'],
@@ -57,6 +57,51 @@ function probBar(g, l, pre, cls = '') {
   return `<div class="pbar ${pre ? 'pre' : ''} ${cls}" title="${pre ? 'Pre-game win chance' : 'Win chance'}"><span>${esc(A.abbr || A.name)} <b>${p.a}%</b></span>
     <div class="pb"><i style="width:${p.a}%;background:${esc(teamColor(A))}"></i><i style="width:${p.h}%;background:${esc(teamColor(H))}"></i></div><span><b>${p.h}%</b> ${esc(H.abbr || H.name)}</span>${pre ? '<em>pre-game</em>' : ''}</div>`;
 }
+/* ---- Clinching scenarios ---- */
+const abT = id => esc(team(id).abbr || team(id).name);
+const litText = x => { const w = x.homeWon ? x.g.home : x.g.away, lo = x.homeWon ? x.g.away : x.g.home; return `<b>${abT(w)}</b> beats ${abT(lo)}`; };
+const scenText = list => list.slice(0, 4).map(sc => sc.map(litText).join(' + ')).join(' <span class="muted">or</span> ') + (list.length > 4 ? ` <span class="muted">(+${list.length - 4} more)</span>` : '');
+const berthOf = r => r.k === 1 && r.div ? `the ${esc(r.div)}` : 'a title game spot';
+function raceHtml(r, order) {
+  if (!r || r.skip === 'done') return '';
+  if (r.skip) return `<div class="race"><h4>Clinching scenarios</h4><p class="muted small">These show up once the race gets down to the last few weeks.</p></div>`;
+  const byId = Object.fromEntries(r.teams.map(t => [t.id, t])), rows = order.map(id => byId[id]).filter(Boolean);
+  const live = rows.filter(t => t.status !== 'eliminated'), out = rows.filter(t => t.status === 'eliminated');
+  const wk = r.now.length ? `Week ${Math.max(...r.now.map(g => g.week))}` : 'this week';
+  const line = t => {
+    if (t.status === 'clinched') return `<li><div class="rh">${chip(t.id)}<span class="rs ok">✓ Clinched</span></div></li>`;
+    const tag = t.destiny ? '<span class="rs gold">Controls own destiny</span>' : '<span class="rs">Needs help</span>';
+    const parts = [];
+    if (t.clinch.length) parts.push(`<div><span class="rl">Clinches in ${wk} if</span> ${scenText(t.clinch)}</div>`);
+    if (t.elim.length) parts.push(`<div><span class="rl bad">Eliminated in ${wk} if</span> ${scenText(t.elim)}</div>`);
+    if (!parts.length) parts.push(`<div class="muted">Can't clinch or be eliminated in ${wk}.</div>`);
+    return `<li><div class="rh">${chip(t.id)}${tag}</div>${parts.join('')}</li>`;
+  };
+  return `<div class="race"><h4>Clinching scenarios · ${wk}</h4><p class="muted small">The race for ${berthOf(r)}. Ties that reach point differential can't be predicted, so those count as still open.</p>
+    <ul class="racelist">${live.map(line).join('')}</ul>${out.length ? `<p class="small muted" style="margin-bottom:0">Eliminated: ${out.map(t => abT(t.id)).join(', ')}</p>` : ''}</div>`;
+}
+// One sentence for a game preview: does this result clinch or eliminate anyone?
+function clinchNote(g) {
+  if ((g.type || 'reg') !== 'reg' || played(g)) return '';
+  const notes = [];
+  clinchScenarios(g.season).forEach(r => {
+    if (!r.teams || !r.now.some(x => x.id === g.id)) return;
+    [g.away, g.home].forEach(id => {
+      const t = r.teams.find(x => x.id === id); if (!t || t.status !== 'alive') return;
+      const nm = esc(team(id).name), win = x => x.g.id === g.id && x.homeWon === (g.home === id);
+      const loss = x => x.g.id === g.id && x.homeWon !== (g.home === id);
+      const c1 = t.clinch.find(sc => sc.length === 1 && win(sc[0])), cW = t.clinch.find(sc => sc.some(win));
+      const e1 = t.elim.find(sc => sc.length === 1 && loss(sc[0])), eL = t.elim.find(sc => sc.some(loss));
+      const others = sc => sc.filter(x => x.g.id !== g.id).map(x => { const w = x.homeWon ? x.g.home : x.g.away, lo = x.homeWon ? x.g.away : x.g.home; return `${esc(team(w).name)} beating ${esc(team(lo).name)}`; }).join(' and ');
+      let t1 = c1 ? `A win clinches ${berthOf(r)} for ${nm}` : cW ? `${nm} clinches ${berthOf(r)} with a win plus ${others(cW)}` : '';
+      const t2 = e1 ? 'a loss eliminates them' : eL ? `a loss plus ${others(eL)} eliminates them` : '';
+      if (t1 && t2) t1 += `, while ${t2}`; else if (!t1 && t2) t1 = `For ${nm}, ${t2}`;
+      if (t1) notes.push(t1 + '.');
+      else if (t.destiny) notes.push(`${nm} controls its own destiny: win out and it takes ${berthOf(r)}.`);
+    });
+  });
+  return notes.join(' ');
+}
 const subSm = txt => txt ? `<div class="show-sm muted small">${txt}</div>` : '';
 const mvHtml = m => m > 0 ? `<span class="up">+${m}</span>` : m < 0 ? `<span class="down">${m}</span>` : '<span class="muted">–</span>';
 
@@ -81,7 +126,7 @@ const PAGES = {
   },
 
   standings() {
-    const s = S(), R = records(s), st = UI.stSort;
+    const s = S(), R = records(s), st = UI.stSort, race = clinchScenarios(s);
     return `<h2>${s} ${esc(D.league.conference)} Standings</h2><p class="muted small">Tap a column header to sort. "Place" is the official order (conference record, head-to-head, overall, point differential).</p>` + divisions().map(d => {
       const ids = leagueTeams().filter(t => !d || t.div === d).map(t => t.id);
       const ordered = orderGroup(ids, s).map((id, i) => ({ id, place: i + 1, ...R[id], name: team(id).name, coach: team(id).coach || 'CPU', cpct: R[id].cw + R[id].cl ? R[id].cw / (R[id].cw + R[id].cl) : 0, opct: R[id].w + R[id].l ? R[id].w / (R[id].w + R[id].l) : 0, diff: R[id].pf - R[id].pa, stk: streak(R[id]) }));
@@ -89,7 +134,7 @@ const PAGES = {
       return `<div class="card"><h3 style="margin-top:0">${esc(d ? D.league.conference + ' ' + d : D.league.conference)}</h3><div class="tablewrap"><table>
         <tr>${sortTh(st, 'place', '#')}${sortTh(st, 'name', 'Team')}${sortTh(st, 'coach', 'Coach', 'hide-sm')}${sortTh(st, 'cpct', 'Conf', 'num')}${sortTh(st, 'opct', 'Ovr', 'num')}${sortTh(st, 'pf', 'PF', 'num hide-sm')}${sortTh(st, 'pa', 'PA', 'num hide-sm')}${sortTh(st, 'diff', 'Diff', 'num')}${sortTh(st, 'stk', 'Strk', 'num hide-xs')}</tr>
         ${rows.map(r => `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td class="rank">${r.place}</td><td>${chip(r.id)}${subSm(isUserTeam(team(r.id)) ? esc(r.coach) : 'CPU')}</td><td class="hide-sm">${isUserTeam(team(r.id)) ? `<a href="#coach/${slug(r.coach)}">${esc(r.coach)}</a>` : '<span class="muted">CPU</span>'}</td><td class="num">${r.cw}-${r.cl}</td><td class="num">${r.w}-${r.l}</td><td class="num hide-sm">${r.pf}</td><td class="num hide-sm">${r.pa}</td><td class="num">${r.diff > 0 ? '+' : ''}${r.diff}</td><td class="num hide-xs">${r.stk}</td></tr>`).join('')}
-      </table></div></div>`;
+      </table></div>${raceHtml(race.find(r => r.div === d), ordered.map(r => r.id))}</div>`;
     }).join('');
   },
 
@@ -825,8 +870,12 @@ PAGES.game = function (id) {
     if (L.phase === PHASES.REG && s === L.season && (g.type || 'reg') === 'reg' && A.conf === L.conference && H.conf === L.conference) {
       const u = nowUpto(), base = simulate(s, u), hW = simulate(s, u, 1500, { [g.id]: true }), aW = simulate(s, u, 1500, { [g.id]: false });
       const move = (t, win, lose) => { const b = base[t.id].titlePct, w = win[t.id].titlePct, lo = lose[t.id].titlePct;
+        if (!b && !w && !lo) return 'it is out of the title race, so this one is about pride and spoiling someone else\'s season';
         return `a win would move its title odds to ${pctStr(w)} (from ${pctStr(b)}), while a loss would ${lo < b - 0.005 ? 'drop them to' : 'leave them at'} ${pctStr(lo)}`; };
-      paras.push(`What's at stake: for ${H.name}, ${move(H, hW, aW)}. For ${A.name}, ${move(A, aW, hW)}.`);
+      const cn = clinchNote(g);
+      const mh = move(H, hW, aW), ma = move(A, aW, hW), outH = mh.startsWith('it is out'), outA = ma.startsWith('it is out');
+      paras.push(outH && outA ? `What's at stake: neither team can reach the title game anymore, so this one is about pride and playing spoiler.`
+        : `What's at stake: for ${H.name}, ${outH ? 'the title race is already over, but it can still play spoiler' : mh}. For ${A.name}, ${outA ? 'the title race is already over, but it can still play spoiler' : ma}.${cn ? ' ' + cn : ''}`);
     }
     const form = t => { const f = formOf(t), P = t === A ? PA : PH; if (!P.gp) return ''; const atsT = `${P.ats[0]}-${P.ats[1]}${P.ats[2] ? '-' + P.ats[2] : ''} against the spread`;
       return `${t.name} ${f == null ? 'comes in' : f >= 4 ? 'comes in hot' : f <= -4 ? 'comes in cold' : 'comes in steady'}${f == null ? '' : `, playing ${Math.abs(f).toFixed(1)} points per game ${f >= 0 ? 'better' : 'worse'} than expected over its last three`}. It's averaging ${(P.pf / P.gp).toFixed(1)} points while allowing ${(P.pa / P.gp).toFixed(1)}, and it's ${atsT} this season.`; };
