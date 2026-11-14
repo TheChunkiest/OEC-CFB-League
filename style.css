@@ -393,3 +393,11 @@ details.legs .lt{color:var(--text)}
 details.legs .lo{font-variant-numeric:tabular-nums}
 details.legs .lw{font-size:11px;color:var(--muted);opacity:.8;white-space:nowrap}
 table.bets td{vertical-align:top}
+
+/* Clickable storylines */
+a.story.link{display:block;position:relative;padding-right:22px;color:inherit;text-decoration:none;border-radius:8px;transition:background .15s}
+a.story.link:hover,a.story.link:active{background:rgba(255,255,255,.03);text-decoration:none}
+a.story.link .go{position:absolute;right:4px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:20px}
+/* Row a storyline linked to */
+tr.focus td{animation:focusRow 2.4s ease-out 1;background:rgba(245,184,46,.14)}
+@keyframes focusRow{0%,30%{background:rgba(245,184,46,.38)}100%{background:rgba(245,184,46,.14)}}
