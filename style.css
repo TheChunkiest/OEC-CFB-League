@@ -609,3 +609,13 @@ details.kform input{display:block;width:100%;max-width:280px;margin-top:6px}
 .kcal button.kresched:hover{background:none;text-decoration:underline}
 .kcal a.disabled{color:var(--muted);font-weight:400;pointer-events:none}
 .gp-head .gp-kctl{margin-top:14px}
+
+.sbhead{display:flex;align-items:center;justify-content:space-between;gap:8px 12px;flex-wrap:wrap;margin:6px 0 12px}
+.sbhead h2{margin:0}
+.bkmini{display:flex;gap:12px;margin-left:auto;text-align:right}
+.bkmini span{display:block;font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;line-height:1.1}
+.bkmini b{font-size:14px;font-variant-numeric:tabular-nums;line-height:1.2}
+@media(max-width:640px){.sbhead{margin:4px 0 10px}.bkmini{gap:9px}.bkmini b{font-size:13px}}
+
+@media(max-width:640px){.sbhead{flex-wrap:nowrap}.sbhead h2{font-size:15px;white-space:nowrap;gap:8px}.bkmini{gap:8px;flex:none}.bkmini b{font-size:12.5px}.bkmini span{font-size:8.5px;letter-spacing:.3px}}
+@media(max-width:359px){.sbhead{flex-wrap:wrap}}

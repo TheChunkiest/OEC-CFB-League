@@ -208,13 +208,10 @@ const PAGES = {
     const bw = bwks.includes(UI.betWeek) ? UI.betWeek : bwks[0];
     const games = D.games.filter(g => g.season === s && g.week === bw && !played(g));
     const open = L.bettingOpen && L.phase !== PHASES.PRE && L.phase !== PHASES.POST;
-    let html = `<h2>Sportsbook · ${esc(weekLabel())}</h2>`;
+    const bk = me && me.teamId ? bankroll(me.id) : null;
+    let html = `<div class="sbhead"><h2>Sportsbook · ${esc(weekLabel())}</h2>${bk ? `<div class="bkmini"><div><span>Balance</span><b>${bk.balance.toLocaleString()}</b></div><div class="hide-sm"><span>In play</span><b>${bk.open}</b></div><div><span>Record</span><b>${bk.w}-${bk.l}${bk.p ? '-' + bk.p : ''}</b></div><div><span>Net</span><b class="${bk.net >= 0 ? 'win' : 'loss'}">${bk.net >= 0 ? '+' : ''}${bk.net}</b></div></div>` : ''}</div>`;
     if (!me) html += `<div class="notice">Every coach gets <b>${START_CREDITS.toLocaleString()} Crackers</b> per season. <a href="#account">Log in</a> to place wagers.</div>`;
     else if (!me.teamId) html += `<div class="notice">Your account isn't linked to a team yet. Ask the commissioner to link it.</div>`;
-    if (me && me.teamId) {
-      const b = bankroll(me.id);
-      html += `<div class="card"><div class="stat"><div><span>Balance</span><b>${b.balance.toLocaleString()}</b></div><div><span>In play</span><b>${b.open}</b></div><div><span>Record</span><b>${b.w}-${b.l}${b.p ? '-' + b.p : ''}</b></div><div><span>Net</span><b class="${b.net >= 0 ? 'win' : 'loss'}">${b.net >= 0 ? '+' : ''}${b.net}</b></div></div></div>`;
-    }
     html += !open ? `<div class="card empty">Betting is ${L.phase === PHASES.PRE ? 'closed until the season is published' : 'locked right now'}.</div>` :
       games.length ? `<div class="row" style="margin-bottom:10px"><div class="seg"><button data-mode="single" class="${UI.mode === 'single' ? 'on' : ''}">Single bets</button><button data-mode="parlay" class="${UI.mode === 'parlay' ? 'on' : ''}">Parlay</button></div>
         ${UI.mode === 'parlay' ? `<span class="muted small">Tap 2–${MAX_LEGS} picks from any upcoming week, plus League Champion and Win Total picks below. Per game: one spread, one moneyline and one O/U, but not the spread and moneyline on the same team. All must hit; payouts multiply. Once more than half the legs have won, you can cash out early for your stake plus ${Math.round(CASHOUT_SHARE * 100)}% of what the winning legs would pay.</span>` : ''}</div>
