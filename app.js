@@ -2,8 +2,8 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
-} from './core.js?v=42';
+  gotwTally, coachStats, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
+} from './core.js?v=43';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['betting', 'Betting'], ['odds', 'Odds'],
@@ -273,18 +273,19 @@ const PAGES = {
     // Awards won by the team they coached that season (player and team awards).
     const teamAwards = D.history.flatMap(h => { const se = seasons.find(x => x.season === h.season); return se ? (h.awards || []).filter(a => a.team && se.teams.includes(a.team)).map(a => ({ h, a })) : []; }).sort((x, y) => y.h.season - x.h.season);
     const finishTag = f => f === 'champ' ? '<span class="tag gold">🏆 Champion</span>' : f === 'runner' ? '<span class="tag">Runner-up</span>' : '';
+    const placeTag = x => { if (x.finish) return finishTag(x.finish); const P = seasonPlaces(x.season), p = P.places[String(name).toLowerCase()]; return p ? `<span class="place">${ordinal(p)}</span> <span class="muted small">of ${P.n}${P.final ? '' : ' · so far'}</span>` : '<span class="muted">–</span>'; };
     let html = `<p><a href="#history">← History</a></p>
       <div class="card" ${t ? `style="border-left:6px solid ${esc(teamColor(t))}"` : ''}><h2 style="margin-top:0">Coach ${esc(name)}</h2>
         <div class="muted">${t ? 'Current team: ' + chip(t.id) : 'Not currently coaching in the league'}</div>
         ${stops.length ? `<div class="cpath">${stops.map(p => `<span class="cstop">${chip(p.team, { abbr: true, rank: false })}<em>${seasonNum(p.from) === seasonNum(p.to) ? 'S' + seasonNum(p.from) : `S${seasonNum(p.from)}–${seasonNum(p.to)}`}</em></span>`).join('<span class="carr">→</span>')}</div>` : ''}
         <div class="stat" style="margin-top:12px"><div><span>Career</span><b>${c ? c.w + '-' + c.l : '0-0'}</b></div><div><span>Win %</span><b>${c ? pct(c.w, c.l) : '–'}</b></div>
         <div><span>League titles</span><b>${titles}</b></div><div><span>Title game apps</span><b>${apps}</b></div><div><span>Seasons</span><b>${seasons.length || (c ? c.seasons.size : 0)}</b></div></div></div>`;
-    html += `<div class="card"><h3 style="margin-top:0">Season by season</h3>${seasons.length ? `<div class="tablewrap"><table>
-      <tr><th>Season</th><th>Team</th><th class="num">W-L</th><th class="num hide-xs">vs Coaches</th><th class="num hide-sm">PF / G</th><th class="num hide-sm">PA / G</th><th>Finish</th></tr>
+    html += `<div class="card"><h3 style="margin-top:0">Season by season</h3>${seasons.length ? `<div class="tablewrap"><table class="cseason">
+      <tr><th>Season</th><th>Team</th><th class="num">W-L</th><th class="num hide-sm">vs Coaches</th><th class="num hide-sm">PF / G</th><th class="num hide-sm">PA / G</th><th>Finish</th></tr>
       ${seasons.slice().reverse().map(x => `<tr><td><b>S${seasonNum(x.season)}</b><div class="muted small">${x.season}${x.season === cur && D.league.phase !== PHASES.PRE && !x.finish ? ' · in progress' : ''}</div></td>
-        <td>${x.teams.map(id => chip(id, { abbr: innerWidth < 640, rank: false })).join(' ')}</td><td class="num"><b>${x.w}-${x.l}</b></td><td class="num hide-xs">${x.uw}-${x.ul}</td>
+        <td>${x.teams.map(id => chip(id, { abbr: innerWidth < 640, rank: false })).join(' ')}</td><td class="num"><b>${x.w}-${x.l}</b></td><td class="num hide-sm">${x.uw}-${x.ul}</td>
         <td class="num hide-sm">${x.gp ? (x.pf / x.gp).toFixed(1) : '–'}</td><td class="num hide-sm">${x.gp ? (x.pa / x.gp).toFixed(1) : '–'}</td>
-        <td>${x.ccg ? `<a href="#game/${esc(x.ccg.g.id)}">${finishTag(x.finish)}</a>` : finishTag(x.finish) || '<span class="muted">–</span>'}</td></tr>`).join('')}
+        <td>${x.ccg ? `<a href="#game/${esc(x.ccg.g.id)}">${finishTag(x.finish)}</a>` : placeTag(x)}</td></tr>`).join('')}
       </table></div>` : '<div class="muted">No games on record yet.</div>'}</div>`;
     if (teamAwards.length) html += `<div class="card"><h3 style="margin-top:0">Team awards</h3><ul class="clean">${teamAwards.map(({ h, a }) => `<li><b>S${seasonNum(h.season)}</b> · ${esc(a.award)}: ${esc(a.winner)}${String(a.winner || '').toLowerCase() === team(a.team).name.toLowerCase() ? '' : ' ' + chip(a.team, { abbr: true, rank: false })}</li>`).join('')}</ul></div>`;
     html += `<div class="card"><h3 style="margin-top:0">Head-to-head vs coaches</h3>${vs.length ? `<table><tr><th>Opponent</th><th class="num">W-L</th><th class="num">Win %</th></tr>${vs.map(([o, r]) => `<tr><td><a href="#coach/${slug(o)}">${esc(o)}</a></td><td class="num">${r.w}-${r.l}</td><td class="num">${pct(r.w, r.l)}</td></tr>`).join('')}</table>` : '<div class="muted">No coach-vs-coach games yet.</div>'}</div>`;
@@ -342,8 +343,8 @@ const PAGES = {
       const seas = [...new Set(D.games.filter(played).map(g => g.season))].sort((a, b) => a - b); if (!seas.length) return '';
       const rows = C.map(c => ({ c, by: Object.fromEntries(coachSeasons(c.name).map(x => [x.season, x])) }));
       return `<h2>Coaching Carousel</h2><div class="card"><div class="tablewrap"><table class="carousel"><tr><th>Coach</th>${seas.map(s => `<th class="num">S${seasonNum(s)}<div class="muted small" style="font-weight:600">${s}</div></th>`).join('')}</tr>
-        ${rows.map(({ c, by }) => `<tr><td><a href="#coach/${slug(c.name)}">${esc(c.name)}</a></td>${seas.map(s => { const x = by[s]; return `<td class="num">${x ? `${x.teams.map(id => `<span class="ctm"><i class="sw" style="background:${esc(teamColor(team(id)))}"></i>${esc(team(id).abbr || team(id).name)}</span>`).join(' ')}<div class="small"><b>${x.w}-${x.l}</b>${x.finish === 'champ' ? ' 🏆' : ''}</div>` : '<span class="muted">–</span>'}</td>`; }).join('')}</tr>`).join('')}
-      </table></div><p class="muted small" style="margin-bottom:0">Team and record each season, from the coach recorded on every game. 🏆 = league champion.</p></div>`;
+        ${rows.map(({ c, by }) => `<tr><td><a href="#coach/${slug(c.name)}">${esc(c.name)}</a></td>${seas.map(s => { const x = by[s]; return `<td class="num">${x ? `${x.teams.map(id => `<span class="ctm"><i class="sw" style="background:${esc(teamColor(team(id)))}"></i>${esc(team(id).abbr || team(id).name)}</span>`).join(' ')}<div class="small"><b>${x.w}-${x.l}</b>${x.finish === 'champ' ? ' 🏆' : (() => { const P = seasonPlaces(s), p = P.places[c.name.toLowerCase()]; return p ? ` <span class="muted">· ${ordinal(p)}</span>` : ''; })()}</div>` : '<span class="muted">–</span>'}</td>`; }).join('')}</tr>`).join('')}
+      </table></div><p class="muted small" style="margin-bottom:0">Team, record and finish each season (🏆 = league champion; the current season shows the order so far). Finish after the title game is by regular-season record, then head-to-head, then point differential.</p></div>`;
     };
     const H = D.history.slice().sort((a, b) => b.season - a.season), C = Object.values(coachStats()).sort((a, b) => b.titles - a.titles || (b.w / Math.max(1, b.w + b.l)) - (a.w / Math.max(1, a.w + a.l)));
     const champLine = h => h.champCoach ? `${esc(h.champCoach)} over ${esc(h.runnerCoach || 'CPU')} — ${esc(team(h.champTeam).name)} ${h.champScore ?? ''}, ${esc(team(h.runnerTeam).name)} ${h.runnerScore ?? ''}` : esc(h.summary || '');

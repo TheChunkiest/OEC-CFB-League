@@ -795,6 +795,29 @@ export function coachSeasons(name) {
     return { ...s, teams, team: teams[0] || '', finish };
   }).sort((a, b) => a.season - b.season);
 }
+// Final placement of every coach in a season: champion 1st, runner-up 2nd, then everyone else by regular-season
+// win %, wins, head-to-head between the two coaches, then point differential. Works for the current season too (live order).
+export function seasonPlaces(season) {
+  return cached(`places|${season}|${D.games.filter(g => g.season === season && played(g)).length}|${D.history.length}`, () => {
+    const by = {}, h2h = {}, h = D.history.find(x => x.season === season), ccg = D.games.find(g => g.season === season && g.type === 'ccg' && played(g));
+    const key = n => String(n || '').toLowerCase(), cpu = n => !n || String(n).toUpperCase() === 'CPU';
+    D.games.filter(g => g.season === season && played(g) && (g.type || 'reg') === 'reg').forEach(g => {
+      const hc = coachOf(g, 'home'), ac = coachOf(g, 'away'), hw = +g.homeScore > +g.awayScore;
+      [[hc, ac, hw, +g.homeScore - +g.awayScore], [ac, hc, !hw, +g.awayScore - +g.homeScore]].forEach(([me, op, won, diff]) => {
+        if (cpu(me)) return;
+        const r = by[key(me)] || (by[key(me)] = { name: me, w: 0, l: 0, pd: 0 }); won ? r.w++ : r.l++; if (!g.forfeit) r.pd += diff;
+        if (!cpu(op) && won) h2h[key(me) + '|' + key(op)] = (h2h[key(me) + '|' + key(op)] || 0) + 1;
+      });
+    });
+    let champ = h && h.champCoach, runner = h && h.runnerCoach;
+    if (!champ && ccg) { const hw = +ccg.homeScore > +ccg.awayScore; champ = coachOf(ccg, hw ? 'home' : 'away'); runner = coachOf(ccg, hw ? 'away' : 'home'); }
+    const pct = r => r.w + r.l ? r.w / (r.w + r.l) : 0, top = x => key(x.name) === key(champ) ? 0 : key(x.name) === key(runner) ? 1 : 2;
+    const list = Object.values(by).sort((a, b) => top(a) - top(b) || pct(b) - pct(a) || b.w - a.w || ((h2h[key(b.name) + '|' + key(a.name)] || 0) - (h2h[key(a.name) + '|' + key(b.name)] || 0)) || b.pd - a.pd);
+    const out = {}; list.forEach((r, i) => out[key(r.name)] = i + 1);
+    return { places: out, n: list.length, final: !!(h || ccg) };
+  });
+}
+export const ordinal = n => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
 // Coaching stops: consecutive seasons at the same team merged, e.g. UAB 2026 → Purdue 2027–2028.
 export function coachStops(seasons) {
   const out = [];

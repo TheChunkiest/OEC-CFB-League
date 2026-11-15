@@ -476,3 +476,7 @@ table.carousel td,table.carousel th{text-align:center}
 table.carousel td:first-child,table.carousel th:first-child{text-align:left}
 .ctm{display:inline-flex;align-items:center;gap:4px;font-weight:800;font-size:12.5px;white-space:nowrap}
 .ctm .sw{width:9px;height:9px;border-radius:3px;display:inline-block}
+
+.place{display:inline-block;font-weight:900;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--card2);border:1px solid var(--line)}
+@media(max-width:440px){table.cseason .tag,table.cseason .place{font-size:9.5px;padding:2px 6px}table.cseason td,table.cseason th{padding-left:5px;padding-right:5px}}
+table.cseason td:first-child{white-space:normal;min-width:64px}
