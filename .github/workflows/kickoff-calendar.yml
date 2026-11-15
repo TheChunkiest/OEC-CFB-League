@@ -97,10 +97,9 @@ jobs:
               g = one(f'games/{gid}')
               if not g or g.get('homeScore') is not None: continue      # finished games drop off
               if inv['time'] < now - 6 * 3600e3: continue
-              title = f"OEC: {tname(g.get('away'))} @ {tname(g.get('home'))}"
               season = g.get('season') or first
-              desc = f"Season {season - first + 1} · Week {g.get('week')} · Coach {inv.get('fromName','')} vs Coach {inv.get('toName','')}"
-              if site: desc += f"\n{site}#game/{gid}"
+              title = f"S{season - first + 1}, W{g.get('week')}: {tname(g.get('away'))} @ {tname(g.get('home'))}"
+              desc = "Watch live now at https://youtube.com/@originalentertainingcrackers?si=op40_dOeDBsH25EV"
               events[gid] = '\r\n'.join([
                   'BEGIN:VEVENT', f'UID:{gid}@oec-cfb-league', f'DTSTAMP:{stamp(inv.get("respondedAt") or now)}',
                   f'DTSTART:{stamp(inv["time"])}', f'DTEND:{stamp(inv["time"] + 3600e3)}',
