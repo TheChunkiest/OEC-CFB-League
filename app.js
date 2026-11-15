@@ -485,12 +485,11 @@ function popularCard() {
   if (!p) return `<div class="card popular"><span class="ribbon">🔥 Most Popular Bet · ${esc(weekLabel())}</span><div class="muted">No bets placed yet this week. The most popular pick will show up here.</div></div>`;
   const row = slipRows({ ...p.cur, season: L.season })[0], inSlip = UI.mode === 'parlay' && UI.legs.some(x => selKey(x) === p.k);
   const mine = auth.profile && D.wagers.some(w => w.uid === auth.profile.id && w.status === 'open' && w.market !== 'parlay' && selKey(w) === p.k);
+  const btn = UI.mode === 'parlay' ? `<button class="${inSlip ? 'ghost' : 'gold'}" data-popular="1">${inSlip ? '✓ In your parlay' : '+ Add to parlay'}</button>`
+    : mine ? '<span class="pill open">✓ You\'re on this</span>' : '<button class="gold" data-popular="1">Bet it</button>';
   return `<div class="card popular"><span class="ribbon">🔥 Most Popular Bet · ${esc(weekLabel())}</span>
-    <div class="row spread" style="align-items:flex-end"><div style="min-width:0"><div class="pop-title">${esc(row.t)}</div><div class="muted small">${esc(row.s)}</div>
-      <div class="small" style="margin-top:6px"><b>${p.n}</b> bet${p.n === 1 ? '' : 's'} from <b>${p.coaches.size}</b> coach${p.coaches.size === 1 ? '' : 'es'} this week</div></div>
-    <div style="text-align:right"><div class="big" style="color:var(--gold)">${fmtOdds(p.cur.odds)}</div>
-      ${UI.mode === 'parlay' ? `<button class="${inSlip ? 'ghost' : 'gold'}" data-popular="1">${inSlip ? '✓ In your parlay' : '+ Add to parlay'}</button>`
-        : mine ? '<span class="pill open">✓ You\'re on this</span>' : '<button class="gold" data-popular="1">Bet it</button>'}</div></div></div>`;
+    <div class="vtop"><div style="min-width:0"><div class="pop-title">${esc(row.t)}</div><div class="muted small">${esc(row.s)}</div></div><div class="big vodds">${fmtOdds(p.cur.odds)}</div></div>
+    <div class="vfoot"><div class="small" style="margin-right:auto"><b>${p.n}</b> bet${p.n === 1 ? '' : 's'} from <b>${p.coaches.size}</b> coach${p.coaches.size === 1 ? '' : 'es'} this week</div>${btn}</div></div>`;
 }
 /* ---- Hidden Value: an overlooked bet the scoring averages like better than the line does ----
    The lines come from the ratings model, so the second opinion is a plain scoring-average projection:

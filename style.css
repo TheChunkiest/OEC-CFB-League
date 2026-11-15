@@ -584,7 +584,7 @@ details.kform input{display:block;width:100%;max-width:280px;margin-top:6px}
 .vwhy{margin:10px 0 0;padding-left:18px;font-size:13.5px;line-height:1.5;color:var(--muted)}
 .vwhy b{color:var(--text)}
 
-.card.value .vtop{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
-.card.value .vodds{color:var(--gold);line-height:1;flex-shrink:0}
-.card.value .vfoot{display:flex;justify-content:flex-end;margin-top:8px}
-.card.popular.value{padding-top:26px}
+.card.popular .vtop{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.card.popular .vodds{color:var(--gold);line-height:1;flex-shrink:0}
+.card.popular .vfoot{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:10px}
+.card.popular{padding-top:26px}
