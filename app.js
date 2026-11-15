@@ -4,6 +4,7 @@ import {
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
   gotwTally, coachStats, onLiveChange, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
 } from './core.js?v=46';
+import { lookupStadium } from './stadiums.js?v=1';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['betting', 'Betting'], ['odds', 'Odds'],
@@ -817,38 +818,45 @@ async function placeBet() {
 /* ---------- chart ---------- */
 /* ---------- Kickoff scheduling (game preview) ---------- */
 const toLocalInput = ts => { const d = new Date(ts - new Date(ts).getTimezoneOffset() * 60000); return d.toISOString().slice(0, 16); };
+// Where a game is played: a game's own venue (neutral sites), else the home team's stadium.
+function venueOf(g) {
+  if (g.venue) return { name: g.venue, city: g.venueCity || '' };
+  if (g.neutral) return { name: 'Neutral site', city: '' };
+  const h = team(g.home), s = h.stadium ? [h.stadium, h.city || ''] : lookupStadium(h.name);
+  return s ? { name: s[0], city: s[1] } : null;
+}
+// Kickoff + venue lines for the preview header, plus the scheduling controls for the two coaches.
 function kickoffCard(g) {
   const me = auth.profile, mineTeam = me && me.teamId && (me.teamId === g.home || me.teamId === g.away);
-  const inv = kickoffInvite(g), pend = pendingInvites(g), commish = isCommish();
-  if (played(g)) return '';
-  const can = canSchedule(g), opp = mineTeam ? team(me.teamId === g.home ? g.away : g.home) : null;
+  const inv = kickoffInvite(g), pend = pendingInvites(g), commish = isCommish(), done = played(g);
+  const can = !done && canSchedule(g), opp = mineTeam ? team(me.teamId === g.home ? g.away : g.home) : null, v = venueOf(g);
   const slots = i => i.times.map(t => esc(fmtKick(t))).join(' · ');
-  let body = '';
-  if (inv) {
-    body = `<div class="kset"><b>${esc(fmtKick(inv.time))}</b><span class="muted small">Agreed by both coaches</span></div>
-      <div class="kcal"><a class="btn sm ghost" data-ics="${esc(g.id)}" href="cal/${esc(g.id)}.ics?v=${inv.respondedAt || 0}">Apple / iPhone Calendar</a><a class="btn sm ghost" href="${gcalHref(g, inv.time)}" target="_blank" rel="noopener">Google Calendar</a>
+  const lines = [];
+  if (inv) lines.push(`<div class="gpm"><span class="gpi">🕗</span><span><b>${esc(fmtKick(inv.time))}</b></span></div>`);
+  else if (!done) lines.push(`<div class="gpm"><span class="gpi">🕗</span><span class="muted">Coaches haven't set a time for this matchup.</span></div>`);
+  if (v) lines.push(`<div class="gpm"><span class="gpi">📍</span><span><b>${esc(v.name)}</b>${v.city ? ` <span class="muted">· ${esc(v.city)}</span>` : ''}</span></div>`);
+  let ctl = '';
+  if (!done && inv) {
+    ctl = `<div class="kcal"><a class="btn sm ghost" data-ics="${esc(g.id)}" href="cal/${esc(g.id)}.ics?v=${inv.respondedAt || 0}">Apple / iPhone Calendar</a><a class="btn sm ghost" href="${gcalHref(g, inv.time)}" target="_blank" rel="noopener">Google Calendar</a>
       ${(mineTeam || commish) && can ? `<button class="sm kresched" data-kcan="${esc(inv.id)}">${commish && !mineTeam ? 'Clear kickoff' : 'Reschedule'}</button>` : ''}</div>
-      <div class="kicsnote muted small" hidden>The Apple Calendar file is on its way. It's made automatically within a few minutes of a time being agreed. Google Calendar works right away.</div>
-      <p class="small" style="margin:10px 0 0"><a href="${subscribeHref()}">Subscribe to every OEC kickoff</a> <span class="muted">(Apple Calendar; updates on its own)</span></p>`;
-  } else if (!can || (!mineTeam && !commish)) {
-    body = `<p class="muted" style="margin:0">Coaches haven't set a time for this matchup.</p>${mineTeam && !can && isUserTeam(team(g.home)) && isUserTeam(team(g.away)) ? `<p class="muted small" style="margin:6px 0 0">Invites open once this game is in the current or next week.</p>` : ''}`;
-  } else {
-    body += `<p class="muted" style="margin:0 0 4px">Coaches haven't set a time for this matchup.</p>`;
+      <div class="kicsnote muted small" hidden>The Apple Calendar file is on its way. It's made automatically within a few minutes of a time being agreed. Google Calendar works right away.</div>`;
+  } else if (!done && mineTeam && !can && isUserTeam(team(g.home)) && isUserTeam(team(g.away))) {
+    ctl = `<p class="muted small" style="margin:0">Kickoff invites open once this game is in the current or next week.</p>`;
+  } else if (can && (mineTeam || commish)) {
     const incoming = pend.filter(i => me && i.to === me.id), outgoing = pend.filter(i => me && i.from === me.id);
-    body += incoming.map(i => `<div class="kinv"><div><b>Coach ${esc(i.fromName || '')}</b> wants to play at one of these times. Tap the one that works:</div>
+    ctl += incoming.map(i => `<div class="kinv"><div><b>Coach ${esc(i.fromName || '')}</b> wants to play at one of these times. Tap the one that works:</div>
       <div class="kslots">${i.times.map(t => `<button class="gold sm" data-kacc="${esc(i.id)}|${t}">${esc(fmtKick(t))}</button>`).join('')}<button class="sm ghost" data-kdec="${esc(i.id)}">None work</button></div></div>`).join('');
-    body += outgoing.map(i => `<div class="kinv"><div>Waiting on <b>Coach ${esc(i.toName || '')}</b> to pick: ${slots(i)}</div><button class="sm ghost" data-kcan="${esc(i.id)}" style="margin-top:6px">Cancel invite</button></div>`).join('');
-    if (commish && !mineTeam) body += pend.map(i => `<div class="kinv muted small">Pending: Coach ${esc(i.fromName || '')} → Coach ${esc(i.toName || '')}: ${slots(i)}</div>`).join('');
+    ctl += outgoing.map(i => `<div class="kinv"><div>Waiting on <b>Coach ${esc(i.toName || '')}</b> to pick: ${slots(i)}</div><button class="sm ghost" data-kcan="${esc(i.id)}" style="margin-top:6px">Cancel invite</button></div>`).join('');
+    if (commish && !mineTeam) ctl += pend.map(i => `<div class="kinv muted small">Pending: Coach ${esc(i.fromName || '')} → Coach ${esc(i.toName || '')}: ${slots(i)}</div>`).join('');
     if (mineTeam && !outgoing.length) {
-      if (!opp.uid) body += `<p class="muted small" style="margin:0">Coach ${esc(opp.coach || '')} hasn't linked an account yet, so they can't get invites.</p>`;
-      else {
-        body += `<div class="kform"><div class="muted small" style="margin-bottom:6px">Propose up to ${KICK_SLOTS} times for Coach ${esc(opp.coach || '')} to choose from. Times show in each coach's own time zone.</div>
+      if (!opp.uid) ctl += `<p class="muted small" style="margin:0">Coach ${esc(opp.coach || '')} hasn't linked an account yet, so they can't get invites.</p>`;
+      else ctl += `<details class="kform"${incoming.length ? '' : ''}><summary>${incoming.length ? 'Suggest other times' : 'Set a kickoff time with Coach ' + esc(opp.coach || '')}</summary><div class="muted small" style="margin:6px 0">Propose up to ${KICK_SLOTS} times for Coach ${esc(opp.coach || '')} to choose from. Times show in each coach's own time zone.</div>
           ${Array.from({ length: KICK_SLOTS }, (_, k) => `<input type="datetime-local" class="kt" min="${toLocalInput(Date.now())}" aria-label="Time option ${k + 1}">`).join('')}
-          <button data-kinv="${esc(g.id)}" style="margin-top:8px">${incoming.length ? 'Counter with these times' : 'Send invite'}</button></div>`;
-      }
+          <button data-kinv="${esc(g.id)}" style="margin-top:8px">${incoming.length ? 'Counter with these times' : 'Send invite'}</button></details>`;
     }
   }
-  return `<div class="card kcard"><h3 style="margin-top:0">🕗 Kickoff time</h3>${body}</div>`;
+  if (!lines.length && !ctl) return '';
+  return `<div class="gp-meta kcard">${lines.join('')}${ctl ? `<div class="kctl">${ctl}</div>` : ''}</div>`;
 }
 // Calendar links for an agreed kickoff (90-minute block).
 const calTimes = ts => { const f = d => new Date(d).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); return [f(ts), f(ts + 60 * 60000)]; };
@@ -1271,10 +1279,10 @@ PAGES.game = function (id) {
     <div class="card gp-head${isGotw ? ' gotw' : ''}">${isGotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}
       <div class="muted small" style="text-transform:uppercase;letter-spacing:.8px;font-weight:800">Season ${seasonNum(s)} · ${g.type === 'ccg' ? 'League Championship' : g.type === 'bowl' ? 'Postseason' : 'Week ' + g.week}${done ? ' · Final' : ''}${gameTags(g) ? ' · ' + gameTags(g) : ''}</div>
       <div class="gp-vs">${side(A, coachA, g.awayScore, !hw)}<div class="gp-at">${g.neutral ? 'vs' : '@'}</div>${side(H, coachH, g.homeScore, hw)}</div>
+      ${kickoffCard(g)}
       ${l && !g.forfeit ? `<div class="gp-odds"><div><span>Spread</span><b>${l.spread === 0 ? 'PK' : esc(fav.abbr || fav.name) + ' ' + fmtLine(-Math.abs(l.spread))}</b></div><div><span>Total</span><b>O/U ${l.total}</b></div>
         <div><span>Moneyline</span><b>${esc(A.abbr)} ${fmtOdds(l.mlAway)}</b><b>${esc(H.abbr)} ${fmtOdds(l.mlHome)}</b></div></div>${probBar(g, l, done)}` : ''}
       ${canBet ? `<button class="gold" data-betgame="${g.week}" style="margin-top:12px">Bet this game${isGotw ? ' · +10% boost' : ''} →</button>` : ''}</div>
-    ${kickoffCard(g)}
     ${l && !g.forfeit ? winChart(g, A, H) : ''}
     <div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(title)}</h2>${paras.map(t => `<p>${esc(t)}</p>`).join('')}</div>
     ${trends.length ? `<div class="card"><h3 style="margin-top:0">Trends to watch</h3><ul class="clean gp-trends">${trends.slice(0, 6).map(t => `<li>${t}</li>`).join('')}</ul></div>` : ''}

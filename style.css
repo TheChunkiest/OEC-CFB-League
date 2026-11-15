@@ -551,3 +551,14 @@ a.btn.disabled{opacity:.45;pointer-events:none}
 .gp-vs .gp-score{margin:2px 0 0}
 .gp-vs .gp-at{margin:0;align-self:center;padding-top:6px;font-size:15px}
 @media(max-width:640px){.gp-vs .gp-name{font-size:17px}}
+
+/* Preview header: kickoff + stadium */
+.gp-meta{margin:10px 0 2px;padding:10px 0 0;border-top:1px solid var(--line);display:grid;gap:6px}
+.gpm{display:flex;gap:8px;align-items:baseline;font-size:14px;line-height:1.4}
+.gpi{width:18px;flex-shrink:0;text-align:center}
+.kctl{margin-top:4px}
+.kctl .kcal{margin-top:2px}
+details.kform{padding-top:2px}
+details.kform summary{cursor:pointer;color:var(--gold);font-weight:800;font-size:14px}
+details.kform[open] summary{margin-bottom:2px}
+details.kform input{display:block;width:100%;max-width:280px;margin-top:6px}
