@@ -253,6 +253,7 @@ const PAGES = {
         <div class="muted">${esc(t.conf)}${t.div ? ' ' + esc(t.div) : ''} · ${isUserTeam(t) ? `Coach <a href="#coach/${slug(t.coach)}">${esc(t.coach)}</a>` : 'CPU'}</div>
         <div class="stat" style="margin-top:10px"><div><span>Record</span><b>${rec(r)}</b></div><div><span>Conf</span><b>${r.cw}-${r.cl}</b></div><div><span>PF / PA</span><b>${r.pf} / ${r.pa}</b></div><div><span>Streak</span><b>${streak(r)}</b></div>
           <div><span>OVR / OFF / DEF</span><b>${t.ovr || '–'} / ${t.off || '–'} / ${t.def || '–'}</b></div>${sim ? `<div><span>Likely record</span><b>${sim.likely}</b></div><div><span>Title odds</span><b>${pctStr(sim.titlePct)}</b></div>` : ''}</div></div>
+      ${teamStatsCard(id, s)}
       <div class="card"><h3 style="margin-top:0">${s} Schedule</h3><div class="tablewrap"><table><tr><th>Wk</th><th>Opponent</th><th>Line</th><th class="num">Result</th></tr>
       ${games.map(g => {
         const home = g.home === id, opp = home ? g.away : g.home, done = played(g), l = lineOf(g);
@@ -1044,6 +1045,61 @@ function teamProfile(tid, s) {
     if (pw < 0.5) out.dog[won ? 0 : 1]++; else out.fav[won ? 0 : 1]++;
   });
   return out;
+}
+// Team page: season stats with each one's rank among the league's teams.
+function teamStatLine(tid, s) {
+  const r = records(s)[tid], P = teamProfile(tid, s), t = team(tid);
+  const R = ratings(s, 999);
+  const sim = s === D.league.season && t.conf === D.league.conference && D.league.phase === PHASES.REG ? simulate(s, nowUpto())[tid] : null;
+  const ha = { hw: 0, hl: 0, aw: 0, al: 0, opp: [], close: [0, 0] };
+  D.games.filter(g => g.season === s && played(g) && (g.home === tid || g.away === tid)).forEach(g => {
+    const home = g.home === tid, my = home ? +g.homeScore : +g.awayScore, th = home ? +g.awayScore : +g.homeScore, won = my > th, o = R[home ? g.away : g.home];
+    if (g.neutral) { /* neutral games count toward neither */ } else if (home) won ? ha.hw++ : ha.hl++; else won ? ha.aw++ : ha.al++;
+    if (o) ha.opp.push(o.o + o.d);
+    if (!g.forfeit && Math.abs(my - th) <= 8) won ? ha.close[0]++ : ha.close[1]++;
+  });
+  const pct = (w, l) => w + l ? w / (w + l) : null, avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+  const pr = currentPower(s)?.find(x => x.id === tid);
+  return {
+    rec: { v: pct(r.w, r.l), f: `${r.w}-${r.l}` }, conf: { v: pct(r.cw, r.cl), f: `${r.cw}-${r.cl}` },
+    ppg: { v: P.gp ? P.pf / P.gp : null, f: P.gp ? (P.pf / P.gp).toFixed(1) : '–' }, papg: { v: P.gp ? P.pa / P.gp : null, f: P.gp ? (P.pa / P.gp).toFixed(1) : '–' },
+    diff: { v: P.gp ? (P.pf - P.pa) / P.gp : null, f: P.gp ? ((P.pf - P.pa) / P.gp > 0 ? '+' : '') + ((P.pf - P.pa) / P.gp).toFixed(1) : '–' },
+    home: { v: pct(ha.hw, ha.hl), f: `${ha.hw}-${ha.hl}` }, away: { v: pct(ha.aw, ha.al), f: `${ha.aw}-${ha.al}` },
+    close: { v: pct(ha.close[0], ha.close[1]), f: `${ha.close[0]}-${ha.close[1]}` },
+    ats: { v: pct(P.ats[0], P.ats[1]), f: `${P.ats[0]}-${P.ats[1]}${P.ats[2] ? '-' + P.ats[2] : ''}` },
+    ou: { v: null, f: `${P.ou[0]}-${P.ou[1]}${P.ou[2] ? '-' + P.ou[2] : ''}` },
+    fav: { v: pct(P.fav[0], P.fav[1]), f: `${P.fav[0]}-${P.fav[1]}` }, dog: { v: pct(P.dog[0], P.dog[1]), f: `${P.dog[0]}-${P.dog[1]}` },
+    sos: { v: avg(ha.opp), f: ha.opp.length ? (avg(ha.opp) > 0 ? '+' : '') + avg(ha.opp).toFixed(1) : '–' },
+    ovr: { v: t.ovr || null, f: t.ovr || '–' }, off: { v: t.off || null, f: t.off || '–' }, def: { v: t.def || null, f: t.def || '–' },
+    power: { v: pr ? pr.rank : null, f: pr ? '#' + pr.rank : '–', isRank: true },
+    expW: { v: sim ? sim.expW : null, f: sim ? sim.expW.toFixed(1) : '–' }, title: { v: sim ? sim.titlePct : null, f: sim ? pctStr(sim.titlePct) : '–' },
+  };
+}
+const TEAM_STATS = [
+  ['Results', [['rec', 'Record', 1], ['conf', 'Conference', 1], ['home', 'Home', 1], ['away', 'Away', 1], ['close', 'One-score games', 1]]],
+  ['Scoring', [['ppg', 'Points / game', 1], ['papg', 'Allowed / game', -1], ['diff', 'Point diff / game', 1], ['sos', 'Schedule strength', 1, 'Avg. model rating of opponents faced; 1st = toughest']]],
+  ['Betting', [['ats', 'Against the spread', 1], ['ou', 'Over / under', 0], ['fav', 'As favorite', 1], ['dog', 'As underdog', 1]]],
+  ['Team', [['ovr', 'Overall', 1], ['off', 'Offense', 1], ['def', 'Defense', 1], ['power', 'Power ranking', 0], ['expW', 'Projected wins', 1], ['title', 'Title odds', 1]]],
+];
+function teamStatsCard(tid, s) {
+  const lt = leagueTeams(), inL = lt.some(t => t.id === tid), all = Object.fromEntries((inL ? lt : [...lt, team(tid)]).map(t => [t.id, teamStatLine(t.id, s)]));
+  const me = all[tid], n = lt.length, r0 = records(s)[tid];
+  if (!inL && !(r0 && r0.w + r0.l)) return '';
+  const rankOfStat = (k, dir) => {
+    const v = me[k].v; if (!inL || !dir || v == null) return null;
+    const vals = lt.map(t => all[t.id][k].v).filter(x => x != null);
+    const better = vals.filter(x => (x - v) * dir > 1e-9).length, ties = vals.filter(x => Math.abs(x - v) <= 1e-9).length;
+    return { r: better + 1, tie: ties > 1, of: vals.length };
+  };
+  const pill = (k, dir) => {
+    if (k === 'power' && me.power.v) { const r = me.power.v; return `<span class="srk ${r <= Math.ceil(n / 4) ? 'top' : r > n - Math.ceil(n / 4) ? 'bot' : ''}">${ordinal(r)}</span>`; }
+    const x = rankOfStat(k, dir); if (!x) return '<span class="muted small">–</span>';
+    const q = Math.ceil(x.of / 4);
+    return `<span class="srk ${k === 'sos' ? '' : x.r <= q ? 'top' : x.r > x.of - q ? 'bot' : ''}">${x.tie ? 'T-' : ''}${ordinal(x.r)}</span>`;
+  };
+  return `<div class="card"><div class="row spread"><h3 style="margin:0">${s} Season Stats</h3>${inL ? `<span class="muted small">Rank among ${n} ${esc(D.league.conference)} teams</span>` : ''}</div>
+    <div class="tstats">${TEAM_STATS.map(([grp, rows]) => `<div class="tsg"><div class="tsh">${grp}</div><table>${rows.map(([k, label, dir, tip]) => `<tr${tip ? ` title="${esc(tip)}"` : ''}><td>${label}${tip ? ' <span class="muted small">ⓘ</span>' : ''}</td><td class="num"><b>${me[k].f}</b></td><td class="num">${pill(k, dir)}</td></tr>`).join('')}</table></div>`).join('')}</div>
+    <p class="muted small" style="margin:8px 0 0"><span class="srk top">Green</span> = top quarter of the league, <span class="srk bot">red</span> = bottom quarter. One-score games are decided by 8 or fewer. Schedule strength is the average model rating of opponents played (1st = toughest).</p></div>`;
 }
 function coachMeetings(c1, c2, exceptId) {
   if (!c1 || !c2 || c1 === 'CPU' || c2 === 'CPU') return [];
