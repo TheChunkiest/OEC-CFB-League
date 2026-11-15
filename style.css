@@ -636,3 +636,10 @@ ol.steps li{padding-left:2px}
 .social .sbreak{flex-basis:100%;height:0}
 @media(max-width:400px){footer .social .sbtn.cal{font-size:12px;padding:5px 10px;gap:4px}}
 .card.gotw{margin-top:26px}
+
+details.card>summary{list-style:none;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:2px 0}
+details.card>summary::-webkit-details-marker{display:none}
+details.card>summary::before{content:"›";display:inline-block;color:var(--gold);font-weight:900;font-size:18px;line-height:1;transition:transform .15s}
+details.card[open]>summary::before{transform:rotate(90deg)}
+details.card[open]>summary{margin-bottom:10px}
+.advclock{border-color:var(--gold2)}

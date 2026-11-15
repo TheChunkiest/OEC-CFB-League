@@ -1,0 +1,266 @@
+name: League notifications
+# Runs every 5 minutes (GitHub often stretches that to 10-15):
+#   - Sends free phone notifications through Firebase Cloud Messaging when the FIREBASE_SERVICE_ACCOUNT secret is
+#     set: league advances, commissioner news, kickoff reminders and kickoff invites. Device tokens are only read
+#     when there's something to send; what has been sent is remembered in push-state.json.
+#   - Rebuilds archive.json (past seasons' games and bets) about once a day so the site doesn't read them from the database.
+# Each run reads about 5 small documents/queries plus the games with an agreed kickoff time.
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: league-notifications
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Notification tools
+        if: env.SA != ''
+        run: python3 -m pip install -q --break-system-packages google-auth requests || python3 -m pip install -q google-auth requests
+      - name: Send notifications and refresh archive
+        run: |
+          python3 - <<'PY'
+          import json, os, re, time, glob, urllib.request, urllib.parse, urllib.error
+          from datetime import datetime, timezone
+
+          cfg = open('firebase-config.js').read()
+          pid = re.search(r'projectId\s*:\s*["\']([^"\']+)', cfg).group(1)
+          key = re.search(r'apiKey\s*:\s*["\']([^"\']+)', cfg).group(1)
+          base = f'https://firestore.googleapis.com/v1/projects/{pid}/databases/(default)/documents'
+
+          def val(v):
+              if 'stringValue' in v: return v['stringValue']
+              if 'integerValue' in v: return int(v['integerValue'])
+              if 'doubleValue' in v: return float(v['doubleValue'])
+              if 'booleanValue' in v: return v['booleanValue']
+              if 'nullValue' in v: return None
+              if 'arrayValue' in v: return [val(x) for x in v['arrayValue'].get('values', [])]
+              if 'mapValue' in v: return {k: val(x) for k, x in v['mapValue'].get('fields', {}).items()}
+              return None
+
+          def docs(col):
+              out, tok = [], ''
+              while True:
+                  q = {'pageSize': 300, 'key': key}
+                  if tok: q['pageToken'] = tok
+                  with urllib.request.urlopen(f'{base}/{col}?' + urllib.parse.urlencode(q), timeout=30) as r:
+                      d = json.load(r)
+                  for x in d.get('documents', []):
+                      f = {k: val(v) for k, v in x.get('fields', {}).items()}
+                      f['id'] = x['name'].rsplit('/', 1)[1]
+                      out.append(f)
+                  tok = d.get('nextPageToken')
+                  if not tok: return out
+
+          def one(path):
+              try:
+                  with urllib.request.urlopen(f'{base}/{path}?key={key}', timeout=30) as r:
+                      return {k: val(v) for k, v in json.load(r).get('fields', {}).items()}
+              except Exception:
+                  return {}
+
+          now = time.time() * 1000
+          # Only invites for upcoming kickoffs (one indexed range filter), so each run reads a handful of
+          # documents instead of whole collections. Team names are fetched just for the games involved.
+          body = {'structuredQuery': {'from': [{'collectionId': 'invites'}], 'where': {'fieldFilter': {'field': {'fieldPath': 'time'}, 'op': 'GREATER_THAN', 'value': {'integerValue': str(int(now - 6 * 3600e3))}}}}}
+          req = urllib.request.Request(f'{base}:runQuery?key={key}', data=json.dumps(body).encode(), headers={'Content-Type': 'application/json'})
+          with urllib.request.urlopen(req, timeout=30) as r:
+              rows = json.load(r)
+          invites = []
+          for row in rows:
+              x = row.get('document')
+              if not x: continue
+              f = {k: val(v) for k, v in x.get('fields', {}).items()}; f['id'] = x['name'].rsplit('/', 1)[1]; invites.append(f)
+          first = 2026
+          teams = {}
+
+          # Latest accepted invite per game = its kickoff.
+          kick = {}
+          for i in invites:
+              if i.get('status') != 'accepted' or not i.get('time'): continue
+              cur = kick.get(i['gameId'])
+              if not cur or (i.get('respondedAt') or 0) > (cur.get('respondedAt') or 0): kick[i['gameId']] = i
+
+          def tname(tid):
+              if tid not in teams: teams[tid] = one(f'teams/{tid}')
+              return (teams.get(tid) or {}).get('name') or tid
+          repo = os.environ.get('GITHUB_REPOSITORY', '')
+          site = f"https://{repo.split('/')[0].lower()}.github.io/{repo.split('/')[1]}/index.html" if '/' in repo else ''
+          gcache = {}
+          def game(gid):
+              if gid not in gcache: gcache[gid] = one(f'games/{gid}')
+              return gcache[gid]
+          # The old calendar files are no longer used (phone notifications replaced them).
+          import shutil
+          if os.path.isdir('cal'): shutil.rmtree('cal')
+
+          # Past-season archive (games + bets never change once a season is over). The site loads these from
+          # archive.json instead of the database. Rebuilt at most once a day, so most runs read nothing here.
+          try: arch_age = now - (json.load(open('archive.json')).get('generatedAt') or 0)
+          except Exception: arch_age = 1e18
+          if arch_age > 20 * 3600e3:
+              lg = one('meta/league'); cur = int(lg.get('season') or 0); fs0 = int(lg.get('firstSeason') or 2026)
+              def past(col):
+                  q = {'structuredQuery': {'from': [{'collectionId': col}], 'where': {'fieldFilter': {'field': {'fieldPath': 'season'}, 'op': 'LESS_THAN', 'value': {'integerValue': str(cur)}}}}}
+                  rq = urllib.request.Request(f'{base}:runQuery?key={key}', data=json.dumps(q).encode(), headers={'Content-Type': 'application/json'})
+                  with urllib.request.urlopen(rq, timeout=60) as r: res = json.load(r)
+                  out = []
+                  for row in res:
+                      x = row.get('document')
+                      if not x: continue
+                      f = {k: val(v) for k, v in x.get('fields', {}).items()}; f['id'] = x['name'].rsplit('/', 1)[1]; out.append(f)
+                  return sorted(out, key=lambda d: d['id'])
+              if cur:
+                  arch = {'generatedAt': int(now), 'season': cur, 'seasons': list(range(fs0, cur)), 'games': past('games'), 'wagers': past('wagers')}
+                  old_arch = {}
+                  try: old_arch = json.load(open('archive.json'))
+                  except Exception: pass
+                  same = {k: old_arch.get(k) for k in ('season', 'seasons', 'games', 'wagers')} == {k: arch[k] for k in ('season', 'seasons', 'games', 'wagers')}
+                  if same and old_arch: arch['generatedAt'] = int(now)
+                  json.dump(arch, open('archive.json', 'w'), separators=(',', ':'))
+                  print(f"archive: {len(arch['games'])} games, {len(arch['wagers'])} bets from seasons {arch['seasons']}")
+
+          # ---------------- Phone notifications ----------------
+          def notify():
+              from google.oauth2 import service_account
+              from google.auth.transport.requests import Request
+              creds = service_account.Credentials.from_service_account_info(json.loads(os.environ['SA']),
+                  scopes=['https://www.googleapis.com/auth/firebase.messaging', 'https://www.googleapis.com/auth/datastore'])
+              creds.refresh(Request())
+              H = {'Authorization': f'Bearer {creds.token}', 'Content-Type': 'application/json'}
+              def call(url, body=None, method=None):
+                  rq = urllib.request.Request(url, data=json.dumps(body).encode() if body is not None else None, headers=H, method=method)
+                  with urllib.request.urlopen(rq, timeout=30) as r: return json.load(r)
+              def query(col, field, op, value):
+                  v = {'booleanValue': value} if isinstance(value, bool) else {'integerValue': str(value)}
+                  rows = call(f'{base}:runQuery', {'structuredQuery': {'from': [{'collectionId': col}], 'where': {'fieldFilter': {'field': {'fieldPath': field}, 'op': op, 'value': v}}}})
+                  out = []
+                  for row in rows:
+                      x = row.get('document')
+                      if not x: continue
+                      f = {k: val(v) for k, v in x.get('fields', {}).items()}; f['id'] = x['name'].rsplit('/', 1)[1]; out.append(f)
+                  return out
+
+              try: st = json.load(open('push-state.json'))
+              except Exception: st = {}
+              fresh = not st
+              lg = one('meta/league')
+              advkey = f"{lg.get('season')}|{lg.get('week')}|{lg.get('phase')}"
+              ann = (lg.get('announce') or {})
+              link = site or './index.html'
+              def ab(tid): t = teams.get(tid) or one(f'teams/{tid}'); teams[tid] = t; return (t or {}).get('abbr') or tname(tid)
+              def uid_of(tid): tname(tid); return (teams.get(tid) or {}).get('uid')
+
+              devices = None
+              def devs():
+                  nonlocal devices
+                  if devices is None: devices = [d for d in docs_auth('push')]
+                  return devices
+              def docs_auth(col):
+                  out, tok = [], ''
+                  while True:
+                      q = {'pageSize': 300}
+                      if tok: q['pageToken'] = tok
+                      d = call(f'{base}/{col}?' + urllib.parse.urlencode(q))
+                      for x in d.get('documents', []):
+                          f = {k: val(v) for k, v in x.get('fields', {}).items()}; f['id'] = x['name'].rsplit('/', 1)[1]; out.append(f)
+                      tok = d.get('nextPageToken')
+                      if not tok: return out
+              sent = 0
+              def send(dev, title, body, url, tag=None):
+                  nonlocal sent
+                  msg = {'message': {'token': dev['token'], 'data': {'title': title, 'body': body, 'link': url, 'tag': tag or ''},
+                         'webpush': {'headers': {'Urgency': 'high', 'TTL': '21600'}}}}
+                  try:
+                      call(f'https://fcm.googleapis.com/v1/projects/{pid}/messages:send', msg); sent += 1
+                  except urllib.error.HTTPError as e:
+                      err = e.read().decode(errors='ignore')
+                      if e.code == 404 or 'UNREGISTERED' in err or ('INVALID_ARGUMENT' in err and 'token' in err.lower()):
+                          try: call(f"{base}/push/{dev['id']}", method='DELETE')   # phone uninstalled or turned it off
+                          except Exception: pass
+                      else: print('send failed', e.code, err[:200])
+              def to(pref, title, body, url, uids=None, skip=(), tag=None):
+                  for d in devs():
+                      if not (d.get('prefs') or {}).get(pref): continue
+                      if uids is not None and d.get('uid') not in uids: continue
+                      if d.get('uid') in skip: continue
+                      send(d, title, body, url, tag)
+
+              if fresh:   # first run: remember where things stand, send nothing
+                  st = {'adv': advkey, 'ann': ann.get('id'), 'inv': int(now), 'resp': int(now), 'kick': {}}
+              else:
+                  # League advanced
+                  if advkey != st.get('adv'):
+                      ph = lg.get('phase') or ''
+                      t = f"🏈 Week {lg.get('week')} is here" if ph == 'Regular Season' else f'🏈 {ph}'
+                      dk = lg.get('desk') or {}
+                      note = (dk.get('text') or '').strip() if dk.get('show') else ''
+                      body = (note[:170] + '…' if len(note) > 170 else note) if note else 'The league advanced. Results are in and new lines are up.'
+                      to('advance', t, body, link + '#home', tag='advance')
+                      st['adv'] = advkey
+                  # Commissioner announcement
+                  if ann.get('id') and ann.get('id') != st.get('ann'):
+                      to('advance', '📣 From the Commissioner', ann.get('text', ''), link + '#home', tag='news')
+                      st['ann'] = ann.get('id')
+                  # Kickoff reminders (GitHub runs every 5 to 15 minutes, so remind anything starting within 45)
+                  sk = st.setdefault('kick', {})
+                  for gid, inv in kick.items():
+                      t = inv['time']
+                      if not (now < t <= now + 45 * 60e3) or sk.get(gid) == t: continue
+                      g = game(gid)
+                      if not g or g.get('homeScore') is not None: continue
+                      mins = max(1, round((t - now) / 60e3 / 5) * 5)
+                      mu = {uid_of(g.get('home')), uid_of(g.get('away'))} - {None}
+                      m = f"{ab(g.get('away'))} @ {ab(g.get('home'))}"
+                      to('mygame', f'⏰ Kickoff in about {mins} min', f'Your game, {m}, is coming up.', f'{link}#game/{gid}', uids=mu, tag='k' + gid)
+                      to('league', f'📺 {m} kicks off in about {mins} min', 'Watch it live on the OEC YouTube channel.', 'https://youtube.com/@originalentertainingcrackers', skip=mu, tag='k' + gid)
+                      sk[gid] = t
+                  st['kick'] = {k: v for k, v in sk.items() if v > now - 24 * 3600e3}
+                  # Kickoff invites sent, and replies to them
+                  new = query('invites', 'ts', 'GREATER_THAN', int(st.get('inv') or now))
+                  resp = query('invites', 'respondedAt', 'GREATER_THAN', int(st.get('resp') or now))
+                  countered = {(i.get('gameId'), i.get('from')) for i in new}
+                  for i in new:
+                      if i.get('status') != 'pending': continue
+                      g = game(i['gameId']); m = f"{ab(g.get('away'))} @ {ab(g.get('home'))}" if g else 'your game'
+                      to('invites', f"📅 Coach {i.get('fromName') or ''} sent kickoff times", f'Pick a time for {m}.', f"{link}#game/{i['gameId']}", uids={i.get('to')}, tag='i' + i['gameId'])
+                  for i in resp:
+                      g = game(i['gameId']); m = f"{ab(g.get('away'))} @ {ab(g.get('home'))}" if g else 'your game'
+                      if i.get('status') == 'accepted':
+                          to('invites', '✅ Kickoff time set', f"Coach {i.get('toName') or ''} picked a time for {m}.", f"{link}#game/{i['gameId']}", uids={i.get('from')}, tag='i' + i['gameId'])
+                      elif i.get('status') == 'declined' and (i['gameId'], i.get('to')) not in countered:
+                          to('invites', 'Kickoff times declined', f"Coach {i.get('toName') or ''} couldn't make those times for {m}. Send new ones.", f"{link}#game/{i['gameId']}", uids={i.get('from')}, tag='i' + i['gameId'])
+                  if new: st['inv'] = max(int(i.get('ts') or 0) for i in new)
+                  if resp: st['resp'] = max(int(i.get('respondedAt') or 0) for i in resp)
+              # Welcome message for devices that just turned notifications on (confirms it works)
+              for d in query('push', 'welcomed', 'EQUAL', False):
+                  send(d, '🔔 Notifications are on', "You'll get OEC Hub alerts on this device. Change them anytime on your Account page.", link + '#account', 'welcome')
+                  try: call(f"{base}/push/{d['id']}?updateMask.fieldPaths=welcomed", {'fields': {'welcomed': {'booleanValue': True}}}, method='PATCH')
+                  except Exception as e: print('welcome flag failed', e)
+              old = None
+              try: old = json.load(open('push-state.json'))
+              except Exception: pass
+              if old != st: json.dump(st, open('push-state.json', 'w'), separators=(',', ':'), sort_keys=True)
+              print(f'notifications: {sent} sent')
+
+          if os.environ.get('SA'):
+              try: notify()
+              except Exception as e: print('notifications skipped:', repr(e)[:300])
+          PY
+      - name: Save
+        run: |
+          git config user.name "oec-hub-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "No changes"; exit 0; fi
+          git commit -m "Update league data"
+          for i in 1 2 3; do git push && exit 0; git pull --rebase -X theirs; done
+          exit 1

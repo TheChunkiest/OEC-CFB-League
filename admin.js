@@ -5,7 +5,9 @@ import {
 } from './core.js?v=49';
 import { lookupColor } from './teamcolors.js';
 
-const TABS = [['advance', 'Weekly Advance'], ['games', 'Games'], ['top25', 'Top 25'], ['ratings', 'Ratings'], ['betting', 'Betting'], ['coaches', 'Coaches & Accounts'], ['awards', 'Awards'], ['preseason', 'Preseason'], ['settings', 'Settings & History']];
+// Tabs: the weekly job lives on "This Week"; everything else is occasional. Awards only shows when it matters.
+const TABS = () => [['advance', 'This Week'], ['games', 'Scores & Schedule'], ['teams', 'Teams & Coaches'], ['betting', 'Sportsbook'],
+  ...(L().phase === PHASES.CCG || L().phase === PHASES.POST || L().awards?.open ? [['awards', 'Awards']] : []), ['preseason', 'New Season'], ['settings', 'Settings']];
 const ST = { tab: 'advance', desk: 'no', gamesWeek: null, msg: '', step: 1, draft: null, done: null };
 const DEFAULT_AWARDS = ['MVP', 'Offensive Player of the Year', 'Defensive Player of the Year', 'Best Offense', 'Best Defense', 'Game of the Year'];
 
@@ -23,11 +25,12 @@ const acctTeamOpts = u => {
 const toLocalInput = ts => { const d = new Date(ts - new Date(ts).getTimezoneOffset() * 60000); return d.toISOString().slice(0, 16); };
 function advClock() {
   const lg = L(), p = projectedAdvance(), ext = lg.advExt || 0;
-  return `<div class="card"><div class="row spread"><h3 style="margin:0">Advance clock</h3>${p ? `<span class="muted small">Header shows: <b>Projected advance ${esc(fmtAdvance(p))}</b>${ext ? ` (includes +${ext}h)` : ''}</span>` : '<span class="muted small">Not set yet. The header badge appears once it is.</span>'}</div>
-    <p class="muted small">Every advance records its time automatically; the next one is projected 3 days later. Set the time here if this week's advance happened before this feature existed.</p>
-    <div class="row"><div><label>Last advance</label><input type="datetime-local" id="advAt" value="${lg.advancedAt ? toLocalInput(lg.advancedAt) : ''}"></div>
-      <button data-act="saveAdvAt">Save time</button>
-      ${ext ? `<button class="ghost" data-act="advExt" data-h="0">Remove +${ext}h extension</button>` : `<button class="ghost" data-act="advExt" data-h="24">Add 24-hour extension</button>`}</div></div>`;
+  return `<div class="card advclock"><div class="row spread"><h3 style="margin:0">⏱️ Advance clock</h3>
+      ${ext ? `<button class="ghost sm" data-act="advExt" data-h="0">Remove +${ext}h</button>` : `<button class="ghost sm" data-act="advExt" data-h="24">+24 hours</button>`}</div>
+    <p style="margin:8px 0 0">${p ? `Next advance: <b>${esc(fmtAdvance(p))}</b>${ext ? ` <span class="muted small">(includes +${ext}h)</span>` : ''}` : '<span class="muted">Starts with your next advance.</span>'}</p>
+    <details class="small" style="margin-top:8px"><summary class="muted">Fix the last advance time</summary>
+      <div class="row" style="margin-top:8px"><input type="datetime-local" id="advAt" value="${lg.advancedAt ? toLocalInput(lg.advancedAt) : ''}"><button class="sm" data-act="saveAdvAt">Save</button></div>
+      <p class="muted small" style="margin:6px 0 0">Every advance records its own time and the next one is projected 3 days later, so you normally never touch this.</p></details></div>`;
 }
 const flash = m => { ST.msg = m; ST.clear = true; render(); window.scrollTo(0, 0); };
 const findTeam = s => { const q = String(s || '').trim().toLowerCase(); return D.teams.find(t => t.id === q || t.name.toLowerCase() === q || (t.abbr || '').toLowerCase() === q); };
@@ -64,7 +67,7 @@ function deskBlock() {
   return `<div class="card"><h3 style="margin-top:0">Post a Commissioner's Desk note with this advance?</h3>
     <div class="seg"><button data-desk="yes" class="${ST.desk === 'yes' ? 'on' : ''}">Yes</button><button data-desk="no" class="${ST.desk === 'no' ? 'on' : ''}">No</button></div>
     <div ${ST.desk === 'yes' ? '' : 'hidden'}><label>Note to the league (shows at the top of the Home page)</label><textarea id="deskText" rows="4" placeholder="Advance times, reminders, trash talk…">${esc(ST.draft?.desk?.text || '')}</textarea></div>
-    <p class="muted small">Choosing No clears last week's note from the Home page.</p></div>`;
+    <p class="muted small">${L().pushKey ? 'Coaches with notifications on get this note in the advance notification. ' : ''}Choosing No clears last week's note from the Home page.</p></div>`;
 }
 const deskValue = () => ST.desk === 'yes' && $('#deskText')?.value.trim() ? { show: true, text: $('#deskText').value.trim() } : { show: false, text: '' };
 function scoreRows(games, dr) {
@@ -139,7 +142,7 @@ function wizard() {
     const g = wizGames(), cur = g.filter(x => x.week === W), late = g.filter(x => x.week < W);
     return `${stepper(1)}<div class="card"><h2>Week ${W} results</h2><p class="muted small" style="margin:0">Enter every score (or mark a forfeit). Use <b>Save scores now</b> to lock finished user games mid-week. Betting is <b>${lg.bettingOpen ? 'OPEN' : 'LOCKED'}</b> <button class="sm ghost" data-act="toggleBet">${lg.bettingOpen ? 'Lock betting' : 'Unlock'}</button></p></div>
       ${late.length ? `<div class="notice">⚠️ ${late.length} earlier game${late.length === 1 ? ' is' : 's are'} still missing a result. Enter ${late.length === 1 ? 'it' : 'them'} here too.</div>${scoreRows(late, dr)}` : ''}
-      ${cur.length ? scoreRows(cur, dr) : '<div class="card empty">No games scheduled this week. Add them on the Games tab, or continue.</div>'}
+      ${cur.length ? scoreRows(cur, dr) : '<div class="card empty">No games scheduled this week. Add them on Scores &amp; Schedule, or continue.</div>'}
       <div class="card row spread"><button class="ghost" data-act="wizSave">Save scores now</button><button data-act="wizNext">Next: set up ${nextLbl} →</button></div>`;
   }
   if (ST.step === 2) {
@@ -173,7 +176,7 @@ function wizard() {
       <h3>Top 25 entering ${nextLbl}</h3>${moves.length ? `<ul class="clean review">${moves.map(m => `<li>${esc(team(m.id).name)}: ${m.a ? '#' + m.a : 'unranked'} → <b>${m.b ? '#' + m.b : 'unranked'}</b></li>`).join('')}</ul>` : `<p style="margin:4px 0" class="muted">No changes (${Object.keys(cur).length} ranked teams carry over).</p>`}
       <h3>Commissioner's Desk</h3>${dr.desk.on && dr.desk.text ? `<div class="notice" style="white-space:pre-wrap;margin:4px 0">${esc(dr.desk.text)}</div>` : '<p style="margin:4px 0" class="muted">No note. Last week\'s note will be cleared.</p>'}
       ${last ? '' : `<h3>Week ${W + 1}</h3><p style="margin:4px 0">${nxt.length} game${nxt.length === 1 ? '' : 's'} scheduled.${gv.total ? ` Game of the Week voting closes: <b>${esc(team(gv.game?.away).name)} @ ${esc(team(gv.game?.home).name)}</b> leads with ${gv.counts[gv.game?.id]} of ${gv.total} votes.` : ' No Game of the Week votes were cast.'}</p>`}
-      ${missing ? `<div class="notice" style="margin-top:12px">⚠️ ${missing} game${missing === 1 ? ' has' : 's have'} no result. You can still advance and enter ${missing === 1 ? 'it' : 'them'} later from the Games tab.</div>` : ''}</div>
+      ${missing ? `<div class="notice" style="margin-top:12px">⚠️ ${missing} game${missing === 1 ? ' has' : 's have'} no result. You can still advance and enter ${missing === 1 ? 'it' : 'them'} later from Scores &amp; Schedule.</div>` : ''}</div>
     <div class="card row spread"><button class="ghost" data-act="wizBack">← Back</button><button class="gold" data-act="wizConfirm">✅ Confirm & ${last ? 'end the regular season' : `advance to Week ${W + 1}`}</button></div>`;
 }
 
@@ -181,12 +184,12 @@ function wizard() {
 const views = {
   advance() {
     const lg = L(), body = views.advanceBody();
-    return ((lg.phase === PHASES.REG || lg.phase === PHASES.CCG) && !ST.done ? advClock() : '') + body;
+    return body + ((lg.phase === PHASES.REG || lg.phase === PHASES.CCG) && !ST.done ? advClock() : '');
   },
   advanceBody() {
     const lg = L(), s = lg.season;
     if (!D.teams.length) return `<div class="card"><h2>Welcome, Commissioner</h2><p>The database is empty. Load the league history and the current season (Seasons 1–3 through Week 9) from <code>league-data.json</code>. This adds all teams, coaches, divisions, results, champions, awards and "Holy Shit" moments, then posts Week 10 lines.</p><button class="gold" data-act="importSeed">Load league data</button></div>`;
-    if (lg.phase === PHASES.PRE) return `<div class="card"><h2>Offseason</h2><p>The ${s} season is wrapped up${D.history.find(h => h.season === s) ? ' and in the history books' : ''}. Fill out the <b>Preseason</b> form to set up next season: coaches, team ratings and the schedule. Publishing it opens Week 0 betting and posts preseason odds.</p><button data-tab="preseason">Open Preseason form →</button></div>`;
+    if (lg.phase === PHASES.PRE) return `<div class="card"><h2>Offseason</h2><p>The ${s} season is wrapped up${D.history.find(h => h.season === s) ? ' and in the history books' : ''}. Fill out the <b>New Season</b> form to set up next season: coaches, team ratings and the schedule. Publishing it opens Week 0 betting and posts preseason odds.</p><button data-tab="preseason">Open New Season form →</button></div>`;
     if (lg.phase === PHASES.REG || ST.done) return wizard();
     if (lg.phase === PHASES.CCG) {
       const ccg = D.games.find(g => g.season === s && g.type === 'ccg');
@@ -214,7 +217,7 @@ const views = {
       <h3>Awards results</h3>${res.length ? `<table>${res.map(r => `<tr><td>${esc(r.award)}</td><td><b>${esc(r.winner)}</b></td><td class="num muted">${r.votes} votes</td></tr>`).join('')}</table>` : '<p class="muted">No ballots were cast.</p>'}</div>
       <div class="card"><h3 style="margin-top:0">Postseason games</h3>${post.length ? scoreRows(post) : '<p class="muted">None added.</p>'}
         <div class="row"><input id="pW" type="number" value="${lg.week + 1}" style="width:70px" title="Week"><select id="pA">${teamOpts('', 'Away/Team 1')}</select> vs <select id="pH">${teamOpts('', 'Home/Team 2')}</select><input id="pNote" placeholder="Bowl name (optional)"><button class="ghost" data-act="addBowl">Add</button></div>
-        <p class="muted small">Opponent missing? Add it as a Non-Conf team on the Preseason tab first.</p></div>
+        <p class="muted small">Opponent missing? Add it as a Non-Conf team on the New Season tab first.</p></div>
       <div class="card"><label>Season notes for History (optional, e.g. national champion, records)</label><textarea id="sNotes" rows="2"></textarea></div>
       ${deskBlock()}<div class="card"><button data-act="finalize">Finalize ${s} season & update History</button></div>`;
   },
@@ -243,12 +246,15 @@ const views = {
   games() {
     const s = L().season, weeks = [...new Set(seasonGames().map(g => g.week))].sort((a, b) => a - b);
     const wk = ST.gamesWeek ?? L().week, games = D.games.filter(g => g.season === s && g.week === wk);
-    return `<div class="card"><div class="row"><b>Week</b><select id="gwSel">${[...new Set([...weeks, wk])].sort((a, b) => a - b).map(w => `<option ${w === wk ? 'selected' : ''}>${w}</option>`).join('')}</select><input id="gwNew" type="number" placeholder="Other week" style="width:110px"><span class="muted small">Season ${s}. Use this to fix past scores; affected wagers are re-graded automatically.</span></div></div>
+    return `<div class="card"><div class="row"><b>Week</b><select id="gwSel">${[...new Set([...weeks, wk])].sort((a, b) => a - b).map(w => `<option ${w === wk ? 'selected' : ''}>${w}</option>`).join('')}</select><input id="gwNew" type="number" placeholder="Other week" style="width:110px"><span class="muted small">Fix any score here; bets on it are re-graded automatically.</span></div></div>
       ${scoreRows(games)}${games.length ? `<div class="card row"><button data-act="saveGames">Save scores</button> ${games.map(g => `<button class="sm danger" data-delgame="${esc(g.id)}">✕ ${esc(team(g.away).abbr)} @ ${esc(team(g.home).abbr)}</button>`).join('')}</div>` : ''}
       <div class="card"><h3 style="margin-top:0">Add a game to week ${wk}</h3><div class="row"><select id="gA">${teamOpts('', 'Away')}</select> @ <select id="gH">${teamOpts('', 'Home')}</select>
         <select id="gT"><option value="reg">Regular season</option><option value="ccg">League Championship</option><option value="bowl">Postseason</option></select><label class="row" style="margin:0"><input type="checkbox" id="gN" style="width:auto"> Neutral</label><button data-act="addGame">Add</button></div></div>`;
   },
 
+  teams() {
+    return views.coaches() + views.ratings() + `<details class="card"><summary><b>Fix this week's Top 25</b> <span class="muted small">(normally set during the weekly advance)</span></summary>${views.top25()}</details>`;
+  },
   ratings() {
     const ts = leagueTeams().slice().sort((a, b) => a.name.localeCompare(b.name));
     return `<div class="card"><h2>Team Ratings</h2><p class="muted small">Update OVR / OFF / DEF whenever rosters change. Saving re-posts this week's lines and updates odds and power rankings right away. Wagers already placed keep their line.</p>
@@ -260,7 +266,7 @@ const views = {
 
   top25() {
     const lg = L(), wk = lg.week;
-    return `<div class="card"><h2>Top 25 · entering ${esc(weekLabel())}</h2><p class="muted small">The ranking shows as <b style="color:var(--gold)">#4</b> before the team name everywhere on the site: schedules, the betting board, odds, standings and bet slips. Each week's poll is saved, so past games keep that week's rankings. You can also update it from the Advance form each week.</p>
+    return `<div style="margin-top:12px"><h3 style="margin-top:0">Top 25 · entering ${esc(weekLabel())}</h3><p class="muted small">The ranking shows as <b style="color:var(--gold)">#4</b> before the team name everywhere on the site: schedules, the betting board, odds, standings and bet slips. Each week's poll is saved, so past games keep that week's rankings. </p>
       ${pollEditor(wk)}<div class="row" style="margin-top:12px"><button data-act="savePoll">Save Top 25</button><button class="ghost" data-act="clearPoll">Clear all</button></div></div>`;
   },
 
@@ -271,7 +277,7 @@ const views = {
         <td data-l="Team"><select data-k="teamId">${acctTeamOpts(u)}</select></td><td data-l="Role"><select data-k="role"><option value="coach" ${u.role !== 'commish' ? 'selected' : ''}>Coach</option><option value="commish" ${u.role === 'commish' ? 'selected' : ''}>Commissioner</option></select></td></tr>`).join('')}</table></div>
         <div style="margin-top:10px"><button data-act="saveUsers">Save accounts</button></div>` : '<p class="muted">No one has signed up yet.</p>'}</div>
       ${us.length ? `<div class="card"><h3 style="margin-top:0">Coach from outside the ${esc(L().conference)}</h3>
-        <p class="muted small">For a coach who joined mid-season and plays outside the ${esc(L().conference)} this year. Their team is added as non-conference, so they can bet, vote and show on the betting leaderboard, but they won't appear in the standings, odds or power rankings. When they join the ${esc(L().conference)}, open the Preseason tab, change the team's Conf to ${esc(L().conference)}, pick a division and save.</p>
+        <p class="muted small">For a coach who joined mid-season and plays outside the ${esc(L().conference)} this year. Their team is added as non-conference, so they can bet, vote and show on the betting leaderboard, but they won't appear in the standings, odds or power rankings. When they join the ${esc(L().conference)}, open the New Season tab, change the team's Conf to ${esc(L().conference)}, pick a division and save.</p>
         <div class="row"><div><label>Their team</label><input id="ocTeam" list="ocTeams" placeholder="Oregon State" style="width:170px"><datalist id="ocTeams">${D.teams.filter(t => t.conf !== L().conference).map(t => `<option value="${esc(t.name)}">`).join('')}</datalist></div>
           <div><label>Abbreviation</label><input id="ocAbbr" placeholder="ORST" maxlength="5" style="width:90px"></div>
           <div><label>Account</label><select id="ocUser"><option value="">Pick an account</option>${us.slice().sort((a, b) => !!a.teamId - !!b.teamId).map(u => `<option value="${esc(u.id)}">${esc(u.name || '(no name)')}${u.teamId ? ' · ' + esc(team(u.teamId).name) : ' · not linked'}</option>`).join('')}</select></div>
@@ -280,7 +286,7 @@ const views = {
 
   betting() {
     const lg = L(), s = lg.season, wk = D.wagers.filter(w => w.season === s).sort((a, b) => b.week - a.week || (b.ts || 0) - (a.ts || 0));
-    return `<div class="card"><h2>Sportsbook Controls</h2><p>Betting is <b>${lg.bettingOpen ? 'OPEN' : 'LOCKED'}</b> for ${esc(weekLabel())}.</p><div class="row"><button data-act="toggleBet">${lg.bettingOpen ? 'Lock betting' : 'Unlock betting'}</button>
+    return `<div class="card"><h2>Sportsbook Controls</h2><p>Betting is <b>${lg.bettingOpen ? 'OPEN' : 'LOCKED'}</b> for ${esc(weekLabel())}. <span class="muted small">Lock or unlock it on This Week.</span></p><div class="row">
       <button class="ghost" data-act="repost">Re-post lines for ${esc(weekLabel())}</button></div><p class="muted small">Re-posting recalculates lines for this week's unplayed games (use after adding games mid-week or fixing ratings). Existing wagers keep the line they were placed at.</p></div>
       <div class="card"><h3 style="margin-top:0">${s} wagers (${wk.length})</h3>${wk.length ? `<div class="tablewrap"><table><tr><th>Wk</th><th>Coach</th><th>Bet</th><th>Placed</th><th class="num">Stake</th><th class="num">Status</th><th></th></tr>
         ${wk.map(w => `<tr><td>${w.week}</td><td>${esc(w.coach)}</td><td style="white-space:normal">${esc(wagerLabel(w))}${legsHtml(w)}</td><td class="muted small">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num"><span class="pill ${w.status}">${w.status}${w.payout ? ' ' + (w.payout > 0 ? '+' : '') + w.payout : ''}</span></td><td>${w.status !== 'void' ? `<button class="sm danger" data-void="${esc(w.id)}">Void</button>` : ''}</td></tr>`).join('')}</table></div>` : '<p class="muted">No wagers yet.</p>'}</div>`;
@@ -302,32 +308,34 @@ const views = {
 
   settings() {
     const lg = L(), H = D.history.slice().sort((a, b) => b.season - a.season);
-    return `<div class="card"><h2>League Settings</h2><label>League name</label><input id="stName" value="${esc(lg.name)}" style="width:100%">
-      <label>Rules (one per line)</label><textarea id="stRules" rows="6">${esc((lg.rules && lg.rules.length ? lg.rules : DEFAULT_RULES).join('\n'))}</textarea>
-      <label>Extra links on the Rules page (one per line: <code>Label | https://…</code>)</label><textarea id="stLinks" rows="3">${esc((lg.links || []).map(l => l.label + ' | ' + l.url).join('\n'))}</textarea>
-      <div class="row" style="margin-top:10px"><button data-act="saveSettings">Save settings</button></div></div>
-      <div class="card"><h2>Phone Notifications</h2>
-        ${lg.pushKey ? `<p class="muted small" style="margin-top:0">✅ Key saved. Coaches can turn on notifications from their Account page.</p>` : `<p class="muted small" style="margin-top:0">One-time setup, all free:</p><ol class="steps small">
+    return `<div class="card"><h2>📣 Send a notification</h2>
+        ${lg.pushKey ? `<input id="annText" maxlength="140" placeholder="e.g. Advancing tonight at 10, get your games in!" style="width:100%">
+        <div class="row" style="margin-top:8px"><button data-act="announce">Send to everyone</button></div>
+        ${lg.announce?.text ? `<p class="muted small" style="margin:8px 0 0">Last sent: “${esc(lg.announce.text)}”</p>` : ''}
+        <p class="muted small" style="margin:6px 0 0">Goes out within about 5 to 15 minutes. Advances notify everyone on their own, with your Commissioner's Desk note.</p>` : '<p class="muted small" style="margin:0">Finish the notification setup below first.</p>'}</div>
+      <details class="card" ${lg.pushKey ? '' : 'open'}><summary><b>Notification setup</b> ${lg.pushKey ? '<span class="muted small">✅ done</span>' : '<span class="muted small">one time, free</span>'}</summary>
+        <ol class="steps small" style="margin-top:10px">
           <li>Firebase console → ⚙️ Project settings → <b>Cloud Messaging</b> → Web configuration → <b>Generate key pair</b>. Copy the key and paste it below.</li>
           <li>Project settings → <b>Service accounts</b> → <b>Generate new private key</b>. It downloads a .json file.</li>
           <li>GitHub repo → Settings → Secrets and variables → Actions → <b>New repository secret</b>. Name: <code>FIREBASE_SERVICE_ACCOUNT</code>. Value: everything in that .json file.</li>
-          <li>Paste the new <code>push</code> rules into Firestore rules.</li></ol>`}
+          <li>Paste the new <code>push</code> rules into Firestore rules.</li></ol>
         <label>Web push key (public "key pair" from step 1)</label><input id="stPush" value="${esc(lg.pushKey || '')}" placeholder="B…" style="width:100%">
-        <div class="row" style="margin-top:10px"><button data-act="savePush">Save key</button></div>
-        <label style="margin-top:14px">Send everyone a notification</label><input id="annText" maxlength="140" placeholder="e.g. Advancing tonight at 10, get your games in!" style="width:100%">
-        <div class="row" style="margin-top:8px"><button data-act="announce">Send</button>${lg.announce?.text ? `<span class="muted small">Last sent: “${esc(lg.announce.text)}”</span>` : ''}</div>
-        <p class="muted small">Notifications go out within about 5 to 15 minutes (whenever GitHub runs the Kickoff calendar workflow).</p></div>
-      <div class="card"><h2>YouTube Live Pop-up</h2>
+        <div class="row" style="margin-top:10px"><button data-act="savePush">Save key</button></div></details>
+      <details class="card"><summary><b>YouTube live pop-up</b> <span class="muted small">automatic · manual: ${lg.live?.on && lg.live?.since && Date.now() - lg.live.since < 6 * 3600e3 ? 'ON' : 'off'}</span></summary>
         <p class="muted small">The site checks the OEC channel automatically about every 5 minutes and shows a "Live now" pop-up while you're streaming. Automatic status: <b id="autoLive">checking…</b></p>
-        <p>Manual pop-up is <b>${lg.live?.on && lg.live?.since && Date.now() - lg.live.since < 6 * 3600e3 ? 'ON' : 'OFF'}</b>${lg.live?.on && lg.live?.since && Date.now() - lg.live.since < 6 * 3600e3 ? ` <span class="muted small">(turns itself off at ${new Date(lg.live.since + 6 * 3600e3).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })})</span>` : ''}. Use this to show it instantly, or if the automatic check misses a stream. It turns itself off after 6 hours.</p>
+        <p>Manual pop-up is <b>${lg.live?.on && lg.live?.since && Date.now() - lg.live.since < 6 * 3600e3 ? 'ON' : 'OFF'}</b>${lg.live?.on && lg.live?.since && Date.now() - lg.live.since < 6 * 3600e3 ? ` <span class="muted small">(turns itself off at ${new Date(lg.live.since + 6 * 3600e3).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })})</span>` : ''}. Use this only if the automatic check misses a stream. It turns itself off after 6 hours.</p>
         <label>Stream link (optional — defaults to the channel's live page)</label><input id="liveUrl" value="${esc(lg.live?.url || '')}" placeholder="https://youtube.com/live/…" style="width:100%">
         <label>Pop-up text (optional)</label><input id="liveTitle" value="${esc(lg.live?.title || '')}" placeholder="OEC is live on YouTube" style="width:100%">
-        <div class="row" style="margin-top:10px"><button data-act="liveOn">${lg.live?.on ? 'Update pop-up' : 'Turn pop-up ON'}</button>${lg.live?.on ? '<button class="ghost" data-act="liveOff">Turn pop-up OFF</button>' : ''}</div></div>
-      <div class="card"><h2>League History</h2><p class="muted small">Seasons are added automatically when you finalize a season. Use this to back-fill past seasons or fix one. Champion line shows as "Coach over Coach — Team 41, Team 27".</p>
+        <div class="row" style="margin-top:10px"><button data-act="liveOn">${lg.live?.on ? 'Update pop-up' : 'Turn pop-up ON'}</button>${lg.live?.on ? '<button class="ghost" data-act="liveOff">Turn pop-up OFF</button>' : ''}</div></details>
+      <details class="card"><summary><b>League name, rules &amp; links</b></summary><label>League name</label><input id="stName" value="${esc(lg.name)}" style="width:100%">
+      <label>Rules (one per line)</label><textarea id="stRules" rows="6">${esc((lg.rules && lg.rules.length ? lg.rules : DEFAULT_RULES).join('\n'))}</textarea>
+      <label>Extra links on the Rules page (one per line: <code>Label | https://…</code>)</label><textarea id="stLinks" rows="3">${esc((lg.links || []).map(l => l.label + ' | ' + l.url).join('\n'))}</textarea>
+      <div class="row" style="margin-top:10px"><button data-act="saveSettings">Save settings</button></div></details>
+      <details class="card"><summary><b>League History</b> <span class="muted small">fills in automatically each season</span></summary><p class="muted small">Seasons are added automatically when you finalize a season. Use this to back-fill past seasons or fix one. Champion line shows as "Coach over Coach — Team 41, Team 27".</p>
         <div class="row"><input id="hSeason" type="number" placeholder="Season" style="width:90px"><select id="hCT">${teamOpts('', 'Champion team')}</select><input id="hCC" placeholder="Champ coach" style="width:120px"><input id="hCS" type="number" placeholder="Pts" style="width:70px"></div>
         <div class="row" style="margin-top:6px"><span style="width:90px"></span><select id="hRT">${teamOpts('', 'Runner-up team')}</select><input id="hRC" placeholder="Runner-up coach" style="width:120px"><input id="hRS" type="number" placeholder="Pts" style="width:70px"><button class="ghost" data-act="addHist">Add / replace season</button></div>
         ${H.map(h => `<details style="margin-top:10px"><summary><b>${h.season}</b> — ${esc(h.champCoach || '')} over ${esc(h.runnerCoach || '')}</summary>${gotyPicker(h)}<textarea data-hist="${esc(h.id)}" rows="10">${esc(JSON.stringify((({ id, ...r }) => r)(h), null, 2))}</textarea><div class="row"><button class="sm" data-savehist="${esc(h.id)}">Save</button><button class="sm danger" data-delhist="${esc(h.id)}">Delete season</button></div></details>`).join('')}
-        <div style="margin-top:12px" class="row"><button class="ghost sm" data-act="importSeed">Load league-data.json (league history + current season)</button><button class="ghost sm" data-act="importLegacy">Import old history.json / awards.json</button></div></div>`;
+        <div style="margin-top:12px" class="row"><button class="ghost sm" data-act="importSeed">Load league-data.json (league history + current season)</button><button class="ghost sm" data-act="importLegacy">Import old history.json / awards.json</button></div></details>`;
   }
 };
 
@@ -637,7 +645,7 @@ const ACT = {
     await batch(ops);
     await put('meta', 'league', d.league);
     await batch(lineOps(d.league.week, d.league.season));
-    flash(`Loaded ${d.teams.length} teams, ${d.games.length} games and ${d.history.length} past seasons. Week ${d.league.week} lines are posted. Next: link coach accounts and set team ratings on the Preseason tab.`);
+    flash(`Loaded ${d.teams.length} teams, ${d.games.length} games and ${d.history.length} past seasons. Week ${d.league.week} lines are posted. Next: link coach accounts and set team ratings on Teams & Coaches.`);
   },
   async importLegacy() {
     const get = async f => { try { const r = await fetch(f + '?v=' + Date.now()); return r.ok ? await r.json() : []; } catch (e) { return []; } };
@@ -663,7 +671,8 @@ const KEEP = ['deskText', 'psSeason', 'psFinal', 'psConf', 'sNotes'];
 function render() {
   syncTeams();
   const kept = {}; KEEP.forEach(id => { const el = document.getElementById(id); if (el) kept[id] = el.value; });
-  $('#tabs').innerHTML = TABS.map(([k, l]) => `<a href="#" data-tab="${k}" class="${k === ST.tab ? 'on' : ''}">${l}</a>`).join('');
+  const T = TABS(); if (!T.some(([k]) => k === ST.tab) && !['coaches', 'ratings', 'top25'].includes(ST.tab)) ST.tab = 'advance';
+  $('#tabs').innerHTML = T.map(([k, l]) => `<a href="#" data-tab="${k}" class="${k === ST.tab ? 'on' : ''}">${l}</a>`).join('');
   $('#sub').textContent = `${L().season} · ${weekLabel()} · ${L().phase}${DEMO ? ' · DEMO (changes are not saved)' : ''}`;
   $('#panel').innerHTML = (ST.msg ? `<div class="notice">${esc(ST.msg)}</div>` : '') + views[ST.tab]();
   if (!ST.clear) KEEP.forEach(id => { const el = document.getElementById(id); if (el && kept[id] != null) el.value = kept[id]; });
