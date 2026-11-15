@@ -796,8 +796,10 @@ function kickoffCard(g) {
   let body = '';
   if (inv) {
     body = `<div class="kset"><b>${esc(fmtKick(inv.time))}</b><span class="muted small">Agreed by both coaches</span></div>
-      <div class="kcal"><a class="btn sm ghost" href="${icsHref(g, inv.time)}" download="OEC-${esc(team(g.away).abbr || 'away')}-at-${esc(team(g.home).abbr || 'home')}.ics">Apple / iPhone Calendar</a><a class="btn sm ghost" href="${gcalHref(g, inv.time)}" target="_blank" rel="noopener">Google Calendar</a>
-      ${(mineTeam || commish) && can ? `<button class="sm ghost" data-kcan="${esc(inv.id)}">${commish && !mineTeam ? 'Clear kickoff' : 'Reschedule'}</button>` : ''}</div>`;
+      <div class="kcal"><a class="btn sm ghost" data-ics="${esc(g.id)}" href="cal/${esc(g.id)}.ics?v=${inv.respondedAt || 0}">Apple / iPhone Calendar</a><a class="btn sm ghost" href="${gcalHref(g, inv.time)}" target="_blank" rel="noopener">Google Calendar</a>
+      ${(mineTeam || commish) && can ? `<button class="sm kresched" data-kcan="${esc(inv.id)}">${commish && !mineTeam ? 'Clear kickoff' : 'Reschedule'}</button>` : ''}</div>
+      <div class="kicsnote muted small" hidden>The Apple Calendar file is on its way. It's made automatically within a few minutes of a time being agreed. Google Calendar works right away.</div>
+      <p class="small" style="margin:10px 0 0"><a href="${subscribeHref()}">Subscribe to every OEC kickoff</a> <span class="muted">(Apple Calendar; updates on its own)</span></p>`;
   } else if (!can || (!mineTeam && !commish)) {
     body = `<p class="muted" style="margin:0">Coaches haven't set a time for this matchup.</p>${mineTeam && !can && isUserTeam(team(g.home)) && isUserTeam(team(g.away)) ? `<p class="muted small" style="margin:6px 0 0">Invites open once this game is in the current or next week.</p>` : ''}`;
   } else {
@@ -819,15 +821,16 @@ function kickoffCard(g) {
   return `<div class="card kcard"><h3 style="margin-top:0">🕗 Kickoff time</h3>${body}</div>`;
 }
 // Calendar links for an agreed kickoff (90-minute block).
-const calTimes = ts => { const f = d => new Date(d).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); return [f(ts), f(ts + 90 * 60000)]; };
+const calTimes = ts => { const f = d => new Date(d).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); return [f(ts), f(ts + 60 * 60000)]; };
 const calTitle = g => `OEC: ${team(g.away).name} @ ${team(g.home).name}`;
 const calDesc = g => `${seasonNum(g.season) ? 'Season ' + seasonNum(g.season) + ' · ' : ''}Week ${g.week} · Coach ${coachOf(g, 'away')} @ Coach ${coachOf(g, 'home')}\n${location.origin + location.pathname}#game/${g.id}`;
-function icsHref(g, ts) {
-  const [s, e] = calTimes(ts), esc2 = x => String(x).replace(/[\\;,]/g, m => '\\' + m).replace(/\n/g, '\\n');
-  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//OEC CFB League Hub//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'BEGIN:VEVENT',
-    `UID:${g.id}-${ts}@oec-cfb`, `DTSTAMP:${calTimes(Date.now())[0]}`, `DTSTART:${s}`, `DTEND:${e}`, `SUMMARY:${esc2(calTitle(g))}`, `DESCRIPTION:${esc2(calDesc(g))}`,
-    'BEGIN:VALARM', 'TRIGGER:-PT30M', 'ACTION:DISPLAY', `DESCRIPTION:${esc2(calTitle(g))}`, 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
-  return 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics);
+const subscribeHref = () => 'webcal://' + location.host + location.pathname.replace(/[^/]*$/, '') + 'cal/league.ics';
+// The .ics files are written by a GitHub Action a few minutes after a time is agreed; until then, say so.
+async function checkIcs() {
+  const a = document.querySelector('[data-ics]'); if (!a) return;
+  let ok = false;
+  try { ok = (await fetch(a.getAttribute('href'), { method: 'HEAD', cache: 'no-store' })).ok; } catch (e) { ok = false; }
+  if (!ok && a.isConnected) { a.classList.add('disabled'); a.removeAttribute('href'); const n = document.querySelector('.kicsnote'); if (n) n.hidden = false; }
 }
 function gcalHref(g, ts) {
   const [s, e] = calTimes(ts);
@@ -1227,7 +1230,7 @@ function route() {
   const active = page === 'team' ? 'teams' : page === 'coach' ? 'history' : page === 'game' ? 'schedule' : page;
   $('#nav').innerHTML = NAV.map(([k, label]) => `<a href="#${k}" class="${k === active ? 'on' : ''}">${label}</a>`).join('');
   header();
-  try { $('#view').innerHTML = (PAGES[page] || PAGES.home)(decodeURIComponent(arg || '')); parlayBar(); }
+  try { $('#view').innerHTML = (PAGES[page] || PAGES.home)(decodeURIComponent(arg || '')); parlayBar(); if (page === 'game') checkIcs(); }
   catch (e) { console.error(e); $('#view').innerHTML = `<div class="card err">Something went wrong rendering this page: ${esc(e.message)}</div>`; }
   // New page: start at the top, or at the row a storyline pointed to.
   if (route.last !== location.hash) {

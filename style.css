@@ -498,3 +498,7 @@ table.cseason td:first-child{white-space:normal;min-width:64px}
 .kcal{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 a.btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
 a.btn.sm{padding:6px 11px;font-size:12px;min-height:34px;border-radius:8px}
+
+button.kresched{background:transparent;border:1px solid var(--red);color:#ff8a8f}
+button.kresched:hover{background:rgba(211,18,28,.15)}
+a.btn.disabled{opacity:.45;pointer-events:none}
