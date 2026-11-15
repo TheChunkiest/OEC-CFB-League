@@ -30,8 +30,11 @@ function gameTags(g) {
 }
 // Week order: Game of the Week first, then games still to play (earliest kickoff first), then finals.
 function weekOrder(games, gotwId) {
+  // Game of the Week first, then unplayed games by kickoff time (unscheduled last) and then closest spread, then finals.
   const rank = g => g.id === gotwId ? 0 : played(g) ? 2 : 1;
-  return games.map((g, i) => ({ g, i })).sort((x, y) => rank(x.g) - rank(y.g) || ((kickoffOf(x.g) || Infinity) - (kickoffOf(y.g) || Infinity)) || x.i - y.i).map(x => x.g);
+  const kick = g => kickoffOf(g) || 9e15, spr = g => { const l = lineOf(g); return l && l.spread != null ? Math.abs(l.spread) : 99; };
+  return games.map((g, i) => ({ g, i })).sort((x, y) => rank(x.g) - rank(y.g)
+    || (rank(x.g) === 1 ? (kick(x.g) - kick(y.g)) || (spr(x.g) - spr(y.g)) : 0) || x.i - y.i).map(x => x.g);
 }
 function gameCard(g, opts = {}) {
   const h = team(g.home), a = team(g.away), done = played(g);
@@ -178,7 +181,7 @@ const PAGES = {
     const wk = arg != null && arg !== '' ? +arg : (weeks.includes(D.league.week) ? D.league.week : weeks[weeks.length - 1]);
     const games = D.games.filter(g => g.season === s && g.week === wk);
     const gt = gotwTally(s, wk).game;
-    return `<div class="row spread"><h2 style="margin:0">Schedule &amp; Scores</h2>
+    return `<div class="row spread schedhead"><h2 style="margin:0">Schedule &amp; Scores</h2>
       <select data-nav="schedule">${weeks.map(w => `<option value="${w}" ${w === wk ? 'selected' : ''}>Week ${w}</option>`).join('')}</select></div>
       ${games.length ? weekOrder(games, gt && gt.id).map(g => gameCard(g, { gotw: gt && gt.id === g.id })).join('') : '<div class="card empty">No games for this week.</div>'}`;
   },
