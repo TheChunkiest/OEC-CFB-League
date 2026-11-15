@@ -6,7 +6,7 @@ name: Kickoff calendar
 # GitHub only starts scheduled workflows every 5 minutes (at best), so a new time can take a few minutes.
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '*/5 * * * *'   # each run reads only upcoming invites plus 3 docs per scheduled game
   workflow_dispatch:
 permissions:
   contents: write
@@ -61,11 +61,20 @@ jobs:
               except Exception:
                   return {}
 
-          invites = docs('invites')
-          teams = {t['id']: t for t in docs('teams')}
-          league = one('meta/league')
-          first = league.get('firstSeason') or 2026
           now = time.time() * 1000
+          # Only invites for upcoming kickoffs (one indexed range filter), so each run reads a handful of
+          # documents instead of whole collections. Team names are fetched just for the games involved.
+          body = {'structuredQuery': {'from': [{'collectionId': 'invites'}], 'where': {'fieldFilter': {'field': {'fieldPath': 'time'}, 'op': 'GREATER_THAN', 'value': {'integerValue': str(int(now - 6 * 3600e3))}}}}}
+          req = urllib.request.Request(f'{base}:runQuery?key={key}', data=json.dumps(body).encode(), headers={'Content-Type': 'application/json'})
+          with urllib.request.urlopen(req, timeout=30) as r:
+              rows = json.load(r)
+          invites = []
+          for row in rows:
+              x = row.get('document')
+              if not x: continue
+              f = {k: val(v) for k, v in x.get('fields', {}).items()}; f['id'] = x['name'].rsplit('/', 1)[1]; invites.append(f)
+          first = 2026
+          teams = {}
 
           # Latest accepted invite per game = its kickoff.
           kick = {}
@@ -74,7 +83,9 @@ jobs:
               cur = kick.get(i['gameId'])
               if not cur or (i.get('respondedAt') or 0) > (cur.get('respondedAt') or 0): kick[i['gameId']] = i
 
-          def tname(tid): return (teams.get(tid) or {}).get('name') or tid
+          def tname(tid):
+              if tid not in teams: teams[tid] = one(f'teams/{tid}')
+              return (teams.get(tid) or {}).get('name') or tid
           def stamp(ms): return datetime.fromtimestamp(ms / 1000, timezone.utc).strftime('%Y%m%dT%H%M%SZ')
           def esc(s): return str(s).replace('\\', '\\\\').replace(';', '\\;').replace(',', '\\,').replace('\n', '\\n')
 
@@ -86,7 +97,7 @@ jobs:
               if not g or g.get('homeScore') is not None: continue      # finished games drop off
               if inv['time'] < now - 6 * 3600e3: continue
               title = f"OEC: {tname(g.get('away'))} @ {tname(g.get('home'))}"
-              season = g.get('season') or league.get('season') or first
+              season = g.get('season') or first
               desc = f"Season {season - first + 1} · Week {g.get('week')} · Coach {inv.get('fromName','')} vs Coach {inv.get('toName','')}"
               if site: desc += f"\n{site}#game/{gid}"
               events[gid] = '\r\n'.join([
