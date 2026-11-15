@@ -1,22 +1,18 @@
-name: Kickoff calendar
-# Builds real calendar files for agreed kickoff times so iPhone / Apple Calendar can open them:
-#   cal/<gameId>.ics  one file per scheduled game (the "Apple / iPhone Calendar" button)
-#   cal/league.ics    every upcoming kickoff in one feed you can subscribe to
-#   archive.json      past seasons' games and bets (refreshed daily) so the site doesn't read them from the database
-# Reads the public Firestore data (kickoff invites, games, teams) using firebase-config.js.
-# GitHub only starts scheduled workflows every 5 minutes (at best), so a new time can take a few minutes.
-# Phone notifications: when the FIREBASE_SERVICE_ACCOUNT secret is set, the same run also sends free Firebase
-# Cloud Messaging notifications (advances, commissioner news, kickoff reminders, kickoff invites). It reuses the
-# documents the calendar already read and adds about 4 small reads per run; device tokens are only read when
-# there is something to send. What has already been sent is remembered in push-state.json.
+name: League notifications
+# Runs every 5 minutes (GitHub often stretches that to 10-15):
+#   - Sends free phone notifications through Firebase Cloud Messaging when the FIREBASE_SERVICE_ACCOUNT secret is
+#     set: league advances, commissioner news, kickoff reminders and kickoff invites. Device tokens are only read
+#     when there's something to send; what has been sent is remembered in push-state.json.
+#   - Rebuilds archive.json (past seasons' games and bets) about once a day so the site doesn't read them from the database.
+# Each run reads about 5 small documents/queries plus the games with an agreed kickoff time.
 on:
   schedule:
-    - cron: '*/5 * * * *'   # each run reads only upcoming invites plus 3 docs per scheduled game
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 permissions:
   contents: write
 concurrency:
-  group: kickoff-calendar
+  group: league-notifications
   cancel-in-progress: false
 jobs:
   build:
@@ -29,7 +25,7 @@ jobs:
       - name: Notification tools
         if: env.SA != ''
         run: python3 -m pip install -q --break-system-packages google-auth requests || python3 -m pip install -q google-auth requests
-      - name: Build calendar files (and send notifications)
+      - name: Send notifications and refresh archive
         run: |
           python3 - <<'PY'
           import json, os, re, time, glob, urllib.request, urllib.parse, urllib.error
@@ -96,43 +92,15 @@ jobs:
           def tname(tid):
               if tid not in teams: teams[tid] = one(f'teams/{tid}')
               return (teams.get(tid) or {}).get('name') or tid
-          def stamp(ms): return datetime.fromtimestamp(ms / 1000, timezone.utc).strftime('%Y%m%dT%H%M%SZ')
-          def esc(s): return str(s).replace('\\', '\\\\').replace(';', '\\;').replace(',', '\\,').replace('\n', '\\n')
-
           repo = os.environ.get('GITHUB_REPOSITORY', '')
           site = f"https://{repo.split('/')[0].lower()}.github.io/{repo.split('/')[1]}/index.html" if '/' in repo else ''
-          events = {}
           gcache = {}
           def game(gid):
               if gid not in gcache: gcache[gid] = one(f'games/{gid}')
               return gcache[gid]
-          for gid, inv in kick.items():
-              g = game(gid)
-              if not g or g.get('homeScore') is not None: continue      # finished games drop off
-              if inv['time'] < now - 6 * 3600e3: continue
-              season = g.get('season') or first
-              title = f"S{season - first + 1}, W{g.get('week')}: {tname(g.get('away'))} @ {tname(g.get('home'))}"
-              desc = "Watch live now at https://youtube.com/@originalentertainingcrackers?si=op40_dOeDBsH25EV"
-              events[gid] = '\r\n'.join([
-                  'BEGIN:VEVENT', f'UID:{gid}@oec-cfb-league', f'DTSTAMP:{stamp(inv.get("respondedAt") or now)}',
-                  f'DTSTART:{stamp(inv["time"])}', f'DTEND:{stamp(inv["time"] + 3600e3)}',
-                  f'SUMMARY:{esc(title)}', f'DESCRIPTION:{esc(desc)}',
-                  'BEGIN:VALARM', 'TRIGGER:-PT30M', 'ACTION:DISPLAY', f'DESCRIPTION:{esc(title)}', 'END:VALARM', 'END:VEVENT'])
-
-          def cal(evs, name=None):
-              head = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//OEC CFB League Hub//Kickoffs//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH']
-              if name: head += [f'X-WR-CALNAME:{name}', 'REFRESH-INTERVAL;VALUE=DURATION:PT1H', 'X-PUBLISHED-TTL:PT1H']
-              return '\r\n'.join(head + evs + ['END:VCALENDAR']) + '\r\n'
-
-          os.makedirs('cal', exist_ok=True)
-          keep = {'cal/league.ics'}
-          for gid, ev in events.items():
-              p = f'cal/{gid}.ics'; keep.add(p)
-              open(p, 'w', newline='').write(cal([ev]))
-          open('cal/league.ics', 'w', newline='').write(cal(list(events.values()), 'OEC Kickoffs'))
-          for p in glob.glob('cal/*.ics'):
-              if p not in keep: os.remove(p)
-          print(f'{len(events)} scheduled game(s)')
+          # The old calendar files are no longer used (phone notifications replaced them).
+          import shutil
+          if os.path.isdir('cal'): shutil.rmtree('cal')
 
           # Past-season archive (games + bets never change once a season is over). The site loads these from
           # archive.json instead of the database. Rebuilt at most once a day, so most runs read nothing here.
@@ -286,10 +254,10 @@ jobs:
           PY
       - name: Save
         run: |
-          git config user.name "oec-calendar-bot"
+          git config user.name "oec-hub-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add -A cal archive.json push-state.json 2>/dev/null || git add -A cal archive.json
+          git add -A
           if git diff --cached --quiet; then echo "No changes"; exit 0; fi
-          git commit -m "Update kickoff calendar"
+          git commit -m "Update league data"
           for i in 1 2 3; do git push && exit 0; git pull --rebase -X theirs; done
           exit 1

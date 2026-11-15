@@ -3,7 +3,7 @@ import {
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
   gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
-} from './core.js?v=48';
+} from './core.js?v=49';
 import { lookupStadium } from './programs.js?v=1';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -902,7 +902,7 @@ function kickoffCard(g) {
   if (v) lines.push(`<div class="gpm"><span class="gpi">📍</span><span><b>${esc(v.name)}</b>${v.city ? ` <span class="muted">· ${esc(v.city)}</span>` : ''}</span></div>`);
   let ctl = '';
   if (!done && inv) {
-    ctl = `<div class="kcal"><span class="klbl">📅 Add to</span><a data-ics="${esc(g.id)}" href="cal/${esc(g.id)}.ics?v=${inv.respondedAt || 0}" title="Add to Apple / iPhone Calendar">Apple</a><span class="kdot">·</span><a href="${gcalHref(g, inv.time)}" target="_blank" rel="noopener" title="Add to Google Calendar">Google</a>${(mineTeam || commish) && can ? `<span class="kdot">·</span><button class="kresched" data-kcan="${esc(inv.id)}">${commish && !mineTeam ? 'Clear' : 'Reschedule'}</button>` : ''}</div>`;
+    ctl = (mineTeam || commish) && can ? `<div class="kcal"><button class="kresched" data-kcan="${esc(inv.id)}">${commish && !mineTeam ? 'Clear kickoff time' : 'Reschedule kickoff'}</button></div>` : '';
   } else if (!done && mineTeam && !can && isUserTeam(team(g.home)) && isUserTeam(team(g.away))) {
     ctl = `<p class="muted small" style="margin:0">Kickoff invites open once this game is in the current or next week.</p>`;
   } else if (can && (mineTeam || commish)) {
@@ -921,22 +921,6 @@ function kickoffCard(g) {
   return {
     meta: lines.length ? `<div class="gp-meta">${lines.join('')}</div>` : '',
     ctl: ctl ? `<div class="kcard kctl gp-kctl">${ctl}</div>` : '' };
-}
-// Calendar links for an agreed kickoff (90-minute block).
-const calTimes = ts => { const f = d => new Date(d).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); return [f(ts), f(ts + 60 * 60000)]; };
-const calTitle = g => `S${seasonNum(g.season)}, W${g.week}: ${team(g.away).name} @ ${team(g.home).name}`;
-const calDesc = () => 'Watch live now at https://youtube.com/@originalentertainingcrackers?si=op40_dOeDBsH25EV';
-const subscribeHref = () => 'webcal://' + location.host + location.pathname.replace(/[^/]*$/, '') + 'cal/league.ics';
-// The .ics files are written by a GitHub Action a few minutes after a time is agreed; until then, say so.
-async function checkIcs() {
-  const a = document.querySelector('[data-ics]'); if (!a) return;
-  let ok = false;
-  try { ok = (await fetch(a.getAttribute('href'), { method: 'HEAD', cache: 'no-store' })).ok; } catch (e) { ok = false; }
-  if (!ok && a.isConnected) { a.classList.add('disabled'); a.removeAttribute('href'); a.title = 'The Apple Calendar file is still being made. Try again in a few minutes.'; }
-}
-function gcalHref(g, ts) {
-  const [s, e] = calTimes(ts);
-  return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(calTitle(g)) + '&dates=' + s + '/' + e + '&details=' + encodeURIComponent(calDesc(g));
 }
 async function kickAction(t) {
   const me = auth.profile, now = Date.now();
@@ -1425,7 +1409,6 @@ function header() {
   const p = auth.profile;
   $('#acct').innerHTML = auth.user ? acctHtml(p) : '<a class="btn" href="#account">Coach Login</a>';
   $('#footAdmin').innerHTML = isCommish() ? ' · <a href="admin.html">Commissioner Tools</a>' : '';
-  const fc = $('#footCal'); if (fc) fc.href = subscribeHref();
 }
 // Header greeting: time of day on the viewer's device, their balance and next game.
 function greeting() { const h = new Date().getHours(); return h >= 4 && h < 12 ? 'Good morning' : h >= 12 && h < 17 ? 'Good afternoon' : 'Good evening'; }
@@ -1455,7 +1438,7 @@ function route() {
   const active = page === 'team' ? 'teams' : page === 'coach' ? 'history' : page === 'game' ? 'schedule' : page;
   $('#nav').innerHTML = NAV.map(([k, label]) => `<a href="#${k}" class="${k === active ? 'on' : ''}">${label}</a>`).join('');
   header();
-  try { $('#view').innerHTML = (PAGES[page] || PAGES.home)(decodeURIComponent(arg || '')); parlayBar(); if (page === 'game') checkIcs(); }
+  try { $('#view').innerHTML = (PAGES[page] || PAGES.home)(decodeURIComponent(arg || '')); parlayBar(); }
   catch (e) { console.error(e); $('#view').innerHTML = `<div class="card err">Something went wrong rendering this page: ${esc(e.message)}</div>`; }
   // New page: start at the top, or at the row a storyline pointed to.
   if (route.last !== location.hash) {
