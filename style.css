@@ -428,3 +428,27 @@ details.legs summary{white-space:nowrap}
 .wpwrap{margin-top:10px;touch-action:pan-y}
 .wpsvg{width:100%;height:auto;display:block;cursor:crosshair}
 @media (max-width:640px){ .wph-v{font-size:22px} .wpchart .wph{gap:12px} }
+
+/* Coach odds trend */
+.trpick{display:flex;gap:6px;overflow-x:auto;padding:10px 0 4px;margin:0 -2px;scrollbar-width:none}
+.trpick::-webkit-scrollbar{display:none}
+.trpick button{flex-shrink:0;display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;background:var(--card2);border:1px solid var(--line);color:var(--muted);font-weight:800;font-size:12.5px;min-height:32px}
+.trpick button.on{background:var(--text);color:#111;border-color:var(--text)}
+.trpick .sw,.trchart .sw{width:9px;height:9px;border-radius:3px;display:inline-block;flex-shrink:0}
+.trread{margin-top:8px;min-height:64px}
+.trlist{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:3px 14px}
+@media (max-width:640px){.trlist{grid-template-columns:1fr 1fr}}
+.trlist li{display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer;counter-increment:tr}
+.trlist li::before{content:counter(tr);color:var(--muted);font-size:11px;min-width:14px;text-align:right}
+.trlist{counter-reset:tr}
+.trlist .ab{font-weight:800;min-width:38px}
+.trlist b{font-variant-numeric:tabular-nums;min-width:34px}
+.trchart .up{color:var(--green);font-size:11px;font-weight:800}.trchart .down{color:var(--loss);font-size:11px;font-weight:800}
+.trone{display:flex;justify-content:space-between;align-items:flex-end;gap:8px 18px;flex-wrap:wrap}
+.trbig{display:flex;align-items:center;gap:8px;font-weight:900;font-size:18px}
+.trbig b{font-size:28px;font-variant-numeric:tabular-nums}
+.trstats{display:flex;gap:14px;flex-wrap:wrap;font-size:13px}
+.trstats em{font-style:normal;color:var(--muted);font-size:12px}
+.trstats .up,.trstats .down{font-size:13px}
+.trwrap{margin-top:8px;touch-action:pan-y}
+.trsvg{width:100%;height:auto;display:block;cursor:crosshair}

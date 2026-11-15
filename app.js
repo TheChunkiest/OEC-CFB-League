@@ -805,34 +805,74 @@ function wpReset(card) {
 document.addEventListener('pointermove', e => { if (e.target.closest && e.target.closest('.wpchart svg')) wpHover(e); });
 document.addEventListener('pointerdown', e => { if (e.target.closest && e.target.closest('.wpchart svg')) wpHover(e); });
 document.addEventListener('pointerout', e => { const c = e.target.closest && e.target.closest('.wpchart svg'); if (c && !c.contains(e.relatedTarget)) wpReset(c.closest('.wpchart')); });
+// Coach odds trend: "League" shows every coach week over week; picking a team isolates it (others fade).
+const trendFmt = (v, isW) => v == null ? '–' : isW ? v.toFixed(1) : (v > 0 && v < 0.005 ? '<1%' : Math.round(v * 100) + '%');
 function trendChart(hist) {
   if (!hist.length) return '<div class="empty">The chart starts once the season schedule is published.</div>';
   const teams = userTeams(); if (!teams.length) return '<div class="empty">No coaches assigned yet.</div>';
-  const k = UI.metric, isW = k === 'expW';
-  const narrow = innerWidth < 640, W = narrow ? 400 : 760, H = narrow ? 300 : 320, P = { l: narrow ? 36 : 44, r: narrow ? 14 : 64, t: 14, b: 30 };
-  const maxY = isW ? Math.max(1, ...teams.map(t => hist[0].sim[t.id]?.gp || 0)) : 1;
-  const x = i => P.l + (hist.length === 1 ? (W - P.l - P.r) / 2 : i * (W - P.l - P.r) / (hist.length - 1));
-  const y = v => P.t + (1 - v / maxY) * (H - P.t - P.b);
-  const fmt = v => isW ? v.toFixed(1) : Math.round(v * 100) + '%';
-  const ticks = isW ? [...Array(maxY + 1).keys()].filter(v => v % Math.ceil(maxY / 6) === 0) : [0, .25, .5, .75, 1];
-  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Weekly odds by coach">`;
-  ticks.forEach(v => svg += `<line x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}" stroke="#33242a"/><text x="${P.l - 6}" y="${y(v) + 4}" fill="#a69a9c" font-size="11" text-anchor="end">${isW ? v : Math.round(v * 100) + '%'}</text>`);
-  const step = Math.ceil(hist.length / (narrow ? 6 : 12));
-  hist.forEach((p, i) => { if (i % step === 0 || i === hist.length - 1) svg += `<text x="${x(i)}" y="${H - 8}" fill="#a69a9c" font-size="11" text-anchor="${narrow && i === hist.length - 1 && hist.length > 1 ? 'end' : 'middle'}">${p.label}</text>`; });
-  const ends = [];
-  teams.forEach(t => {
-    const c = teamColor(t), pts = hist.map((p, i) => [x(i), y(p.sim[t.id] ? p.sim[t.id][k] : 0), p]);
-    svg += `<polyline fill="none" stroke="${c}" stroke-width="2.5" stroke-linejoin="round" points="${pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ')}"/>`;
-    pts.forEach(([px, py, p]) => svg += `<circle cx="${px}" cy="${py}" r="3.5" fill="${c}" stroke="#09090a" stroke-width="1"><title>${esc(t.coach)} · ${esc(t.name)} · ${p.label}: ${fmt(p.sim[t.id][k])}</title></circle>`);
-    ends.push({ y: pts[pts.length - 1][1], t, c });
+  const k = UI.metric, isW = k === 'expW', sel = teams.some(t => t.id === UI.trendTeam) ? UI.trendTeam : 'all', one = sel !== 'all';
+  const narrow = innerWidth < 640, W = narrow ? 360 : 860, H = narrow ? 230 : 300, P = { l: narrow ? 32 : 40, r: narrow ? 62 : 72, t: 12, b: 26 };
+  const n = hist.length, top = Math.max(0, ...teams.flatMap(t => hist.map(p => p.sim[t.id] ? p.sim[t.id][k] : 0)));
+  // Percent charts zoom to the highest value (in 25% steps) so small odds are readable.
+  const maxY = isW ? Math.max(1, ...teams.map(t => hist[0].sim[t.id]?.gp || 0)) : Math.min(1, Math.max(.25, Math.ceil(top * 1.08 * 4) / 4));
+  const x = i => P.l + (n === 1 ? (W - P.l - P.r) / 2 : i * (W - P.l - P.r) / (n - 1)), y = v => P.t + (1 - v / maxY) * (H - P.t - P.b);
+  const val = (t, i) => hist[i].sim[t.id] ? hist[i].sim[t.id][k] : 0;
+  const col = Object.fromEntries(teams.map(t => [t.id, liftColor(teamColor(t))]));
+  const ticks = isW ? [...Array(maxY + 1).keys()].filter(v => v % Math.ceil(maxY / 5) === 0) : maxY <= .5 ? [0, .1, .2, .3, .4, .5].filter(v => v <= maxY + 1e-9) : [0, .25, .5, .75, 1].filter(v => v <= maxY + 1e-9);
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Coach odds week over week" class="trsvg">`;
+  ticks.forEach(v => svg += `<line x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}" stroke="#2b2024"/><text x="${P.l - 6}" y="${y(v) + 4}" fill="#a69a9c" font-size="11" text-anchor="end">${isW ? v : Math.round(v * 100) + '%'}</text>`);
+  const step = Math.max(1, Math.ceil(n / (narrow ? 5 : 10)));
+  hist.forEach((p, i) => { if ((i % step === 0 && n - 1 - i >= step * 0.6) || i === n - 1) svg += `<text x="${x(i)}" y="${H - 7}" fill="#a69a9c" font-size="11" text-anchor="${i === 0 && n > 1 ? 'start' : i === n - 1 && n > 1 ? 'end' : 'middle'}">${esc(p.label)}</text>`; });
+  const line = (t, attrs) => `<polyline fill="none" points="${hist.map((_, i) => x(i).toFixed(1) + ',' + y(val(t, i)).toFixed(1)).join(' ')}" stroke-linejoin="round" ${attrs}/>`;
+  const order = one ? [...teams.filter(t => t.id !== sel), teams.find(t => t.id === sel)] : teams;
+  order.forEach(t => {
+    const me = t.id === sel;
+    svg += one && !me ? line(t, `stroke="#6f6266" stroke-width="1.2" opacity=".35"`) : line(t, `stroke="${col[t.id]}" stroke-width="${me ? 3 : 2}"`);
+    if (me) hist.forEach((_, i) => svg += `<circle cx="${x(i)}" cy="${y(val(t, i))}" r="3.5" fill="${col[t.id]}" stroke="#1a1416" stroke-width="1.5"/>`);
   });
-  ends.sort((a, b) => a.y - b.y);
-  for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 12) ends[i].y = ends[i - 1].y + 12;
-  for (let i = ends.length - 1; i >= 0; i--) { const lim = i === ends.length - 1 ? H - P.b : ends[i + 1].y - 12; if (ends[i].y > lim) ends[i].y = lim; }
-  if (!narrow) ends.forEach(e => svg += `<text x="${W - P.r + 6}" y="${e.y + 4}" fill="${e.c}" font-size="11" font-weight="700">${esc(e.t.abbr || e.t.name)}</text>`);
-  svg += '</svg>';
-  return svg + `<div class="legend">${teams.map(t => `<span><i class="sw" style="background:${esc(teamColor(t))}"></i>${esc(t.coach)} (${esc(t.abbr || t.name)})</span>`).join('')}</div>`;
+  // Direct labels at the right end (all coaches in League view, just the pick otherwise), nudged apart.
+  const ends = (one ? teams.filter(t => t.id === sel) : [...teams].sort((p, q) => val(q, n - 1) - val(p, n - 1)).slice(0, 3)).map(t => ({ t, yy: y(val(t, n - 1)), v: val(t, n - 1) })).sort((a, b) => a.yy - b.yy);
+  for (let i = 1; i < ends.length; i++) if (ends[i].yy - ends[i - 1].yy < 12) ends[i].yy = ends[i - 1].yy + 12;
+  for (let i = ends.length - 1; i >= 0; i--) { const lim = i === ends.length - 1 ? H - P.b : ends[i + 1].yy - 12; if (ends[i].yy > lim) ends[i].yy = lim; }
+  ends.forEach(e => svg += `<text x="${x(n - 1) + 7}" y="${e.yy + 4}" fill="#f3eeee" font-size="${one ? 12 : 10.5}" font-weight="800">${esc(e.t.abbr || e.t.name)}${one ? ' ' + trendFmt(e.v, isW) : ''}</text>`);
+  svg += `<g class="trx" style="display:none"><line y1="${P.t}" y2="${H - P.b}" stroke="#a69a9c" stroke-width="1"/>${(one ? teams.filter(t => t.id === sel) : teams).map(t => `<circle r="${one ? 5 : 3.5}" fill="${col[t.id]}" stroke="#1a1416" stroke-width="1.5" data-tid="${esc(t.id)}"/>`).join('')}</g>`;
+  svg += `<rect x="${P.l}" y="0" width="${W - P.l - P.r}" height="${H}" fill="transparent"/></svg>`;
+  // Data for the hover layer.
+  const data = { W, H, P, n, maxY, isW, one, sel, labels: hist.map(p => p.label), teams: teams.map(t => ({ id: t.id, ab: t.abbr || t.name, coach: t.coach, c: col[t.id], v: hist.map((_, i) => val(t, i)) })) };
+  const picker = `<div class="trpick"><button data-trend="all" class="${one ? '' : 'on'}">League</button>${teams.map(t => `<button data-trend="${esc(t.id)}" class="${sel === t.id ? 'on' : ''}"><i class="sw" style="background:${col[t.id]}"></i>${esc(t.abbr || t.name)}</button>`).join('')}</div>`;
+  return `${picker}<div class="trchart" data-tr="${esc(JSON.stringify(data))}"><div class="trread">${trendReadout(data, n - 1)}</div><div class="trwrap">${svg}</div></div>
+    <p class="muted small" style="margin:6px 0 0">Touch or hover the chart to see any week. ${one ? 'Faded lines are the rest of the league.' : 'Tap a coach above to follow just their team.'}</p>`;
 }
+function trendReadout(D0, i) {
+  const wk = D0.labels[i], when = wk === 'Pre' ? 'Preseason' : wk === 'Final' ? 'Final' : `Entering ${wk.replace('Wk', 'Week')}`;
+  const chg = (t, j) => { if (j < 1) return ''; const d = D0.isW ? t.v[j] - t.v[j - 1] : Math.round(t.v[j] * 100) - Math.round(t.v[j - 1] * 100); const r = D0.isW ? Math.round(d * 10) / 10 : d; return r === 0 ? '' : `<span class="${r > 0 ? 'up' : 'down'}">${r > 0 ? '▲' : '▼'}${Math.abs(r)}</span>`; };
+  if (D0.one) {
+    const t = D0.teams.find(x => x.id === D0.sel), d0 = D0.isW ? t.v[i] - t.v[0] : Math.round(t.v[i] * 100) - Math.round(t.v[0] * 100), r0 = D0.isW ? Math.round(d0 * 10) / 10 : d0;
+    const rank = [...D0.teams].sort((a, b) => b.v[i] - a.v[i]).findIndex(x => x.id === t.id) + 1;
+    return `<div class="trone"><div><span class="muted small">${esc(when)}</span><div class="trbig"><i class="sw" style="background:${t.c}"></i>${esc(t.ab)} <b>${trendFmt(t.v[i], D0.isW)}</b></div></div>
+      <div class="trstats"><span>${chg(t, i) || '<span class="muted">–</span>'} <em>vs prior week</em></span><span>${r0 === 0 ? '<span class="muted">–</span>' : `<span class="${r0 > 0 ? 'up' : 'down'}">${r0 > 0 ? '▲' : '▼'}${Math.abs(r0)}</span>`} <em>since preseason</em></span><span><b>#${rank}</b> <em>of ${D0.teams.length} coaches</em></span></div></div>`;
+  }
+  const rows = [...D0.teams].sort((a, b) => b.v[i] - a.v[i]);
+  return `<div class="muted small" style="margin-bottom:6px">${esc(when)}</div><ol class="trlist">${rows.map(t => `<li data-trend="${esc(t.id)}"><i class="sw" style="background:${t.c}"></i><span class="ab">${esc(t.ab)}</span><b>${trendFmt(t.v[i], D0.isW)}</b>${chg(t, i)}</li>`).join('')}</ol>`;
+}
+function trHover(e) {
+  const card = e.target.closest('.trchart'), svg = card.querySelector('svg'), D0 = JSON.parse(card.dataset.tr), r = svg.getBoundingClientRect();
+  const vx = ((e.touches ? e.touches[0].clientX : e.clientX) - r.left) / r.width * D0.W, span = D0.W - D0.P.l - D0.P.r;
+  const i = D0.n === 1 ? 0 : Math.max(0, Math.min(D0.n - 1, Math.round((vx - D0.P.l) / span * (D0.n - 1))));
+  if (card.dataset.i === String(i)) return; card.dataset.i = i;
+  const X = D0.P.l + (D0.n === 1 ? span / 2 : i * span / (D0.n - 1)), Y = v => D0.P.t + (1 - v / D0.maxY) * (D0.H - D0.P.t - D0.P.b);
+  const g = svg.querySelector('.trx'); g.style.display = '';
+  g.querySelector('line').setAttribute('x1', X); g.querySelector('line').setAttribute('x2', X);
+  g.querySelectorAll('circle').forEach(c => { const t = D0.teams.find(z => z.id === c.dataset.tid); c.setAttribute('cx', X); c.setAttribute('cy', Y(t.v[i])); });
+  card.querySelector('.trread').innerHTML = trendReadout(D0, i);
+}
+function trReset(card) {
+  const D0 = JSON.parse(card.dataset.tr); delete card.dataset.i;
+  card.querySelector('.trx').style.display = 'none'; card.querySelector('.trread').innerHTML = trendReadout(D0, D0.n - 1);
+}
+document.addEventListener('pointermove', e => { if (e.target.closest && e.target.closest('.trchart svg')) trHover(e); });
+document.addEventListener('pointerdown', e => { if (e.target.closest && e.target.closest('.trchart svg')) trHover(e); });
+document.addEventListener('pointerout', e => { const c = e.target.closest && e.target.closest('.trchart svg'); if (c && !c.contains(e.relatedTarget)) trReset(c.closest('.trchart')); });
 
 /* ---------- YouTube live pop-up ---------- */
 const YT_CHANNEL = 'https://youtube.com/@originalentertainingcrackers';
@@ -1075,7 +1115,7 @@ document.addEventListener('click', async e => {
   if (gc && !e.target.closest('a,button,input,select,label')) { location.hash = '#game/' + gc.dataset.game; window.scrollTo(0, 0); return; }
   const lx = e.target.closest('[data-livex]');
   if (lx) { try { localStorage.setItem('oecLiveDismissed', lx.dataset.livex); } catch (err) { /* ignore */ } showLive(); return; }
-  const t = e.target.closest('[data-sort],[data-metric],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-slip],[data-popular],[data-res],[data-act],[data-close],[data-stake],[data-acct],[data-cancel]');
+  const t = e.target.closest('[data-sort],[data-metric],[data-trend],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-slip],[data-popular],[data-res],[data-act],[data-close],[data-stake],[data-acct],[data-cancel]');
   if (!t) return;
   const page = (location.hash.slice(1) || 'home').split('/')[0];
   if (t.dataset.sort) {
@@ -1083,6 +1123,7 @@ document.addEventListener('click', async e => {
     if (st.key === t.dataset.sort) st.dir *= -1; else { st.key = t.dataset.sort; st.dir = ['place', 'rank', 'name', 'coach', 'bet', 'status'].includes(st.key) ? 1 : -1; }
     route();
   } else if (t.dataset.metric) { UI.metric = t.dataset.metric; route(); }
+  else if (t.dataset.trend) { UI.trendTeam = t.dataset.trend; route(); }
   else if (t.dataset.pr) { UI.prUsers = t.dataset.pr === 'users'; route(); }
   else if (t.dataset.prsort) { UI.prSort = { key: t.dataset.prsort, dir: t.dataset.prsort === 'rank' ? 1 : -1 }; route(); }
   else if (t.dataset.acct) { UI.acct = t.dataset.acct; UI.msg = ''; route(); }
