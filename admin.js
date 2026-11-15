@@ -1,8 +1,8 @@
 import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
-  orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance
-} from './core.js?v=40';
+  orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf
+} from './core.js?v=42';
 import { lookupColor } from './teamcolors.js';
 
 const TABS = [['advance', 'Weekly Advance'], ['games', 'Games'], ['top25', 'Top 25'], ['ratings', 'Ratings'], ['betting', 'Betting'], ['coaches', 'Coaches & Accounts'], ['awards', 'Awards'], ['preseason', 'Preseason'], ['settings', 'Settings & History']];
@@ -315,11 +315,20 @@ const views = {
       <div class="card"><h2>League History</h2><p class="muted small">Seasons are added automatically when you finalize a season. Use this to back-fill past seasons or fix one. Champion line shows as "Coach over Coach — Team 41, Team 27".</p>
         <div class="row"><input id="hSeason" type="number" placeholder="Season" style="width:90px"><select id="hCT">${teamOpts('', 'Champion team')}</select><input id="hCC" placeholder="Champ coach" style="width:120px"><input id="hCS" type="number" placeholder="Pts" style="width:70px"></div>
         <div class="row" style="margin-top:6px"><span style="width:90px"></span><select id="hRT">${teamOpts('', 'Runner-up team')}</select><input id="hRC" placeholder="Runner-up coach" style="width:120px"><input id="hRS" type="number" placeholder="Pts" style="width:70px"><button class="ghost" data-act="addHist">Add / replace season</button></div>
-        ${H.map(h => `<details style="margin-top:10px"><summary><b>${h.season}</b> — ${esc(h.champCoach || '')} over ${esc(h.runnerCoach || '')}</summary><textarea data-hist="${esc(h.id)}" rows="10">${esc(JSON.stringify((({ id, ...r }) => r)(h), null, 2))}</textarea><div class="row"><button class="sm" data-savehist="${esc(h.id)}">Save</button><button class="sm danger" data-delhist="${esc(h.id)}">Delete season</button></div></details>`).join('')}
+        ${H.map(h => `<details style="margin-top:10px"><summary><b>${h.season}</b> — ${esc(h.champCoach || '')} over ${esc(h.runnerCoach || '')}</summary>${gotyPicker(h)}<textarea data-hist="${esc(h.id)}" rows="10">${esc(JSON.stringify((({ id, ...r }) => r)(h), null, 2))}</textarea><div class="row"><button class="sm" data-savehist="${esc(h.id)}">Save</button><button class="sm danger" data-delhist="${esc(h.id)}">Delete season</button></div></details>`).join('')}
         <div style="margin-top:12px" class="row"><button class="ghost sm" data-act="importSeed">Load league-data.json (league history + current season)</button><button class="ghost sm" data-act="importLegacy">Import old history.json / awards.json</button></div></div>`;
   }
 };
 
+// Game of the Year → link the award to the actual game so History can open its recap.
+function gotyPicker(h) {
+  const i = (h.awards || []).findIndex(a => /game of the year/i.test(a.award || '')); if (i < 0) return '';
+  const a = h.awards[i], cur = awardGame(h, a), games = D.games.filter(g => g.season === h.season && played(g)).sort((x, y) => (x.type === 'ccg') - (y.type === 'ccg') || x.week - y.week);
+  const lbl = g => `${g.type === 'ccg' ? 'Title game' : 'Wk ' + g.week} · ${team(g.away).abbr || team(g.away).name} ${g.awayScore} @ ${team(g.home).abbr || team(g.home).name} ${g.homeScore} (${coachOf(g, 'away')} vs ${coachOf(g, 'home')})`;
+  return `<div class="row" style="margin:8px 0"><label style="margin:0">Game of the Year (“${esc(a.winner || '')}”)</label>
+    <select data-goty="${esc(h.id)}" data-i="${i}" style="max-width:100%;min-width:0"><option value="">${cur ? 'Not linked' : 'Not linked: pick the game'}</option>${games.map(g => `<option value="${esc(g.id)}" ${cur && cur.id === g.id ? 'selected' : ''}>${esc(lbl(g))}</option>`).join('')}</select>
+    <button class="sm" data-savegoty="${esc(h.id)}">Save link</button>${cur && !a.gameId ? '<span class="muted small">Matched automatically</span>' : ''}</div>`;
+}
 function teamRow(t) {
   const lg = L();
   return `<tr data-team="${esc(t.id)}"><td data-l="Team"><input data-k="name" value="${esc(t.name)}" style="width:150px"></td><td data-l="Abbr"><input data-k="abbr" value="${esc(t.abbr || '')}" style="width:70px"></td>
@@ -643,7 +652,7 @@ function render() {
   if ($('#autoLive')) fetch('live.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : { live: false }).then(j => { const el = $('#autoLive'); if (!el) return; const fresh = j.live && j.checkedAt && Date.now() - j.checkedAt < 25 * 60e3; el.textContent = fresh ? 'LIVE — ' + (j.title || '') + ' (checked ' + Math.round((Date.now() - j.checkedAt) / 60e3) + ' min ago)' : j.live ? 'stale "live" status ignored — the checker hasn\'t confirmed it recently' : 'not live'; }).catch(() => { const el = $('#autoLive'); if (el) el.textContent = 'not set up yet'; });
 }
 document.addEventListener('click', async e => {
-  const t = e.target.closest('[data-tab],[data-act],[data-desk],[data-delgame],[data-delteam],[data-void],[data-delcat],[data-savehist],[data-delhist]');
+  const t = e.target.closest('[data-tab],[data-act],[data-desk],[data-delgame],[data-delteam],[data-void],[data-delcat],[data-savehist],[data-delhist],[data-savegoty]');
   if (!t) return;
   e.preventDefault();
   try {
@@ -654,6 +663,11 @@ document.addEventListener('click', async e => {
     else if (t.dataset.delteam) { const id = t.dataset.delteam; if (D.games.some(g => g.home === id || g.away === id)) return alert('This team has games scheduled. Delete those first.'); if (confirm('Delete ' + team(id).name + '?')) { if (D.teams.find(x => x.id === id)?._new) D.teams = D.teams.filter(x => x.id !== id); else await batch([{ op: 'del', col: 'teams', id }]); render(); } }
     else if (t.dataset.void) { if (confirm('Void this wager and refund the stake?')) { await put('wagers', t.dataset.void, { status: 'void', payout: 0, settledAt: Date.now() }); render(); } }
     else if (t.dataset.delcat) { const c = readCats(); c.splice(+t.dataset.delcat, 1); $('#cats').innerHTML = catEditor(c); }
+    else if (t.dataset.savegoty) {
+      const id = t.dataset.savegoty, h = D.history.find(x => x.id === id), sel = $(`[data-goty="${id}"]`), i = +sel.dataset.i;
+      const awards = (h.awards || []).map((x, j) => { if (j !== i) return x; const { gameId, ...rest } = x; return sel.value ? { ...rest, gameId: sel.value } : rest; });
+      await put('history', id, { awards }); flash(sel.value ? 'Game of the Year linked.' : 'Game of the Year link removed.');
+    }
     else if (t.dataset.savehist) { const v = JSON.parse($(`[data-hist="${t.dataset.savehist}"]`).value); await put('history', t.dataset.savehist, v, false); flash('History saved.'); }
     else if (t.dataset.delhist) { if (confirm('Delete this season from History?')) { await batch([{ op: 'del', col: 'history', id: t.dataset.delhist }]); render(); } }
   } catch (err) { console.error(err); alert('Error: ' + err.message); render(); }

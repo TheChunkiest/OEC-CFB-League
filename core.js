@@ -179,7 +179,7 @@ export function pollFor(season = D.league.season, week = D.league.week) {
 export const rankOf = (id, season, week) => pollFor(season ?? D.league.season, week ?? D.league.week)[id] || null;
 export const rankName = (id, season, week) => { const r = rankOf(id, season, week); return (r ? '#' + r + ' ' : '') + team(id).name; };
 export function chip(id, opts = {}) {
-  const t = team(id), r = rankOf(id, opts.season, opts.week);
+  const t = team(id), r = opts.rank === false ? null : rankOf(id, opts.season, opts.week);
   return `<a class="chip" href="${esc(opts.href || '#team/' + t.id)}"><i class="sw" style="background:${esc(teamColor(t))}"></i>${r ? `<span class="rk">#${r}</span>` : ''}${esc(opts.abbr ? (t.abbr || t.name) : t.name)}</a>`;
 }
 
@@ -769,6 +769,54 @@ export function coachStats() {
   });
   D.history.forEach(h => { if (h.champCoach && h.champCoach.toUpperCase() !== 'CPU') { const c = get(h.champCoach); c.titles++; c.seasons.add(h.season); } if (h.runnerCoach && h.runnerCoach.toUpperCase() !== 'CPU') get(h.runnerCoach).seasons.add(h.season); });
   return C;
+}
+
+// One coach's career, season by season (from the coach recorded on each game, so team changes are tracked).
+export function coachSeasons(name) {
+  const key = String(name || '').toLowerCase(), by = {};
+  D.games.filter(played).forEach(g => ['home', 'away'].forEach(side => {
+    if (String(coachOf(g, side)).toLowerCase() !== key) return;
+    const tid = g[side], op = side === 'home' ? 'away' : 'home', won = side === 'home' ? +g.homeScore > +g.awayScore : +g.awayScore > +g.homeScore;
+    const s = by[g.season] || (by[g.season] = { season: g.season, teams: {}, w: 0, l: 0, pf: 0, pa: 0, gp: 0, uw: 0, ul: 0, ccg: null });
+    s.teams[tid] = (s.teams[tid] || 0) + 1; won ? s.w++ : s.l++;
+    if (!g.forfeit) { s.pf += +g[side + 'Score']; s.pa += +g[op + 'Score']; s.gp++; }
+    const oc = coachOf(g, op); if (oc && oc.toUpperCase() !== 'CPU') won ? s.uw++ : s.ul++;
+    if (g.type === 'ccg') s.ccg = { g, won };
+  }));
+  D.history.forEach(h => {
+    const role = String(h.champCoach || '').toLowerCase() === key ? 'champ' : String(h.runnerCoach || '').toLowerCase() === key ? 'runner' : null;
+    if (!role) return;
+    const s = by[h.season] || (by[h.season] = { season: h.season, teams: {}, w: 0, l: 0, pf: 0, pa: 0, gp: 0, uw: 0, ul: 0, ccg: null });
+    s.finish = role; const tid = role === 'champ' ? h.champTeam : h.runnerTeam; if (tid && !Object.keys(s.teams).length) s.teams[tid] = 1;
+  });
+  return Object.values(by).map(s => {
+    const teams = Object.entries(s.teams).sort((a, b) => b[1] - a[1]).map(x => x[0]);
+    const finish = s.finish || (s.ccg ? (s.ccg.won ? 'champ' : 'runner') : null);
+    return { ...s, teams, team: teams[0] || '', finish };
+  }).sort((a, b) => a.season - b.season);
+}
+// Coaching stops: consecutive seasons at the same team merged, e.g. UAB 2026 → Purdue 2027–2028.
+export function coachStops(seasons) {
+  const out = [];
+  seasons.forEach(s => s.teams.forEach(t => { const last = out[out.length - 1]; if (last && last.team === t && last.to === s.season - 1) last.to = s.season; else if (!(last && last.team === t && last.to === s.season)) out.push({ team: t, from: s.season, to: s.season }); }));
+  return out;
+}
+// Link a Game of the Year award to the stored game: an explicit gameId wins; otherwise read the text
+// ("2026 MAC Championship", "ECU @ APP", "Clay @ Chunky") and only link when exactly one game matches.
+export function awardGame(h, a) {
+  if (!a) return null;
+  if (a.gameId) return D.games.find(g => g.id === a.gameId) || null;
+  if (!/game of the year/i.test(a.award || '')) return null;
+  const txt = String(a.winner || ''), sg = D.games.filter(g => g.season === h.season && played(g));
+  if (/championship|title game|\bccg\b/i.test(txt)) return sg.find(g => g.type === 'ccg') || null;
+  const m = txt.replace(/^\s*\d{4}\s+/, '').split(/\s+(?:@|at|vs\.?|v\.?)\s+/i); if (m.length !== 2) return null;
+  const norm = x => x.trim().toLowerCase().replace(/[^a-z0-9 ]/g, '');
+  const tm = x => { const n = norm(x); return D.teams.find(t => norm(t.abbr || '') === n || norm(t.name) === n || t.id === slug(x)); };
+  const A = tm(m[0]), B = tm(m[1]);
+  let hits = A && B ? sg.filter(g => g.away === A.id && g.home === B.id) : [];
+  if (!hits.length && A && B) hits = sg.filter(g => (g.away === B.id && g.home === A.id));
+  if (!hits.length) { const ca = norm(m[0]), cb = norm(m[1]); hits = sg.filter(g => norm(coachOf(g, 'away')) === ca && norm(coachOf(g, 'home')) === cb); }
+  return hits.length === 1 ? hits[0] : null;
 }
 
 /* ---------------- Storylines ---------------- */

@@ -465,3 +465,14 @@ details.legs summary{white-space:nowrap}
 .badge.adv{background:linear-gradient(160deg,#2a2124,#1a1416);box-shadow:0 0 0 2px #3a2c31,0 6px 18px rgba(0,0,0,.5);color:var(--text)}
 .badge.adv b{font-family:inherit;font-weight:900;font-size:15px;line-height:1.25;margin-top:3px;white-space:nowrap}
 @media(max-width:640px){.badge.adv{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:1px;min-width:0;flex:1 1 auto;padding:4px 9px}.badge.adv span{font-size:8.5px;letter-spacing:.6px;white-space:nowrap}.badge.adv b{font-size:12.5px;margin-top:0}}
+
+/* Coach pages & history */
+.cpath{display:flex;flex-wrap:wrap;align-items:center;gap:6px 6px;margin-top:10px}
+.cstop{display:inline-flex;align-items:center;gap:5px;background:var(--card2);border:1px solid var(--line);border-radius:999px;padding:3px 10px 3px 6px}
+.cstop em{font-style:normal;font-size:11.5px;color:var(--muted);font-weight:700}
+.carr{color:var(--muted);font-weight:800}
+.goty{color:var(--muted);margin-top:2px}
+table.carousel td,table.carousel th{text-align:center}
+table.carousel td:first-child,table.carousel th:first-child{text-align:left}
+.ctm{display:inline-flex;align-items:center;gap:4px;font-weight:800;font-size:12.5px;white-space:nowrap}
+.ctm .sw{width:9px;height:9px;border-radius:3px;display:inline-block}
