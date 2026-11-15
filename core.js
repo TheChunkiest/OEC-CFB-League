@@ -45,15 +45,28 @@ export async function loadAll() {
     }
     return D;
   }
+  if (live) { await live; return D; }   // listeners keep D current; nothing to re-download
+  live = startListeners().catch(e => { live = null; throw e; });
+  await live; return D;
+}
+// Live listeners: each visit reads every document once, then Firebase only sends documents that change.
+// (The old approach re-downloaded whole collections on every refresh and on timers, which burned through
+// the free daily read allowance.) onLiveChange(fn) lets the page react to changes, e.g. new bets.
+let live = null;
+const liveSubs = new Set();
+export const onLiveChange = fn => liveSubs.add(fn);
+async function startListeners() {
   const { fs, db } = await fbInit();
-  const [lg, rc, ...rest] = await Promise.all([
-    fs.getDoc(fs.doc(db, 'meta', 'league')), fs.getDoc(fs.doc(db, 'meta', 'recruiting')),
-    ...COLS.map(c => fs.getDocs(fs.collection(db, c)))
-  ]);
-  D.league = Object.assign(defaultLeague(), lg.exists() ? lg.data() : {});
-  D.recruiting = rc.exists() ? rc.data() : { class: '', rows: [] };
-  COLS.forEach((c, i) => D[c] = rest[i].docs.map(d => ({ ...d.data(), id: d.id })));
-  return D;
+  const first = [];
+  const watch = (ref, apply, name) => first.push(new Promise((res, rej) => {
+    let initial = true;
+    fs.onSnapshot(ref, snap => { apply(snap); clearCache(); if (initial) { initial = false; res(); } else liveSubs.forEach(f => { try { f(name); } catch (e) { console.error(e); } }); },
+      err => { if (initial) rej(err); else console.error(err); });
+  }));
+  watch(fs.doc(db, 'meta', 'league'), s => { D.league = Object.assign(defaultLeague(), s.exists() ? s.data() : {}); }, 'league');
+  watch(fs.doc(db, 'meta', 'recruiting'), s => { D.recruiting = s.exists() ? s.data() : { class: '', rows: [] }; }, 'recruiting');
+  COLS.forEach(c => watch(fs.collection(db, c), s => { D[c] = s.docs.map(d => ({ ...d.data(), id: d.id })); }, c));
+  await Promise.all(first);
 }
 
 function demoSave() { try { sessionStorage.setItem('oecDemo', JSON.stringify(D)); } catch (e) { /* ignore */ } }
@@ -98,13 +111,11 @@ export async function batch(ops) {
 
 export async function refreshLive() {
   if (DEMO) return D.league.live;
-  try { const { fs, db } = await fbInit(); const s = await fs.getDoc(fs.doc(db, 'meta', 'league')); if (s.exists()) D.league.live = s.data().live || null; } catch (e) { /* ignore */ }
-  return D.league.live;
+  return D.league.live;   // kept current by the live listener
 }
 export async function refreshWagers() {
   if (DEMO) return D.wagers;
-  try { const { fs, db } = await fbInit(); const s = await fs.getDocs(fs.collection(db, 'wagers')); D.wagers = s.docs.map(d => ({ ...d.data(), id: d.id })); clearCache(); } catch (e) { /* ignore */ }
-  return D.wagers;
+  return D.wagers;   // kept current by the live listener
 }
 // Identity of a selection, ignoring line movement (same side of the same market).
 export const selKey = l => l.market === 'future' ? 'future|' + l.pick : l.market === 'wins' ? `wins|${l.team}|${l.pick}` : `${l.market}|${l.gameId}|${l.pick}`;

@@ -2,8 +2,8 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, batch, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
-} from './core.js?v=44';
+  gotwTally, coachStats, onLiveChange, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
+} from './core.js?v=45';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['betting', 'Betting'], ['odds', 'Odds'],
@@ -479,12 +479,11 @@ function alreadyHolding(sel) {
   const me = auth.profile;
   return me && D.wagers.some(w => w.uid === me.id && w.status === 'open' && w.market !== 'parlay' && selKey(w) === selKey(sel));
 }
-setInterval(async () => {
-  const page = (location.hash.slice(1) || 'home').split('/')[0];
-  if (page !== 'betting' || document.hidden || $('#modal').innerHTML) return;
-  await refreshWagers();
-  const el = document.getElementById('popular'); if (el) el.innerHTML = popularCard();
-}, 30000);
+// Live updates (no polling): refresh the Most Popular Bet card when bets change, and the live pop-up when the league doc changes.
+onLiveChange(what => {
+  if (what === 'wagers') { const el = document.getElementById('popular'); if (el) el.innerHTML = popularCard(); }
+  if (what === 'league') checkLive();
+});
 
 /* ---------- Shareable bet slip image ---------- */
 async function placeWager(data) {
@@ -1032,7 +1031,7 @@ function showLive() {
     <div class="lp-badge"><i></i>LIVE NOW</div><div class="lp-title">${esc(info.title)}</div>
     <a class="btn lp-go" href="${esc(info.url)}" target="_blank" rel="noopener">▶ Watch on YouTube</a>`;
 }
-setInterval(async () => { await refreshLive(); checkLive(); }, 60000);
+setInterval(() => checkLive(), 60000);   // re-checks live.json / expiry; no database reads
 
 /* ---------- Game preview / recap page ---------- */
 const pct0 = p => Math.round(p * 100) + '%';
