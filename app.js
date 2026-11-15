@@ -106,8 +106,7 @@ function raceHtml(r, order) {
   };
   return `<div class="race"><h4>Race for ${prize}</h4><p class="rsum">${sum.join(' ')}</p>
     <div class="muted small" style="margin:10px 0 2px;font-weight:800;letter-spacing:.6px;text-transform:uppercase">What can happen in ${wk}</div>
-    <ul class="racelist">${rows.map(card).join('')}</ul>
-    <p class="muted small" style="margin:6px 0 0">"In control" means winning every remaining game guarantees it. A tie that comes down to point differential can't be predicted, so it counts as still open.</p></div>`;
+    <ul class="racelist">${rows.map(card).join('')}</ul></div>`;
 }
 // One sentence for a game preview: does this result clinch or eliminate anyone?
 function clinchNote(g) {
