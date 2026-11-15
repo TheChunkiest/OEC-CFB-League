@@ -645,3 +645,20 @@ details.card[open]>summary{margin-bottom:10px}
 .advclock{border-color:var(--gold2)}
 .schedhead{margin-bottom:16px}
 .schedhead+.card.gotw{margin-top:28px}
+
+/* ---- Spacing system (one rule per kind of gap) ----
+   card→card 14px · section title→content 14px · content→next section title 26px · grids own their gaps */
+.grid,.grid2{margin-bottom:14px}
+.grid>.card,.grid2>.card,.grid>div>.card:last-child,.grid2>div>.card:last-child{margin-bottom:0}
+#view>h2,#view>.row.spread,#view>.sbhead{margin-top:26px;margin-bottom:14px}
+#view>h2:first-child,#view>.row.spread:first-child,#view>.sbhead:first-child,#view>.notice+h2{margin-top:6px}
+.tgrid{margin-bottom:14px}
+.schedhead{margin-bottom:14px}
+.schedhead+.card.gotw{margin-top:28px}
+h3+.tablewrap,h3+ul,h3+table{margin-top:10px}
+h2{margin-bottom:14px}
+:not(.card)>h2:not(:first-child){margin-top:26px}
+.notice+h2,.notice+.row.spread{margin-top:6px!important}
+h3{margin-bottom:10px}
+.row.spread+.tablewrap{margin-top:10px}
+.row.spread:has([data-tstat]){margin-bottom:10px}
