@@ -142,7 +142,7 @@ const PAGES = {
     const gt = gotwTally(s, wk);
     const stories = storylines();
     const pr = currentPower().slice(0, 5);
-    const leaders = D.users.filter(u => u.teamId).map(u => ({ u, b: bankroll(u.id) })).sort((a, b) => b.b.balance - a.b.balance).slice(0, 5);
+    const leaders = D.users.filter(u => u.teamId).map(u => ({ u, b: bankroll(u.id) })).sort((a, b) => b.b.net - a.b.net || b.b.balance - a.b.balance).slice(0, 5);
     let html = '';
     if (L.desk && L.desk.show && L.desk.text) html += `<div class="card banner"><h2>Commissioner's Desk</h2><div style="white-space:pre-wrap">${esc(L.desk.text)}</div></div>`;
     if (gt.game) html += gameCard(gt.game, { gotw: true, extra: `<div class="meta">${gt.counts[gt.game.id]} of ${gt.total} coach vote${gt.total === 1 ? '' : 's'}</div>` });
@@ -150,7 +150,7 @@ const PAGES = {
     html += `<div class="grid2"><div><h2>This Week's Storylines</h2><div class="card">${stories.length ? stories.map(st => `<${st.href ? `a href="${esc(st.href)}"` : 'div'} class="story${st.href ? ' link' : ''}"><span class="tag">${esc(st.tag)}</span><h3>${esc(st.title)}</h3><p>${esc((() => { const vs = {}; vary(st.title, vs); return vary(st.body, vs); })())}</p>${st.href ? '<span class="go" aria-hidden="true">›</span>' : ''}</${st.href ? 'a' : 'div'}>`).join('') : '<div class="empty">Storylines appear once games are played.</div>'}</div></div>
       <div><h2>${esc(weekLabel())} Matchups</h2>${games.length ? weekOrder(games.filter(g => g.id !== gt.game?.id)).map(g => gameCard(g)).join('') || '<div class="card empty">Only the Game of the Week is on the slate.</div>' : '<div class="card empty">No games scheduled this week.</div>'}</div></div>
       <div class="grid"><div class="card"><h2>Power Rankings</h2><table>${pr.map(x => `<tr><td class="rank">${x.rank}</td><td>${chip(x.id)}</td><td class="num">${rec(x.rec)}</td><td class="num">${mvHtml(x.move)}</td></tr>`).join('')}</table><p><a href="#rankings">Full rankings →</a></p></div>
-      <div class="card"><h2>Betting Leaders</h2>${leaders.length ? `<table>${leaders.map((x, i) => `<tr><td class="rank">${i + 1}</td><td>${esc(x.u.name)}</td><td class="num">${x.b.w}-${x.b.l}${x.b.p ? '-' + x.b.p : ''}</td><td class="num"><b>${x.b.balance.toLocaleString()}</b></td></tr>`).join('')}</table>` : '<div class="muted">No coaches linked yet.</div>'}<p><a href="#betting">Place wagers →</a></p></div></div>`;
+      <div class="card"><h2>Betting Leaders</h2>${leaders.length ? `<table>${leaders.map((x, i) => `<tr><td class="rank">${i + 1}</td><td>${esc(x.u.name)}</td><td class="num">${x.b.w}-${x.b.l}${x.b.p ? '-' + x.b.p : ''}</td><td class="num"><b class="${x.b.net >= 0 ? 'win' : 'loss'}">${x.b.net >= 0 ? '+' : ''}${x.b.net.toLocaleString()}</b></td></tr>`).join('')}</table>` : '<div class="muted">No coaches linked yet.</div>'}<p><a href="#betting">Place wagers →</a></p></div></div>`;
     return html;
   },
 
@@ -162,7 +162,7 @@ const PAGES = {
       const h = team(g.home), a = team(g.away); if (!h.div || h.div !== a.div || h.conf !== D.league.conference || a.conf !== D.league.conference) return;
       const hw = +g.homeScore > +g.awayScore; [[g.home, hw], [g.away, !hw]].forEach(([id, w]) => { const r = dv[id] || (dv[id] = { w: 0, l: 0 }); w ? r.w++ : r.l++; });
     });
-    return `<h2>${s} ${esc(D.league.conference)} Standings</h2><p class="muted small">Tap a column header to sort. "Place" is the official order (conference record, head-to-head, overall, point differential).</p>` + divisions().map(d => {
+    return `<h2>${s} ${esc(D.league.conference)} Standings</h2>` + divisions().map(d => {
       const ids = leagueTeams().filter(t => !d || t.div === d).map(t => t.id);
       const ordered = orderGroup(ids, s).map((id, i) => ({ id, place: i + 1, ...R[id], name: team(id).name, coach: team(id).coach || 'CPU', cpct: R[id].cw + R[id].cl ? R[id].cw / (R[id].cw + R[id].cl) : 0, opct: R[id].w + R[id].l ? R[id].w / (R[id].w + R[id].l) : 0, diff: R[id].pf - R[id].pa, stk: streak(R[id]), dw: (dv[id] || {}).w || 0, dl: (dv[id] || {}).l || 0, dpct: dv[id] && dv[id].w + dv[id].l ? dv[id].w / (dv[id].w + dv[id].l) : 0 }));
       const rows = sortRows(ordered, st, { stk: r => (r.stk[0] === 'W' ? 1 : -1) * (+r.stk.slice(1) || 0) });
@@ -180,7 +180,6 @@ const PAGES = {
     const gt = gotwTally(s, wk).game;
     return `<div class="row spread"><h2 style="margin:0">Schedule &amp; Scores</h2>
       <select data-nav="schedule">${weeks.map(w => `<option value="${w}" ${w === wk ? 'selected' : ''}>Week ${w}</option>`).join('')}</select></div>
-      <p class="muted small">Lines for upcoming weeks update after every advance. You can bet any upcoming week on the Betting page, and a bet keeps the line you took.</p>
       ${games.length ? weekOrder(games, gt && gt.id).map(g => gameCard(g, { gotw: gt && gt.id === g.id })).join('') : '<div class="card empty">No games for this week.</div>'}`;
   },
 
@@ -192,14 +191,14 @@ const PAGES = {
     const hist = oddsHistory();
     const divLbl = divisions().length > 1 ? 'Division' : 'Reg. Season Title';
     return `<h2>${pre ? 'Preseason Odds' : 'Season Odds'}</h2>
-      <p class="muted small">${pre ? 'Built from team overall, offense and defense ratings and the full schedule, before any Week 0 games.' : 'Re-simulated 1,500 times after every advance using results so far.'} "League Title" means winning the ${esc(L.conference)} Championship Game.</p>
+      <p class="muted small">${pre ? 'Built from team overall, offense and defense ratings and the full schedule, before any Week 0 games.' : 'Re-simulated 1,500 times after every advance using results so far.'}</p>
       <div class="card"><div class="tablewrap"><table>
         <tr>${sortTh(st, 'name', 'Team')}${sortTh(st, 'coach', 'Coach', 'hide-sm')}${sortTh(st, 'likely', 'Likely', 'num')}${sortTh(st, 'expW', 'Proj. W', 'num hide-xs')}${sortTh(st, 'divPct', divLbl.replace('Reg. Season Title', 'Div'), 'num')}${sortTh(st, 'ccgPct', 'Make Title Game', 'num hide-sm')}${sortTh(st, 'titlePct', 'Title', 'num')}</tr>
         ${rows.map(r => `<tr id="odds-${esc(r.id)}" class="${myTeam()?.id === r.id ? 'me' : ''}${focus === r.id ? ' focus' : ''}"><td>${chip(r.id)}${subSm(isUserTeam(team(r.id)) ? esc(r.coach) + ' · ' + r.expW.toFixed(1) + ' proj. W' : 'CPU')}</td><td class="hide-sm">${isUserTeam(team(r.id)) ? esc(r.coach) : '<span class="muted">CPU</span>'}</td><td class="num">${r.likely}</td><td class="num hide-xs">${r.expW.toFixed(1)}</td><td class="num">${pctStr(r.divPct)}</td><td class="num hide-sm">${pctStr(r.ccgPct)}</td><td class="num"><b>${pctStr(r.titlePct)}</b></td></tr>`).join('')}
       </table></div></div>
       <h2>Coach Odds Trend</h2><div class="card chart"><div class="row spread"><div class="seg">
         ${[['titlePct', 'League Title %', 'Title %'], ['divPct', divLbl + ' %', 'Div %'], ['expW', 'Projected Wins', 'Proj. W']].map(([k, l, sm]) => `<button data-metric="${k}" class="${UI.metric === k ? 'on' : ''}"><span class="hide-sm">${l}</span><span class="show-sm">${sm}</span></button>`).join('')}
-      </div><span class="muted small">Odds entering each week · ${s} season · resets each new season</span></div>${trendChart(hist)}</div>`;
+      </div></div>${trendChart(hist)}</div>`;
   },
 
   betting() {
@@ -216,7 +215,7 @@ const PAGES = {
       games.length ? `<div class="row" style="margin-bottom:10px"><div class="seg"><button data-mode="single" class="${UI.mode === 'single' ? 'on' : ''}">Single bets</button><button data-mode="parlay" class="${UI.mode === 'parlay' ? 'on' : ''}">Parlay</button></div>
         ${UI.mode === 'parlay' ? `<span class="muted small">Tap 2–${MAX_LEGS} picks from any upcoming week, plus League Champion and Win Total picks below. Per game: one spread, one moneyline and one O/U, but not the spread and moneyline on the same team. All must hit; payouts multiply. Once more than half the legs have won, you can cash out early for your stake plus ${Math.round(CASHOUT_SHARE * 100)}% of what the winning legs would pay.</span>` : ''}</div>
         <div class="row" style="margin-bottom:10px"><b>Bet on</b><select data-betweek="1">${bwks.map(w => `<option value="${w}" ${w === bw ? 'selected' : ''}>Week ${w}${w === L.week ? ' (this week)' : ''}</option>`).join('')}</select>
-        <span class="muted small">${bw === L.week ? 'This week\'s games.' : 'Early lines: they move after every advance, but your bet keeps the line you took.'}</span></div><div class="card"><div class="betgrid"><div class="hdr">Spread</div><div class="hdr">Moneyline</div><div class="hdr">Total</div>
+        <span class="muted small">${bw === L.week ? '' : 'Early lines: they move after every advance, but your bet keeps the line you took.'}</span></div><div class="card"><div class="betgrid"><div class="hdr">Spread</div><div class="hdr">Moneyline</div><div class="hdr">Total</div>
         ${games.slice().sort((x, y) => (y.id === gotwGameId()) - (x.id === gotwGameId())).map(g => betRows(g)).join('')}</div></div>${bw === L.week ? `<div id="popular">${popularCard()}</div>` : ''}<div id="value">${valueCard(games)}</div>` : '<div class="card empty">No open games this week.</div>';
     html += futuresSection();
     html += winsSection();
@@ -233,7 +232,7 @@ const PAGES = {
     const board0 = D.users.filter(u => u.teamId).map(u => ({ u, b: bankroll(u.id) })).sort((a, b) => b.b.balance - a.b.balance)
       .map((x, i) => ({ ...x, place: i + 1, name: x.u.name, rec: x.b.w + x.b.l ? x.b.w / (x.b.w + x.b.l) : 0, net: x.b.net, roi: x.b.risked ? x.b.net / x.b.risked : -Infinity, balance: x.b.balance }));
     const board = sortRows(board0, lb, { rec: r => r.rec * 1000 + r.b.w });
-    html += `<h2>Season ${seasonNum()} Leaderboard</h2><p class="muted small" style="margin-top:-6px">Tap a column header to sort.</p><div class="card"><div class="tablewrap"><table><tr>${sortTh(lb, 'place', '#', '', 'lbSort')}${sortTh(lb, 'name', 'Coach', '', 'lbSort')}${sortTh(lb, 'rec', 'W-L-P', 'num', 'lbSort')}${sortTh(lb, 'net', 'Net', 'num hide-xs', 'lbSort')}${sortTh(lb, 'roi', 'ROI', 'num hide-sm', 'lbSort')}${sortTh(lb, 'balance', 'Balance', 'num', 'lbSort')}</tr>
+    html += `<h2>Season ${seasonNum()} Leaderboard</h2><div class="card"><div class="tablewrap"><table><tr>${sortTh(lb, 'place', '#', '', 'lbSort')}${sortTh(lb, 'name', 'Coach', '', 'lbSort')}${sortTh(lb, 'rec', 'W-L-P', 'num', 'lbSort')}${sortTh(lb, 'net', 'Net', 'num hide-xs', 'lbSort')}${sortTh(lb, 'roi', 'ROI', 'num hide-sm', 'lbSort')}${sortTh(lb, 'balance', 'Balance', 'num', 'lbSort')}</tr>
       ${board.map(x => `<tr class="${me && me.id === x.u.id ? 'me' : ''}"><td class="rank">${x.place}</td><td><a href="#coach/${slug(x.u.name)}">${esc(x.u.name)}</a> <span class="muted small hide-sm">${esc(team(x.u.teamId).name)}</span>${subSm(esc(team(x.u.teamId).name))}</td><td class="num">${x.b.w}-${x.b.l}-${x.b.p}</td><td class="num hide-xs ${x.b.net >= 0 ? 'win' : 'loss'}">${x.b.net >= 0 ? '+' : ''}${x.b.net}</td><td class="num hide-sm">${x.b.risked ? Math.round(x.b.net / x.b.risked * 100) + '%' : '–'}</td><td class="num"><b>${x.b.balance.toLocaleString()}</b></td></tr>`).join('')}
     </table></div></div>`;
     // Potential payout = stake back + profit (boost included). Pushes and voids just return the stake.
@@ -242,7 +241,7 @@ const PAGES = {
     const STO = { open: 0, won: 1, cashed: 1.5, push: 2, void: 3, lost: 4 };
     const wk = sortRows(D.wagers.filter(w => w.season === s && w.week === L.week), ws,
       { coach: w => (w.coach || '').toLowerCase(), bet: w => wagerLabel(w).toLowerCase(), ts: w => w.ts || 0, stake: w => w.stake, payout: payOf, status: w => STO[w.status] ?? 9 });
-    if (wk.length) html += `<h2>Bets Placed This Week</h2><p class="muted small" style="margin-top:-6px">Payout is the stake plus winnings if the bet hits. Tap a column header to sort.</p><div class="card"><div class="tablewrap"><table class="bets"><tr>${sortTh(ws, 'coach', 'Coach', '', 'wkSort')}${sortTh(ws, 'bet', 'Bet', '', 'wkSort')}${sortTh(ws, 'ts', 'Placed', 'hide-sm', 'wkSort')}${sortTh(ws, 'stake', 'Stake', 'num', 'wkSort')}${sortTh(ws, 'payout', 'Payout', 'num', 'wkSort')}${sortTh(ws, 'status', 'Status', 'num hide-xs', 'wkSort')}</tr>${wk.map(w => `<tr><td>${esc(w.coach || '')}</td><td class="wrap">${esc(wagerLabel(w))}${legsHtml(w)}${subSm(fmtTime(w.ts))}</td><td class="muted small hide-sm">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num">${payCell(w)}</td><td class="num hide-xs"><span class="pill ${w.status}">${w.status}</span></td></tr>`).join('')}</table></div></div>`;
+    if (wk.length) html += `<h2>Bets Placed This Week</h2><div class="card"><div class="tablewrap"><table class="bets"><tr>${sortTh(ws, 'coach', 'Coach', '', 'wkSort')}${sortTh(ws, 'bet', 'Bet', '', 'wkSort')}${sortTh(ws, 'ts', 'Placed', 'hide-sm', 'wkSort')}${sortTh(ws, 'stake', 'Stake', 'num', 'wkSort')}${sortTh(ws, 'payout', 'Payout', 'num', 'wkSort')}${sortTh(ws, 'status', 'Status', 'num hide-xs', 'wkSort')}</tr>${wk.map(w => `<tr><td>${esc(w.coach || '')}</td><td class="wrap">${esc(wagerLabel(w))}${legsHtml(w)}${subSm(fmtTime(w.ts))}</td><td class="muted small hide-sm">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num">${payCell(w)}</td><td class="num hide-xs"><span class="pill ${w.status}">${w.status}</span></td></tr>`).join('')}</table></div></div>`;
     return html;
   },
 
@@ -445,7 +444,7 @@ function winsSection() {
   const open = futuresOpen() && winsPosted();
   const btn = (r, pick) => { const o = r.o; if (!o) return ''; const odds = pick === 'over' ? o.over : o.under;
     return open ? `<button class="pick${UI.mode === 'parlay' && UI.legs.some(x => x.market === 'wins' && x.team === r.id && x.pick === pick) ? ' sel' : ''}" data-wins="${esc(r.id)}|${pick}">${pick === 'over' ? 'O' : 'U'} ${o.line} <b>${fmtOdds(odds)}</b></button>` : `${pick === 'over' ? 'O' : 'U'} ${o.line} <b>${fmtOdds(odds)}</b>`; };
-  h += `<div class="card"><p class="muted small" style="margin-top:0">Regular-season wins (user games only), over/under the line. Lines are set from the projected wins on the Odds page and move after every advance; your bet keeps the line you took. Settles as soon as it's decided, or at the end of the regular season.</p>
+  h += `<div class="card">
     <div class="tablewrap"><table><tr><th>Team</th><th class="num hide-sm">Record</th><th class="num hide-sm">Proj.</th><th class="num">Over</th><th class="num">Under</th></tr>
     ${rows.map(r => `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td>${chip(r.id)} <span class="muted small hide-sm">${esc(team(r.id).coach || '')}</span>${subSm(`${esc(team(r.id).coach || '')} · ${r.w}-${regRec(r.id).l} · proj ${r.proj.toFixed(1)}`)}</td><td class="num hide-sm">${r.w}-${(regRec(r.id)).l}</td><td class="num hide-sm">${r.proj.toFixed(1)}</td>
       ${r.o ? `<td class="num">${btn(r, 'over')}</td><td class="num">${btn(r, 'under')}</td>` : '<td class="num muted small" colspan="2">Off the board</td>'}</tr>`).join('')}
@@ -1199,7 +1198,7 @@ function statsBoard(s) {
     return `<tr class="clickable${l.t.id === me ? ' me' : ''}" data-team="${esc(l.t.id)}"><td class="rank">${r ? (tie ? 'T-' : '') + r : '–'}</td><td>${chip(l.t.id)}${subSm(rec(records(s)[l.t.id]))}</td>
       <td class="hide-sm muted small">${rec(records(s)[l.t.id])}</td><td class="num tsv"><b>${l.x.f}</b>${w ? `<i style="width:${w.toFixed(0)}%;background:${esc(liftColor(teamColor(l.t)))}"></i>` : ''}</td></tr>`; }).join('');
   return `<h2>${s} Season Stats</h2><div class="card"><div class="row spread" style="gap:8px"><select data-tstat aria-label="Stat">${opts.map(([g, rows]) => `<optgroup label="${g}">${rows.map(([k, l]) => `<option value="${k}" ${k === key ? 'selected' : ''}>${l}</option>`).join('')}</optgroup>`).join('')}</select>
-    <span class="muted small">${tip ? esc(tip) + ' · ' : ''}Tap the column header to flip the order.</span></div>
+    ${tip ? `<span class="muted small">${esc(tip)}</span>` : ''}</div>
     <div class="tablewrap" style="margin-top:8px"><table class="tsboard"><tr><th>#</th><th>Team</th><th class="hide-sm">Record</th><th class="num sortable" data-tsflip="1">${esc(label)} ${UI.tsFlip ? '▲' : '▼'}</th></tr>${rows}</table></div></div>`;
 }
 function teamStatsCard(tid, s) {
