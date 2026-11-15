@@ -23,7 +23,7 @@ function gameTags(g) {
   const h = team(g.home), a = team(g.away), out = [];
   if (isUserTeam(h) && isUserTeam(a)) out.push('<span class="h2h">USER GAME</span>');
   const conf = D.league.conference;
-  if ((g.type || 'reg') === 'reg' && h.div && h.div === a.div && h.conf === conf && a.conf === conf) out.push(`<span class="h2h divtag" title="Both teams are in the ${esc(h.div)} division">${esc(h.div.toUpperCase())} DIV</span>`);
+  if ((g.type || 'reg') === 'reg' && h.div && h.div === a.div && h.conf === conf && a.conf === conf) out.push(`<span class="h2h divtag" title="Both teams are in the ${esc(h.div)} division">${esc(h.div.toUpperCase())}</span>`);
   return out.join('');
 }
 function gameCard(g, opts = {}) {
