@@ -29,7 +29,11 @@ async function fbInit() {
   const base = `https://www.gstatic.com/firebasejs/${FBV}/`;
   const [app, au, fs] = await Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-firestore.js')]);
   const a = app.initializeApp(firebaseConfig);
-  fb = { au, fs, auth: au.getAuth(a), db: fs.getFirestore(a) };
+  // On-device cache: reopening the site within ~30 minutes only downloads what changed.
+  let db;
+  try { db = fs.initializeFirestore(a, { localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() }) }); }
+  catch (e) { db = fs.getFirestore(a); }
+  fb = { au, fs, auth: au.getAuth(a), db };
   return fb;
 }
 
@@ -55,18 +59,50 @@ export async function loadAll() {
 let live = null;
 const liveSubs = new Set();
 export const onLiveChange = fn => liveSubs.add(fn);
+// Current season comes from live listeners; past seasons (which don't change) come from archive.json,
+// a file the GitHub workflow writes once a day, so they cost no database reads. Any past season missing
+// from the archive (e.g. the day a new season starts) is read once from the database instead.
+const SEASONAL = ['games', 'wagers', 'gotw', 'invites'], PAST = ['games', 'wagers'];
+let unsubs = [], liveSeason = null;
 async function startListeners() {
   const { fs, db } = await fbInit();
+  unsubs.forEach(u => u()); unsubs = [];
+  const past = { games: [], wagers: [] }, cur = {};
+  const merge = c => { D[c] = PAST.includes(c) ? [...past[c], ...(cur[c] || [])] : (cur[c] || []); };
   const first = [];
   const watch = (ref, apply, name) => first.push(new Promise((res, rej) => {
     let initial = true;
-    fs.onSnapshot(ref, snap => { apply(snap); clearCache(); if (initial) { initial = false; res(); } else liveSubs.forEach(f => { try { f(name); } catch (e) { console.error(e); } }); },
-      err => { if (initial) rej(err); else console.error(err); });
+    unsubs.push(fs.onSnapshot(ref, snap => {
+      apply(snap); clearCache();
+      if (initial) { initial = false; res(); } else liveSubs.forEach(f => { try { f(name); } catch (e) { console.error(e); } });
+    }, err => { if (initial) rej(err); else console.error(err); }));
   }));
-  watch(fs.doc(db, 'meta', 'league'), s => { D.league = Object.assign(defaultLeague(), s.exists() ? s.data() : {}); }, 'league');
+  // League doc first: it says which season is current.
+  watch(fs.doc(db, 'meta', 'league'), s => {
+    D.league = Object.assign(defaultLeague(), s.exists() ? s.data() : {});
+    if (liveSeason != null && D.league.season !== liveSeason) { live = startListeners(); }   // new season published: re-subscribe
+  }, 'league');
+  await first[0];
+  const season = liveSeason = D.league.season;
   watch(fs.doc(db, 'meta', 'recruiting'), s => { D.recruiting = s.exists() ? s.data() : { class: '', rows: [] }; }, 'recruiting');
-  COLS.forEach(c => watch(fs.collection(db, c), s => { D[c] = s.docs.map(d => ({ ...d.data(), id: d.id })); }, c));
+  ['teams', 'users', 'history'].forEach(c => watch(fs.collection(db, c), s => { D[c] = s.docs.map(d => ({ ...d.data(), id: d.id })); }, c));
+  SEASONAL.forEach(c => watch(fs.query(fs.collection(db, c), fs.where('season', '==', season)), s => { cur[c] = s.docs.map(d => ({ ...d.data(), id: d.id })); merge(c); }, c));
+  // Past seasons: archive file first, then the database for anything it doesn't cover.
+  first.push((async () => {
+    let arch = null;
+    try { const r = await fetch('archive.json?d=' + new Date().toISOString().slice(0, 10), { cache: 'no-cache' }); if (r.ok) arch = await r.json(); } catch (e) { /* no archive yet */ }
+    const have = new Set((arch && arch.seasons) || []);
+    PAST.forEach(c => { past[c] = ((arch && arch[c]) || []).filter(x => x.season < season); });
+    const firstS = D.league.firstSeason || 2026, missing = [];
+    for (let y = firstS; y < season; y++) if (!have.has(y)) missing.push(y);
+    if (missing.length) await Promise.all(PAST.map(async c => {
+      const s = await fs.getDocs(fs.query(fs.collection(db, c), fs.where('season', 'in', missing.slice(-10))));
+      past[c] = past[c].concat(s.docs.map(d => ({ ...d.data(), id: d.id })));
+    }));
+    PAST.forEach(merge);
+  })());
   await Promise.all(first);
+  PAST.forEach(merge); clearCache();
 }
 
 function demoSave() { try { sessionStorage.setItem('oecDemo', JSON.stringify(D)); } catch (e) { /* ignore */ } }

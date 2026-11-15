@@ -2,6 +2,7 @@ name: Kickoff calendar
 # Builds real calendar files for agreed kickoff times so iPhone / Apple Calendar can open them:
 #   cal/<gameId>.ics  one file per scheduled game (the "Apple / iPhone Calendar" button)
 #   cal/league.ics    every upcoming kickoff in one feed you can subscribe to
+#   archive.json      past seasons' games and bets (refreshed daily) so the site doesn't read them from the database
 # Reads the public Firestore data (kickoff invites, games, teams) using firebase-config.js.
 # GitHub only starts scheduled workflows every 5 minutes (at best), so a new time can take a few minutes.
 on:
@@ -120,12 +121,38 @@ jobs:
           for p in glob.glob('cal/*.ics'):
               if p not in keep: os.remove(p)
           print(f'{len(events)} scheduled game(s)')
+
+          # Past-season archive (games + bets never change once a season is over). The site loads these from
+          # archive.json instead of the database. Rebuilt at most once a day, so most runs read nothing here.
+          try: arch_age = now - (json.load(open('archive.json')).get('generatedAt') or 0)
+          except Exception: arch_age = 1e18
+          if arch_age > 20 * 3600e3:
+              lg = one('meta/league'); cur = int(lg.get('season') or 0); fs0 = int(lg.get('firstSeason') or 2026)
+              def past(col):
+                  q = {'structuredQuery': {'from': [{'collectionId': col}], 'where': {'fieldFilter': {'field': {'fieldPath': 'season'}, 'op': 'LESS_THAN', 'value': {'integerValue': str(cur)}}}}}
+                  rq = urllib.request.Request(f'{base}:runQuery?key={key}', data=json.dumps(q).encode(), headers={'Content-Type': 'application/json'})
+                  with urllib.request.urlopen(rq, timeout=60) as r: res = json.load(r)
+                  out = []
+                  for row in res:
+                      x = row.get('document')
+                      if not x: continue
+                      f = {k: val(v) for k, v in x.get('fields', {}).items()}; f['id'] = x['name'].rsplit('/', 1)[1]; out.append(f)
+                  return sorted(out, key=lambda d: d['id'])
+              if cur:
+                  arch = {'generatedAt': int(now), 'season': cur, 'seasons': list(range(fs0, cur)), 'games': past('games'), 'wagers': past('wagers')}
+                  old_arch = {}
+                  try: old_arch = json.load(open('archive.json'))
+                  except Exception: pass
+                  same = {k: old_arch.get(k) for k in ('season', 'seasons', 'games', 'wagers')} == {k: arch[k] for k in ('season', 'seasons', 'games', 'wagers')}
+                  if same and old_arch: arch['generatedAt'] = int(now)
+                  json.dump(arch, open('archive.json', 'w'), separators=(',', ':'))
+                  print(f"archive: {len(arch['games'])} games, {len(arch['wagers'])} bets from seasons {arch['seasons']}")
           PY
       - name: Save
         run: |
           git config user.name "oec-calendar-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add -A cal
+          git add -A cal archive.json
           if git diff --cached --quiet; then echo "No changes"; exit 0; fi
           git commit -m "Update kickoff calendar"
           for i in 1 2 3; do git push && exit 0; git pull --rebase -X theirs; done
