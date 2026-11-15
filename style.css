@@ -608,3 +608,4 @@ details.kform input{display:block;width:100%;max-width:280px;margin-top:6px}
 .kcal button.kresched,.gp-head .kcal button.kresched{background:none;border:0;padding:0;min-height:0;font:inherit;font-weight:700;color:#ff8a8f;cursor:pointer}
 .kcal button.kresched:hover{background:none;text-decoration:underline}
 .kcal a.disabled{color:var(--muted);font-weight:400;pointer-events:none}
+.gp-head .gp-kctl{margin-top:14px}

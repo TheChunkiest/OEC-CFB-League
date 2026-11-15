@@ -922,8 +922,9 @@ function kickoffCard(g) {
           <button data-kinv="${esc(g.id)}" style="margin-top:8px">${incoming.length ? 'Counter with these times' : 'Send invite'}</button></details>`;
     }
   }
-  if (!lines.length && !ctl) return '';
-  return `<div class="gp-meta kcard">${lines.join('')}${ctl ? `<div class="kctl">${ctl}</div>` : ''}</div>`;
+  return {
+    meta: lines.length ? `<div class="gp-meta">${lines.join('')}</div>` : '',
+    ctl: ctl ? `<div class="kcard kctl gp-kctl">${ctl}</div>` : '' };
 }
 // Calendar links for an agreed kickoff (90-minute block).
 const calTimes = ts => { const f = d => new Date(d).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); return [f(ts), f(ts + 60 * 60000)]; };
@@ -1347,15 +1348,16 @@ PAGES.game = function (id) {
   const side = (t, coach, scr, won) => `<div class="gp-team ${done && !won ? 'l' : ''}"><i class="sw big" style="background:${esc(teamColor(t))}"></i><div><div class="gp-name">${rk(t) ? `<span class="rk">#${rk(t)}</span>` : ''}<a href="#team/${esc(t.id)}">${esc(t.name)}</a></div>
     <div class="muted small">${rec(recs[t.id])}${coach && coach !== 'CPU' ? ` · <a href="#coach/${slug(coach)}">${esc(coach)}</a>` : ' · CPU'}</div></div>${done ? `<div class="gp-score">${g.forfeit ? (won ? 'FW' : 'FL') : scr}</div>` : ''}</div>`;
   const hw = +g.homeScore > +g.awayScore;
+  const ko = kickoffCard(g);
   const canBet = !done && s === L.season && g.week >= L.week && L.bettingOpen && L.phase !== PHASES.POST;
   return `<p><a href="#schedule/${g.week}">← Week ${g.week} schedule</a></p>
     <div class="card gp-head${isGotw ? ' gotw' : ''}">${isGotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}
       <div class="muted small" style="text-transform:uppercase;letter-spacing:.8px;font-weight:800">Season ${seasonNum(s)} · ${g.type === 'ccg' ? 'League Championship' : g.type === 'bowl' ? 'Postseason' : 'Week ' + g.week}${done ? ' · Final' : ''}${gameTags(g) ? ' · ' + gameTags(g) : ''}</div>
       <div class="gp-vs">${side(A, coachA, g.awayScore, !hw)}<div class="gp-at">${g.neutral ? 'vs' : '@'}</div>${side(H, coachH, g.homeScore, hw)}</div>
-      ${kickoffCard(g)}
+      ${ko.meta}
       ${l && !g.forfeit ? (done ? finalLines(g, l, A, H) : `<div class="gp-odds"><div><span>Spread</span><b>${l.spread === 0 ? 'PK' : esc(fav.abbr || fav.name) + ' ' + fmtLine(-Math.abs(l.spread))}</b></div><div><span>Total</span><b>O/U ${l.total}</b></div>
         <div><span>Moneyline</span><b>${esc(A.abbr)} ${fmtOdds(l.mlAway)}</b><b>${esc(H.abbr)} ${fmtOdds(l.mlHome)}</b></div></div>`) + probBar(g, l, done) : ''}
-      ${canBet ? `<button class="gold" data-betgame="${g.week}" style="margin-top:12px">Bet this game${isGotw ? ' · +10% boost' : ''} →</button>` : ''}</div>
+      ${canBet ? `<button class="gold" data-betgame="${g.week}" style="margin-top:12px">Bet this game${isGotw ? ' · +10% boost' : ''} →</button>` : ''}${ko.ctl}</div>
     ${l && !g.forfeit ? winChart(g, A, H) : ''}
     <div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(title)}</h2>${(() => { const vs = {}; return paras.map(t => `<p>${esc(vary(t, vs))}</p>`).join(''); })()}</div>
     ${trends.length ? `<div class="card"><h3 style="margin-top:0">Trends to watch</h3><ul class="clean gp-trends">${trends.slice(0, 6).map(t => `<li>${t}</li>`).join('')}</ul></div>` : ''}
