@@ -220,7 +220,7 @@ const PAGES = {
         ${UI.mode === 'parlay' ? `<span class="muted small">Tap 2–${MAX_LEGS} picks from any upcoming week, plus League Champion and Win Total picks below. Per game: one spread, one moneyline and one O/U, but not the spread and moneyline on the same team. All must hit; payouts multiply. Once more than half the legs have won, you can cash out early for your stake plus ${Math.round(CASHOUT_SHARE * 100)}% of what the winning legs would pay.</span>` : ''}</div>
         <div class="row" style="margin-bottom:10px"><b>Bet on</b><select data-betweek="1">${bwks.map(w => `<option value="${w}" ${w === bw ? 'selected' : ''}>Week ${w}${w === L.week ? ' (this week)' : ''}</option>`).join('')}</select>
         <span class="muted small">${bw === L.week ? 'This week\'s games.' : 'Early lines: they move after every advance, but your bet keeps the line you took.'}</span></div><div id="popular">${popularCard()}</div><div class="card"><div class="betgrid"><div class="hdr">Spread</div><div class="hdr">Moneyline</div><div class="hdr">Total</div>
-        ${games.slice().sort((x, y) => (y.id === gotwGameId()) - (x.id === gotwGameId())).map(g => betRows(g)).join('')}</div></div>` : '<div class="card empty">No open games this week.</div>';
+        ${games.slice().sort((x, y) => (y.id === gotwGameId()) - (x.id === gotwGameId())).map(g => betRows(g)).join('')}</div></div><div id="value">${valueCard(games)}</div>` : '<div class="card empty">No open games this week.</div>';
     html += futuresSection();
     html += winsSection();
     if (me && me.teamId) {
@@ -491,6 +491,77 @@ function popularCard() {
     <div style="text-align:right"><div class="big" style="color:var(--gold)">${fmtOdds(p.cur.odds)}</div>
       ${UI.mode === 'parlay' ? `<button class="${inSlip ? 'ghost' : 'gold'}" data-popular="1">${inSlip ? '✓ In your parlay' : '+ Add to parlay'}</button>`
         : mine ? '<span class="pill open">✓ You\'re on this</span>' : '<button class="gold" data-popular="1">Bet it</button>'}</div></div></div>`;
+}
+/* ---- Hidden Value: an overlooked bet the scoring averages like better than the line does ----
+   The lines come from the ratings model, so the second opinion is a plain scoring-average projection:
+   each side's points = (its points per game + opponent's points allowed per game) / 2, plus home field.
+   When that projection beats the posted spread/total by 2+ points (or says an underdog wins outright),
+   and few coaches are on it this week, it's a candidate. Fewer bets on it ranks higher. */
+const VALUE_MIN_EDGE = 2;
+function valuePick(games) {
+  const L = D.league, s = L.season, counts = {};
+  D.wagers.filter(w => w.season === s && w.status !== 'void').forEach(w => (w.market === 'parlay' ? (w.legs || []) : [w]).forEach(l => { const k = selKey(l); counts[k] = (counts[k] || 0) + 1; }));
+  const best = [];
+  games.filter(g => !played(g) && L.bettingOpen && g.week >= L.week).forEach(g => {
+    const l = lineOf(g); if (!l) return;
+    const PH = teamProfile(g.home, s), PA = teamProfile(g.away, s); if (PH.gp < 2 || PA.gp < 2) return;
+    const ppg = P => P.pf / P.gp, papg = P => P.pa / P.gp;
+    const projH = (ppg(PH) + papg(PA)) / 2 + (g.neutral ? 0 : 1.25), projA = (ppg(PA) + papg(PH)) / 2 - (g.neutral ? 0 : 1.25);
+    const margin = projH - projA, tot = projH + projA;
+    const add = (market, pick, edge, why) => {
+      const sel = { gameId: g.id, market, pick }, odds = market === 'ml' ? (pick === 'home' ? l.mlHome : l.mlAway) : juiceOf(l, market, pick);
+      if (edge < VALUE_MIN_EDGE || odds < -135) return;
+      const n = counts[selKey(sel)] || 0;
+      best.push({ g, l, market, pick, odds, edge, n, why, projH, projA, PH, PA, score: edge - 1.5 * n + (odds > 0 ? 0.5 : 0) });
+    };
+    add('spread', 'home', margin + l.spread, 'spread'); add('spread', 'away', -(margin + l.spread), 'spread');
+    add('total', 'over', tot - l.total, 'total'); add('total', 'under', l.total - tot, 'total');
+    // Underdog moneyline when the averages say the dog wins outright.
+    if (l.mlAway >= 120 && margin < 0) add('ml', 'away', -margin + 1, 'ml');
+    if (l.mlHome >= 120 && margin > 0) add('ml', 'home', margin + 1, 'ml');
+  });
+  best.sort((x, y) => y.score - x.score);
+  return best[0] || null;
+}
+function valueCard(games) {
+  const L = D.league; if (L.phase === PHASES.PRE || L.phase === PHASES.POST) return '';
+  const v = valuePick(games);
+  const wkl = games.length && games[0].week !== L.week ? `Week ${games[0].week}` : weekLabel();
+  const head = `<span class="ribbon vrib">💎 Hidden Value · ${esc(wkl)}</span>`;
+  if (!v) return `<div class="card popular value">${head}<div class="muted">Nothing stands out this week: the lines and the teams' scoring averages agree. Check back after scores come in.</div></div>`;
+  const { g, l, market, pick, odds, edge, n, projH, projA, PH, PA } = v, s = L.season;
+  const side = pick === 'home' ? g.home : g.away, other = pick === 'home' ? g.away : g.home, T = team(side), O = team(other);
+  const nm = t => esc(t.name), f1 = x => x.toFixed(1), P = pick === 'home' ? PH : PA;
+  const rec3 = a => `${a[0]}-${a[1]}${a[2] ? '-' + a[2] : ''}`;
+  const row = slipRows({ gameId: g.id, market, pick, odds, line: market === 'spread' ? l.spread : market === 'total' ? l.total : null, season: s })[0];
+  const why = [];
+  if (market === 'total') {
+    why.push(`${nm(team(g.away))} and ${nm(team(g.home))} project to <b>${f1(projH + projA)}</b> combined points on season averages, ${pick === 'over' ? 'above' : 'below'} the total of ${l.total} by ${f1(edge)}.`);
+    const oh = PH.ou, oa = PA.ou, ov = pick === 'over' ? oh[0] + oa[0] : oh[1] + oa[1], gp = oh[0] + oh[1] + oa[0] + oa[1];
+    if (gp) why.push(`Their games have gone <b>${pick} in ${ov} of ${gp}</b> this season.`);
+  } else {
+    const lineTxt = market === 'spread' ? `${T.abbr || T.name} ${fmtLine(pick === 'home' ? l.spread : -l.spread)}` : `${T.abbr || T.name} to win outright`;
+    const m = (pick === 'home' ? projH - projA : projA - projH);
+    why.push(`Season scoring averages have ${nm(T)} ${m >= 0 ? `winning by <b>${f1(m)}</b>` : `losing by only <b>${f1(-m)}</b>`}, a ${f1(edge)}-point edge on ${esc(lineTxt)}.`);
+    // One supporting stat, picked from whichever actually backs the bet.
+    const OP = pick === 'home' ? PA : PH, dogNow = (pick === 'home' ? l.pHome : 1 - l.pHome) < 0.5;
+    const back = [];
+    if (P.ats[0] > P.ats[1]) back.push(`${nm(T)} ${P.ats[0] - P.ats[1] >= 2 ? 'has been a cover machine at' : 'is'} <b>${rec3(P.ats)} against the spread</b> this season.`);
+    if (OP.ats[1] > OP.ats[0]) back.push(`${nm(O)} is just <b>${rec3(OP.ats)} against the spread</b> this season.`);
+    if (dogNow && P.dog[0] + P.dog[1] && P.dog[0] >= P.dog[1]) back.push(`${nm(T)} is <b>${P.dog[0]}-${P.dog[1]} straight up as an underdog</b>.`);
+    if (dogNow && OP.fav[1] >= 2) back.push(`${nm(O)} has lost <b>${OP.fav[1]} game${OP.fav[1] === 1 ? '' : 's'} as a favorite</b> (${OP.fav[0]}-${OP.fav[1]}).`);
+    const papgT = P.pa / P.gp, papgO = OP.pa / OP.gp;
+    if (papgT + 3 < papgO) back.push(`${nm(T)}'s defense allows <b>${f1(papgT)}</b> points a game, ${f1(papgO - papgT)} fewer than ${nm(O)}'s.`);
+    if (back.length) why.push(back[0]);
+  }
+  const inSlip = UI.mode === 'parlay' && UI.legs.some(x => selKey(x) === selKey({ gameId: g.id, market, pick }));
+  const mine = auth.profile && D.wagers.some(w => w.uid === auth.profile.id && w.status === 'open' && w.market !== 'parlay' && selKey(w) === selKey({ gameId: g.id, market, pick }));
+  return `<div class="card popular value">${head}
+    <div class="row spread" style="align-items:flex-end"><div style="min-width:0"><div class="pop-title">${esc(row.t)}</div><div class="muted small">${esc(row.s)}</div></div>
+    <div style="text-align:right"><div class="big" style="color:var(--gold)">${fmtOdds(odds)}</div>
+      ${UI.mode === 'parlay' ? `<button class="${inSlip ? 'ghost' : 'gold'}" data-value="${esc(g.id)}|${market}|${pick}">${inSlip ? '✓ In your parlay' : '+ Add to parlay'}</button>`
+        : mine ? '<span class="pill open">✓ You\'re on this</span>' : `<button class="gold" data-value="${esc(g.id)}|${market}|${pick}">Bet it</button>`}</div></div>
+    <ul class="vwhy">${why.map(w => `<li>${w}</li>`).join('')}<li>${n === 0 ? 'No one in the league has bet it yet.' : `Only <b>${n}</b> bet${n === 1 ? '' : 's'} on it so far.`}</li></ul></div>`;
 }
 function betPopular() {
   const p = popularPick(); if (!p) return;
@@ -1368,7 +1439,7 @@ document.addEventListener('click', async e => {
   if (lx) { try { localStorage.setItem('oecLiveDismissed', lx.dataset.livex); } catch (err) { /* ignore */ } showLive(); return; }
   const tf = e.target.closest('[data-tsflip]'); if (tf) { UI.tsFlip = !UI.tsFlip; route(); return; }
   const tr = e.target.closest('tr[data-team]'); if (tr && !e.target.closest('a')) { location.hash = '#team/' + tr.dataset.team; return; }
-  const t = e.target.closest('[data-sort],[data-metric],[data-trend],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-slip],[data-popular],[data-res],[data-act],[data-close],[data-stake],[data-acct],[data-cancel],[data-cashout],[data-kinv],[data-kacc],[data-kdec],[data-kcan]');
+  const t = e.target.closest('[data-sort],[data-metric],[data-trend],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-slip],[data-popular],[data-res],[data-act],[data-close],[data-stake],[data-acct],[data-cancel],[data-cashout],[data-value],[data-kinv],[data-kacc],[data-kdec],[data-kcan]');
   if (!t) return;
   const page = (location.hash.slice(1) || 'home').split('/')[0];
   if (t.dataset.sort) {
@@ -1396,6 +1467,7 @@ document.addEventListener('click', async e => {
     catch (err) { alert(friendlyError(err)); }
   }
   else if (t.dataset.cancel) { if (confirm('Cancel this wager and refund the stake?')) { try { await del('wagers', t.dataset.cancel); await reload(); } catch (err) { alert(err.message); } } }
+  else if (t.dataset.value) { const [gid, market, pick] = t.dataset.value.split('|'); if (UI.mode === 'parlay') toggleLeg(gid, market, pick); else showSlip(gid, market, pick); }
   else if (t.dataset.kinv || t.dataset.kacc || t.dataset.kdec || t.dataset.kcan) kickAction(t);
   else if (t.dataset.act === 'place') placeBet();
   else if (t.dataset.act === 'saveSlip') saveSlip();

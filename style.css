@@ -577,3 +577,9 @@ details.kform input{display:block;width:100%;max-width:280px;margin-top:6px}
 .gp-head>button.gold{display:block;margin:12px auto 0}
 .gp-head .gp-name{font-size:23px}
 @media(max-width:640px){.gp-head .gp-name{font-size:19px}}
+
+/* Hidden Value card */
+.card.value{border-color:rgba(120,200,255,.45);background:linear-gradient(135deg,#0d1f2a,#171314 70%)}
+.ribbon.vrib{background:#7fd0ff;color:#06202e}
+.vwhy{margin:10px 0 0;padding-left:18px;font-size:13.5px;line-height:1.5;color:var(--muted)}
+.vwhy b{color:var(--text)}
