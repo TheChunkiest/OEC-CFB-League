@@ -2,8 +2,9 @@ import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf
-} from './core.js?v=49';
+} from './core.js?v=50';
 import { lookupColor } from './teamcolors.js';
+import { lookupAbbr } from './programs.js?v=2';
 
 // Tabs: the weekly job lives on "This Week"; everything else is occasional. Awards only shows when it matters.
 const TABS = () => [['advance', 'This Week'], ['games', 'Scores & Schedule'], ['teams', 'Teams & Coaches'], ['betting', 'Sportsbook'],
@@ -33,7 +34,7 @@ function advClock() {
       <p class="muted small" style="margin:6px 0 0">Every advance records its own time and the next one is projected 3 days later, so you normally never touch this.</p></details></div>`;
 }
 const flash = m => { ST.msg = m; ST.clear = true; render(); window.scrollTo(0, 0); };
-const findTeam = s => { const q = String(s || '').trim().toLowerCase(); return D.teams.find(t => t.id === q || t.name.toLowerCase() === q || (t.abbr || '').toLowerCase() === q); };
+const findTeam = s => { const q = String(s || '').trim().toLowerCase(); return D.teams.find(t => t.id === q || t.name.toLowerCase() === q || (t.abbr || '').toLowerCase() === q || lookupAbbr(t.name).toLowerCase() === q); };
 
 /* ---------- Top 25 editor ---------- */
 function pollTeams() {
@@ -589,7 +590,7 @@ const ACT = {
     if (!u) return alert('Pick the account to link.');
     const ex = findTeam(name);
     if (ex && ex.conf === L().conference) return alert(`${ex.name} is already a ${L().conference} team. Link it in the table above instead.`);
-    const id = ex ? ex.id : slug(name), abbr = ($('#ocAbbr').value.trim() || (ex && ex.abbr) || name.replace(/[^A-Za-z]/g, '').slice(0, 4)).toUpperCase();
+    const id = ex ? ex.id : slug(name), abbr = ($('#ocAbbr').value.trim() || (ex && ex.abbr) || lookupAbbr(name) || name.replace(/[^A-Za-z]/g, '').slice(0, 4)).toUpperCase();
     const ops = [];
     if (ex) ops.push({ op: 'set', col: 'teams', id, data: { abbr, coach: u.name || '', uid } });
     else ops.push({ op: 'set', col: 'teams', id, data: { name, abbr, conf: 'Non-Conf', div: '', coach: u.name || '', uid, color: lookupColor(name) || '#777777', ovr: null, off: null, def: null }, merge: false });
@@ -703,7 +704,8 @@ document.addEventListener('click', async e => {
 document.addEventListener('change', e => {
   if (e.target.id === 'gwSel') { ST.gamesWeek = +e.target.value; render(); }
   if (e.target.id === 'gwNew' && e.target.value !== '') { ST.gamesWeek = +e.target.value; render(); }
-  if (e.target.dataset.k === 'name' && e.target.closest('[data-team]')) { const c = lookupColor(e.target.value), ci = e.target.closest('tr').querySelector('[data-k=color]'); if (c && (ci.value === '#777777' || ci.value === '#6b6b6b')) ci.value = c; }
+  if (e.target.dataset.k === 'name' && e.target.closest('[data-team]')) { const tr = e.target.closest('tr'), c = lookupColor(e.target.value), ci = tr.querySelector('[data-k=color]'), ai = tr.querySelector('[data-k=abbr]'), ab = lookupAbbr(e.target.value); if (c && (ci.value === '#777777' || ci.value === '#6b6b6b')) ci.value = c; if (ab && ai && !ai.value) ai.value = ab; }
+  if (e.target.id === 'ocTeam') { const ab = lookupAbbr(e.target.value); if (ab && !$('#ocAbbr').value) $('#ocAbbr').value = ab; }
 });
 
 (async function init() {

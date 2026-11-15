@@ -1,7 +1,7 @@
 // Shared data layer + league math for the OEC CFB League Hub.
 import { firebaseConfig } from './firebase-config.js';
 import { lookupColor } from './teamcolors.js';
-import { lookupProgram } from './programs.js?v=1';
+import { lookupProgram, lookupAbbr } from './programs.js?v=2';
 
 export const $ = s => document.querySelector(s);
 export const $$ = s => [...document.querySelectorAll(s)];
@@ -204,7 +204,11 @@ export async function resetPassword(email) {
 export function refreshProfile() { setProfile(); }
 
 /* ---------------- Helpers ---------------- */
-export const team = id => D.teams.find(t => t.id === id) || { id, name: id || '?', abbr: id, conf: '', div: '', coach: '', color: '' };
+export const team = id => {
+  const t = D.teams.find(x => x.id === id);
+  if (t) { if (!t.abbr) t.abbr = lookupAbbr(t.name) || t.name; return t; }   // missing abbreviation: use the common one
+  return { id, name: id || '?', abbr: id, conf: '', div: '', coach: '', color: '' };
+};
 export const mascotOf = t => (t && (t.mascot || lookupProgram(t.name)?.mascot)) || '';
 // Variety for generated text: after a team's first mention, some later mentions become its mascot
 // ("beat Purdue" → "beat the Boilermakers", "Purdue's defense" → "the Boilermakers' defense").
