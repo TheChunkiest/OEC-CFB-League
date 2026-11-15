@@ -54,8 +54,8 @@ function gameCard(g, opts = {}) {
   const who = [a, h].filter(isUserTeam).length ? ` · ${isUserTeam(a) ? esc(a.coach) : 'CPU'} ${g.neutral ? 'vs' : '@'} ${isUserTeam(h) ? esc(h.coach) : 'CPU'}` : '';
   return `<div class="card game clickable${opts.gotw ? ' gotw' : ''}" data-game="${esc(g.id)}">${opts.gotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}<span class="go" aria-hidden="true">›</span><div class="teams">
       <div class="matchup"><span class="mt ${done ? (aw ? 'w' : 'l') : ''}">${chip(a.id, { season: g.season, week: g.week, href: '#game/' + g.id })}${sc('away', aw)}</span><span class="at">${g.neutral ? 'vs' : '@'}</span><span class="mt ${done ? (hw ? 'w' : 'l') : ''}">${chip(h.id, { season: g.season, week: g.week, href: '#game/' + g.id })}${sc('home', hw)}</span>${tags.join('')}</div>
-      <div class="meta">${status}${who}${!done && kickoffOf(g) ? ` · <span class="kick">🕗 ${esc(fmtKick(kickoffOf(g), true))}</span>` : ''}</div>
-      ${!done && odds ? `<div class="meta">${odds}</div>` : ''}${done || g.forfeit ? '' : probBar(g, l, done)}${opts.extra || ''}</div></div>`;
+      <div class="meta">${status}${who}${!done && kickoffOf(g) ? ` · ${esc(fmtKick(kickoffOf(g), true))}` : ''}</div>
+      ${done || g.forfeit ? '' : probBar(g, l, done)}${!done && odds ? `<div class="meta">${odds}</div>` : ''}${opts.extra || ''}</div></div>`;
 }
 const sortTh = (st, key, label, cls = '', tbl = '') => `<th data-sort="${key}"${tbl ? ` data-st="${tbl}"` : ''} class="${cls}${st.key === key ? ' sorted' : ''}">${label}${st.key === key ? (st.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
 function sortRows(rows, st, getters) {
@@ -903,7 +903,6 @@ function kickoffCard(g) {
   const slots = i => i.times.map(t => esc(fmtKick(t))).join(' · ');
   const lines = [];
   if (inv) lines.push(`<div class="gpm"><span class="gpi">🕗</span><span><b>${esc(fmtKick(inv.time))}</b></span></div>`);
-  else if (!done) lines.push(`<div class="gpm"><span class="gpi">🕗</span><span class="muted">Coaches haven't set a time for this matchup.</span></div>`);
   if (v) lines.push(`<div class="gpm"><span class="gpi">📍</span><span><b>${esc(v.name)}</b>${v.city ? ` <span class="muted">· ${esc(v.city)}</span>` : ''}</span></div>`);
   let ctl = '';
   if (!done && inv) {
