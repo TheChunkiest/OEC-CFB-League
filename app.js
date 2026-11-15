@@ -556,12 +556,12 @@ function valueCard(games) {
   }
   const inSlip = UI.mode === 'parlay' && UI.legs.some(x => selKey(x) === selKey({ gameId: g.id, market, pick }));
   const mine = auth.profile && D.wagers.some(w => w.uid === auth.profile.id && w.status === 'open' && w.market !== 'parlay' && selKey(w) === selKey({ gameId: g.id, market, pick }));
+  const btn = UI.mode === 'parlay' ? `<button class="${inSlip ? 'ghost' : 'gold'}" data-value="${esc(g.id)}|${market}|${pick}">${inSlip ? '✓ In your parlay' : '+ Add to parlay'}</button>`
+    : mine ? '<span class="pill open">✓ You\'re on this</span>' : `<button class="gold" data-value="${esc(g.id)}|${market}|${pick}">Bet it</button>`;
   return `<div class="card popular value">${head}
-    <div class="row spread" style="align-items:flex-end"><div style="min-width:0"><div class="pop-title">${esc(row.t)}</div><div class="muted small">${esc(row.s)}</div></div>
-    <div style="text-align:right"><div class="big" style="color:var(--gold)">${fmtOdds(odds)}</div>
-      ${UI.mode === 'parlay' ? `<button class="${inSlip ? 'ghost' : 'gold'}" data-value="${esc(g.id)}|${market}|${pick}">${inSlip ? '✓ In your parlay' : '+ Add to parlay'}</button>`
-        : mine ? '<span class="pill open">✓ You\'re on this</span>' : `<button class="gold" data-value="${esc(g.id)}|${market}|${pick}">Bet it</button>`}</div></div>
-    <ul class="vwhy">${why.map(w => `<li>${w}</li>`).join('')}<li>${n === 0 ? 'No one in the league has bet it yet.' : `Only <b>${n}</b> bet${n === 1 ? '' : 's'} on it so far.`}</li></ul></div>`;
+    <div class="vtop"><div style="min-width:0"><div class="pop-title">${esc(row.t)}</div><div class="muted small">${esc(row.s)}</div></div><div class="big vodds">${fmtOdds(odds)}</div></div>
+    <ul class="vwhy">${why.map(w => `<li>${w}</li>`).join('')}<li>${n === 0 ? 'No one in the league has bet it yet.' : `Only <b>${n}</b> bet${n === 1 ? '' : 's'} on it so far.`}</li></ul>
+    <div class="vfoot">${btn}</div></div>`;
 }
 function betPopular() {
   const p = popularPick(); if (!p) return;
