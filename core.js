@@ -387,6 +387,116 @@ export function divisions() {
   return divs.length > 1 && divs.every(Boolean) ? divs.sort() : [''];
 }
 
+/* ---------------- Division race simulator ----------------
+   What-if engine for the Standings page. `picks` = { gameId: 'home' | 'away' } chosen by the viewer; every other
+   remaining regular-season game that involves the division is enumerated (up to 2^18 outcomes). Tiebreakers match
+   orderGroup: conference %, conference wins, head-to-head, overall %; point differential can't be predicted for
+   future games, so a tie that reaches it counts as "could go either way". */
+export function raceSim(d, picks = {}, season = D.league.season) {
+  const L = D.league;
+  if (L.phase !== PHASES.REG || season !== L.season) return null;
+  const divs = divisions(), K = divs.length > 1 ? 1 : 2, reg = g => g.season === season && (g.type || 'reg') === 'reg';
+  const ids = leagueTeams().filter(t => !d || t.div === d).map(t => t.id), m = ids.length, ix = {};
+  ids.forEach((id, i) => ix[id] = i);
+  const left = D.games.filter(g => reg(g) && !played(g) && (g.home in ix || g.away in ix)).sort((a, b) => a.week - b.week || String(a.id).localeCompare(String(b.id)));
+  const pick = g => picks[g.id] === 'home' ? true : picks[g.id] === 'away' ? false : null;
+  const open = left.filter(g => pick(g) === null), n = open.length;
+  const cw = new Array(m).fill(0), cl = new Array(m).fill(0), w = new Array(m).fill(0), l = new Array(m).fill(0);
+  const h2h = Array.from({ length: m }, () => new Array(m).fill(0)), h2hG = {};
+  const add = (g, homeWon, C, CL, W, Lo, Hh, note) => {
+    const win = homeWon ? g.home : g.away, lose = homeWon ? g.away : g.home, a = ix[win], b = ix[lose];
+    if (a != null) W[a]++; if (b != null) Lo[b]++;
+    if (isConfGame(g)) { if (a != null) C[a]++; if (b != null) CL[b]++; }
+    if (a != null && b != null) { Hh[a][b]++; if (note) (h2hG[a + '|' + b] = h2hG[a + '|' + b] || []).push({ g, picked: note === 'pick', fav: note === 'fav' }); }
+  };
+  D.games.filter(g => reg(g) && played(g)).forEach(g => add(g, +g.homeScore > +g.awayScore, cw, cl, w, l, h2h, 'played'));
+  left.forEach(g => { const r = pick(g); if (r !== null) add(g, r, cw, cl, w, l, h2h, 'pick'); });
+  const R = records(season), pd = ids.map(id => R[id].pf - R[id].pa);
+  const res = { div: d, K, ids, left, open, picks };
+
+  // Projected order: picks, then the favorite in every open game. Each neighbor pair gets the reason it's ordered that way.
+  {
+    const C = cw.slice(), CL = cl.slice(), W = w.slice(), Lo = l.slice(), Hh = h2h.map(r => r.slice());
+    open.forEach(g => { const lnx = lineOf(g); add(g, !lnx || lnx.pHome >= 0.5, C, CL, W, Lo, Hh, 'fav'); });
+    const why = (a, b) => {   // a finishes ahead of b: which rule decided it?
+      if (pctOf(C[a], CL[a]) !== pctOf(C[b], CL[b])) return { k: 'conf', t: 'better conference record' };
+      if (C[a] !== C[b]) return { k: 'confw', t: 'more conference wins' };
+      if (Hh[a][b] !== Hh[b][a]) {
+        const gs = (h2hG[a + '|' + b] || []), g = gs[gs.length - 1];
+        return { k: 'h2h', t: g ? `head-to-head (${g.picked ? 'your pick, ' : g.fav ? 'favored, ' : 'won '}Week ${g.g.week})` : 'head-to-head' };
+      }
+      if (pctOf(W[a], Lo[a]) !== pctOf(W[b], Lo[b])) return { k: 'ovr', t: 'better overall record' };
+      return { k: 'pd', t: pd[a] !== pd[b] ? 'point differential (can still change)' : 'too close to call' };
+    };
+    const order = [...ids.keys()].sort((a, b) => pctOf(C[b], CL[b]) - pctOf(C[a], CL[a]) || (C[b] - C[a]) || (Hh[b][a] - Hh[a][b]) || pctOf(W[b], Lo[b]) - pctOf(W[a], Lo[a]) || (pd[b] - pd[a]));
+    res.projected = order.map((t, i) => ({ id: ids[t], cw: C[t], cl: CL[t], w: W[t], l: Lo[t], over: i < order.length - 1 ? why(t, order[i + 1]) : null }));
+    res.favFilled = open.length;
+  }
+  if (n > 18) { res.tooMany = true; return res; }
+
+  // Enumerate every outcome of the open games.
+  const N = 1 << n, FULL = (1 << m) - 1;
+  const own = ids.map(id => { let mask = 0, want = 0; open.forEach((g, i) => { if (g.home === id || g.away === id) { mask |= 1 << i; if (g.home === id) want |= 1 << i; } }); return { mask, want }; });
+  let certAll = FULL, possAny = 0;
+  const certI = open.map(() => [FULL, FULL]), possI = open.map(() => [0, 0]);
+  const best = new Array(m).fill(99), worst = new Array(m).fill(0);
+  const wo = ids.map(() => ({ any: false, cert: FULL, poss: 0, certJ: open.map(() => [FULL, FULL]), possJ: open.map(() => [0, 0]) }));
+  const pairOK = n <= 16;
+  const pairs = []; if (pairOK) for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) pairs.push([i, j]);
+  const woPair = ids.map(() => pairOK ? pairs.map(() => [FULL, FULL, FULL, FULL]) : null);
+  const C = new Array(m), CL = new Array(m), W = new Array(m), Lo = new Array(m), Hh = Array.from({ length: m }, () => new Array(m));
+  for (let o = 0; o < N; o++) {
+    for (let t = 0; t < m; t++) { C[t] = cw[t]; CL[t] = cl[t]; W[t] = w[t]; Lo[t] = l[t]; for (let u = 0; u < m; u++) Hh[t][u] = h2h[t][u]; }
+    for (let i = 0; i < n; i++) add(open[i], !!(o >> i & 1), C, CL, W, Lo, Hh, null);
+    const cmp = (a, b) => pctOf(C[b], CL[b]) - pctOf(C[a], CL[a]) || (C[b] - C[a]) || (Hh[b][a] - Hh[a][b]) || pctOf(W[b], Lo[b]) - pctOf(W[a], Lo[a]);
+    let cert = 0, poss = 0;
+    for (let t = 0; t < m; t++) {
+      let def = 0, may = 0;
+      for (let u = 0; u < m; u++) if (u !== t) { const c = cmp(u, t); if (c < 0) def++; if (c <= 0) may++; }
+      if (may < K) cert |= 1 << t;
+      if (def < K) poss |= 1 << t;
+      if (def + 1 < best[t]) best[t] = def + 1;
+      if (may + 1 > worst[t]) worst[t] = may + 1;
+    }
+    certAll &= cert; possAny |= poss;
+    for (let i = 0; i < n; i++) { const r = o >> i & 1; certI[i][r] &= cert; possI[i][r] |= poss; }
+    for (let t = 0; t < m; t++) {
+      if ((o & own[t].mask) !== own[t].want) continue;
+      const x = wo[t]; x.any = true; x.cert &= cert; x.poss |= poss;
+      for (let i = 0; i < n; i++) { const r = o >> i & 1; x.certJ[i][r] &= cert; x.possJ[i][r] |= poss; }
+      if (pairOK) { const P = woPair[t]; for (let q = 0; q < pairs.length; q++) { const [i, j] = pairs[q]; P[q][(o >> i & 1) * 2 + (o >> j & 1)] &= cert; } }
+    }
+  }
+  const R1 = (g, homeWon) => ({ g, winner: homeWon ? g.home : g.away, loser: homeWon ? g.away : g.home });
+  res.teams = ids.map((id, t) => {
+    const bit = 1 << t, clinched = !!(certAll & bit), out = !(possAny & bit), x = wo[t];
+    const mine = (g) => g.home === id || g.away === id;
+    const T = { id, status: clinched ? 'clinched' : out ? 'eliminated' : 'alive', best: best[t], worst: worst[t] };
+    if (clinched || out) return T;
+    T.mustWin = open.filter((g, i) => mine(g) && !(possI[i][g.home === id ? 0 : 1] & bit));
+    T.canLose = open.filter((g, i) => mine(g) && (possI[i][g.home === id ? 0 : 1] & bit));
+    T.needs = open.map((g, i) => !mine(g) && [0, 1].map(r => !(possI[i][r] & bit) ? R1(g, !r) : null).find(Boolean)).filter(Boolean);
+    T.winsOutIn = x.any && !!(x.cert & bit);           // controls own destiny
+    T.winsOutAlive = x.any && !!(x.poss & bit);
+    T.clinch1 = open.map((g, i) => [0, 1].map(r => (certI[i][r] & bit) ? R1(g, !!r) : null).find(Boolean)).filter(Boolean);
+    if (!T.winsOutIn && T.winsOutAlive) {
+      // Wins out + one result elsewhere, else wins out + two results.
+      T.help1 = []; T.help2 = [];
+      open.forEach((g, i) => { if (mine(g)) return; [0, 1].forEach(r => { if (x.certJ[i][r] & bit) T.help1.push(R1(g, !!r)); }); });
+      if (!T.help1.length && pairOK) {
+        pairs.forEach(([i, j], q) => {
+          if (mine(open[i]) || mine(open[j])) return;
+          for (let c = 0; c < 4; c++) if (woPair[t][q][c] & bit) T.help2.push([R1(open[i], !!(c >> 1)), R1(open[j], !!(c & 1))]);
+        });
+        T.help2 = T.help2.slice(0, 4);
+      }
+      T.pdOnly = !T.help1.length && !T.help2.length;   // even the best case may come down to point differential / 3+ results
+    }
+    return T;
+  });
+  return res;
+}
+
 /* ---------------- Clinching scenarios ---------------- */
 // Exact enumeration of every remaining regular-season outcome for each division (when there are
 // 16 or fewer games left that involve its teams). Tiebreakers follow orderGroup: conference %,

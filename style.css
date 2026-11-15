@@ -662,3 +662,27 @@ h2{margin-bottom:14px}
 h3{margin-bottom:10px}
 .row.spread+.tablewrap{margin-top:10px}
 .row.spread:has([data-tstat]){margin-bottom:10px}
+
+/* Division race */
+.race2 .racelist{margin:4px 0 0}
+.race2 .racelist li{padding:10px 0;border-top:1px solid var(--line)}
+.race2 .racelist li:first-child{border-top:0;padding-top:4px}
+.rpath p{margin:4px 0 0;font-size:.9rem;line-height:1.45}
+.rneed{color:#ff8a8f;font-weight:700}
+.rgood{color:var(--green);font-weight:700}
+.rsub{margin:16px 0 8px;padding-top:12px;border-top:1px solid var(--line);font-weight:800;font-size:.8rem;letter-spacing:.6px;text-transform:uppercase;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rsub .muted{font-weight:500;letter-spacing:0;text-transform:none;font-size:.85rem}
+.rsub button{margin-left:auto}
+.rproj{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.rproj li{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.88rem}
+.rpos{width:18px;font-weight:800;color:var(--gold);text-align:center}
+.rrec{color:var(--muted);font-size:.82rem}
+.rwhy{flex-basis:100%;padding-left:26px;color:var(--muted);font-size:.8rem;margin-top:-2px}
+.rwk{font-size:.75rem;font-weight:800;color:var(--muted);letter-spacing:.6px;text-transform:uppercase;margin:10px 0 6px}
+.rgame{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;margin-bottom:6px}
+.rpk{display:flex;align-items:center;justify-content:center;gap:6px;background:var(--card2);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:8px 10px;font-weight:800;font-size:.9rem;min-height:40px;cursor:pointer}
+.rpk span{color:var(--muted);font-weight:600;font-size:.78rem}
+.rpk.on{border-color:var(--gold);background:rgba(245,184,46,.14);color:var(--gold)}
+.rpk.on span{color:var(--gold)}
+.rat{color:var(--muted);font-size:.85rem}
+.rpath .rleft{color:var(--muted);font-size:.8rem;margin-top:6px}

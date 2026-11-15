@@ -1,9 +1,9 @@
 import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, batch, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout, PUSH_PREFS, pushDefaults, pushLocal, pushSupported, pushEnable, pushPrefs, pushDisable,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
-  pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
+  pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, raceSim, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
   gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
-} from './core.js?v=51';
+} from './core.js?v=52';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -112,6 +112,67 @@ function raceHtml(r, order) {
     <div class="muted small" style="margin:10px 0 2px;font-weight:800;letter-spacing:.6px;text-transform:uppercase">What can happen in ${wk}</div>
     <ul class="racelist">${rows.map(card).join('')}</ul></div>`;
 }
+// ---- Division Race (Standings page): every team's path, plus a what-if picker for the remaining games ----
+let racePicks = {}; try { racePicks = JSON.parse(sessionStorage.getItem('oecRace') || '{}'); } catch (e) { }
+const saveRacePicks = () => { try { sessionStorage.setItem('oecRace', JSON.stringify(racePicks)); } catch (e) { } };
+function raceSection() {
+  const s = S(); if (s !== D.league.season || D.league.phase !== PHASES.REG) return '';
+  const sims = divisions().map(d => raceSim(d, racePicks, s)).filter(r => r && r.left.length);
+  if (!sims.length) return '';
+  return `<h2>Division Race</h2>` + sims.map(raceCard).join('');
+}
+function raceCard(r) {
+  const nm = id => esc(team(id).name), ab = id => esc(team(id).abbr || team(id).name);
+  const prize = r.K === 1 && r.div ? `the ${esc(r.div)}` : 'the title game';
+  const vsTxt = (g, me) => `${g.home === me ? 'vs' : g.neutral ? 'vs' : 'at'} ${ab(g.home === me ? g.away : g.home)} <span class="muted">(Wk ${g.week})</span>`;
+  const list = a => a.length <= 1 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
+  const beat = x => `${ab(x.winner)} beats ${ab(x.loser)}`;
+  const ordn = n => ordinal(n);
+  const nPicked = r.left.length - r.open.length;
+  const byId = Object.fromEntries((r.teams || []).map(t => [t.id, t]));
+  const pill = t => !t ? '' : t.status === 'clinched' ? '<span class="rs ok">✓ Clinched</span>' : t.status === 'eliminated' ? '<span class="rs out">Out</span>' : t.winsOutIn ? '<span class="rs gold">In control</span>' : '<span class="rs">Needs help</span>';
+  // Group results by the team that has to lose: "KENN loses to LT, UK or PUR".
+  const results = arr => {
+    const by = {}; arr.forEach(x => (by[x.loser] = by[x.loser] || []).push(x.winner));
+    return Object.entries(by).map(([lo, ws]) => ws.length === 1 ? `${ab(ws[0])} beats ${ab(lo)}` : `${ab(lo)} loses to ${orList(ws.map(ab))}`);
+  };
+  const orList = a => a.length <= 1 ? a.join('') : a.slice(0, -1).join(', ') + ' or ' + a[a.length - 1];
+  const path = (t) => {
+    if (!t) return '';
+    if (t.status === 'clinched') return `<p>Has clinched ${prize}${r.K === 1 ? ' and a spot in the title game' : ''}.</p>`;
+    if (t.status === 'eliminated') return `<p class="muted">Can't win ${prize} anymore.</p>`;
+    const mine = r.open.filter(g => g.home === t.id || g.away === t.id), out = [];
+    const opp = g => ab(g.home === t.id ? g.away : g.home);
+    if (t.winsOutIn) {
+      out.push(mine.length ? `<b>Win out and it's in.</b>` : `<b>In as things stand</b> unless other results go against it.`);
+      if (t.canLose.length) out.push(`One loss isn't fatal: it can still get in after losing to ${orList(t.canLose.map(opp))}, with help.`);
+    } else if (t.winsOutAlive) {
+      const lead = mine.length ? '<b>Win out</b> plus' : '<b>Needs</b>';
+      if (t.help1.length) { const h = results(t.help1).slice(0, 4); out.push(`${lead} ${h.length > 1 ? 'any one of these: ' : ''}${h.join(' <span class="muted">or</span> ')}.`); }
+      else if (t.help2.length) out.push(`${lead} two results, such as ${t.help2.slice(0, 2).map(p => p.map(x => `${ab(x.winner)} beats ${ab(x.loser)}`).join(' <b>and</b> ')).join(' <span class="muted">or</span> ')}.`);
+      else out.push(`${mine.length ? '<b>Win out</b>, then' : 'Needs'} a lot to break its way. It may take several results or come down to point differential.`);
+      if (t.mustWin.length && t.mustWin.length < mine.length) out.push(`Can't afford to lose to ${orList(t.mustWin.map(opp))}.`);
+      else if (t.canLose.length && t.mustWin.length < mine.length) out.push(`A loss to ${orList(t.canLose.map(opp))} doesn't end it, but it needs more help after one.`);
+    } else out.push(`Still alive only through tiebreaks that need other results to break its way.`);
+    if (t.needs.length) out.push(`<span class="rneed">Needs no matter what:</span> ${results(t.needs).join(', ')}.`);
+    if (t.clinch1.length) out.push(`<span class="rgood">Clinches right away if</span> ${results(t.clinch1).slice(0, 3).join(' <span class="muted">or</span> ')}.`);
+    const left = mine.length ? `<p class="rleft">Left: ${mine.map(g => `${g.home === t.id || g.neutral ? 'vs' : 'at'} ${opp(g)} <span class="muted">Wk ${g.week}</span>`).join(' · ')}</p>` : '';
+    return out.map(x => `<p>${x}</p>`).join('') + left;
+  };
+  const range = t => !t ? '' : t.best === t.worst ? `Finishes ${ordn(t.best)}` : `Can finish ${ordn(t.best)}–${ordn(t.worst)}`;
+  const teamsHtml = r.tooMany ? `<p class="muted small">There are too many games left to map every path. Pick a few results below and the paths will appear.</p>`
+    : `<ul class="racelist">${r.projected.map(p => byId[p.id]).map(t => `<li><div class="rh">${chip(t.id)}${pill(t)}<span class="muted small">${range(t)}</span></div><div class="rpath">${path(t)}</div></li>`).join('')}</ul>`;
+  const proj = `<div class="rsub">Projected finish <span class="muted">${nPicked ? `your ${nPicked} pick${nPicked > 1 ? 's' : ''}` : ''}${nPicked && r.open.length ? ' + ' : ''}${r.open.length ? 'favorites in the rest' : ''}</span></div>
+    <ol class="rproj">${r.projected.map((p, i) => `<li><span class="rpos">${i + 1}</span>${chip(p.id)}<span class="rrec">${p.cw}-${p.cl} conf · ${p.w}-${p.l}</span>${p.over ? `<span class="rwhy">ahead of ${ab(r.projected[i + 1].id)}: ${esc(p.over.t)}</span>` : ''}</li>`).join('')}</ol>`;
+  const weeks = [...new Set(r.left.map(g => g.week))];
+  const picker = `<div class="rsub">What if… <span class="muted">tap a winner to see how it changes</span>${nPicked ? ` <button class="ghost sm" data-rreset="${esc(r.div)}">Reset</button>` : ''}</div>
+    ${weeks.map(wk => `<div class="rwk">Week ${wk}</div>${r.left.filter(g => g.week === wk).map(g => {
+      const lnx = lineOf(g), ph = lnx ? Math.round(lnx.pHome * 100) : null, cur = racePicks[g.id] || '';
+      const btn = (side, id, pct) => `<button class="rpk ${cur === side ? 'on' : ''}" data-rpick="${esc(g.id)}|${side}"><i class="sw" style="background:${esc(teamColor(team(id)))}"></i>${ab(id)}${pct != null ? `<span>${pct}%</span>` : ''}</button>`;
+      return `<div class="rgame">${btn('away', g.away, ph != null ? 100 - ph : null)}<span class="rat">${g.neutral ? 'vs' : '@'}</span>${btn('home', g.home, ph)}</div>`;
+    }).join('')}`).join('')}`;
+  return `<div class="card race2"><h3 style="margin-top:0">${esc(r.div ? D.league.conference + ' ' + r.div : D.league.conference)} race</h3>${teamsHtml}${proj}${picker}</div>`;
+}
 // One sentence for a game preview: does this result clinch or eliminate anyone?
 function clinchNote(g) {
   if ((g.type || 'reg') !== 'reg' || played(g)) return '';
@@ -172,8 +233,8 @@ const PAGES = {
       return `<div class="card"><h3 style="margin-top:0">${esc(d ? D.league.conference + ' ' + d : D.league.conference)}</h3><div class="tablewrap"><table>
         <tr>${sortTh(st, 'place', '#')}${sortTh(st, 'name', 'Team')}${sortTh(st, 'coach', 'Coach', 'hide-sm')}${sortTh(st, 'cpct', 'Conf', 'num')}${sortTh(st, 'dpct', 'Div', 'num')}${sortTh(st, 'pf', 'PF', 'num hide-sm')}${sortTh(st, 'pa', 'PA', 'num hide-sm')}${sortTh(st, 'diff', 'Diff', 'num')}${sortTh(st, 'stk', 'Strk', 'num hide-xs')}</tr>
         ${rows.map(r => `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td class="rank">${r.place}</td><td>${chip(r.id)}${subSm(isUserTeam(team(r.id)) ? esc(r.coach) : 'CPU')}</td><td class="hide-sm">${isUserTeam(team(r.id)) ? `<a href="#coach/${slug(r.coach)}">${esc(r.coach)}</a>` : '<span class="muted">CPU</span>'}</td><td class="num">${r.cw}-${r.cl}</td><td class="num">${r.dw}-${r.dl}</td><td class="num hide-sm">${r.pf}</td><td class="num hide-sm">${r.pa}</td><td class="num">${r.diff > 0 ? '+' : ''}${r.diff}</td><td class="num hide-xs">${r.stk}</td></tr>`).join('')}
-      </table></div>${raceHtml(race.find(r => r.div === d), ordered.map(r => r.id))}</div>`;
-    }).join('');
+      </table></div></div>`;
+    }).join('') + `<div id="race">${raceSection()}</div>`;
   },
 
   schedule(arg) {
@@ -1454,6 +1515,14 @@ function route() {
 async function reload() { await loadAll(); refreshProfile(); if (D.league.awards?.open && auth.user) await loadBallots(false); route(); }
 
 document.addEventListener('click', async e => {
+  const rp = e.target.closest('[data-rpick]'), rr = e.target.closest('[data-rreset]');
+  if (rp || rr) {
+    if (rp) { const [gid, side] = rp.dataset.rpick.split('|'); if (racePicks[gid] === side) delete racePicks[gid]; else racePicks[gid] = side; }
+    else { const div = rr.dataset.rreset; D.games.forEach(g => { if (team(g.home).div === div || team(g.away).div === div) delete racePicks[g.id]; }); }
+    saveRacePicks();
+    const box = $('#race'), y = scrollY; if (box) { box.innerHTML = raceSection(); scrollTo(0, y); }
+    return;
+  }
   if (e.target.closest('[data-a2hsx]')) { try { localStorage.setItem('oecA2HS', '1'); } catch (x) { } e.target.closest('.a2hs')?.remove(); return; }
   const bg = e.target.closest('[data-betgame]');
   if (bg) { UI.betWeek = +bg.dataset.betgame; location.hash = '#betting'; return; }
