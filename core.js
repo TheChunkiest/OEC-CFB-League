@@ -573,10 +573,44 @@ export function futuresPosted() { const L = D.league, F = L.futures; return DEMO
 // Post lines for every unplayed game from `week` on (current + future weeks), plus League Champion futures.
 export function boardOps(week, season = D.league.season) {
   const L = D.league;
-  const ops = D.games.filter(g => g.season === season && g.week >= week && !played(g)).map(g => ({ op: 'set', col: 'games', id: g.id, data: { lines: freshLine(g) } }));
+  const ops = D.games.filter(g => g.season === season && g.week >= week && !played(g)).map(g => {
+    const l = freshLine(g), data = { lines: l }, h = histPoint(g, l);
+    if (h) data.hist = h;
+    return { op: 'set', col: 'games', id: g.id, data };
+  });
   if (season === L.season && week === L.week && L.phase === PHASES.REG) ops.push({ op: 'set', col: 'meta', id: 'league', data: { futures: futuresSnapshot(), winTotals: winTotalsSnapshot() } });
   return ops;
 }
+/* ---------- Win-chance history (for the game preview chart) ---------- */
+// Every re-price appends a point when the home win chance moves; capped so the doc stays small.
+function histPoint(g, l) {
+  if (!l || l.pHome == null) return null;
+  const old = Array.isArray(g.hist) ? g.hist : [], last = old[old.length - 1], p = Math.round(l.pHome * 1000) / 1000;
+  if (last && Math.abs(last.p - p) < 0.0005 && last.s === l.spread) return null;
+  return [...old, { t: Date.now(), p, s: l.spread, u: priceUpto(g) }].slice(-80);
+}
+// Points from matchup open to now (or kickoff). Weeks before the first saved point are rebuilt from the
+// model as of each week, so every game has a chart even from before tracking started.
+export function winHistory(g) {
+  const s = g.season, saved = Array.isArray(g.hist) ? g.hist : [];
+  const weeks = [...new Set(D.games.filter(x => x.season === s).map(x => x.week))].sort((a, b) => a - b);
+  const endU = Math.min(priceUpto(g), saved.length ? saved[0].u : Infinity);
+  const pts = [];
+  const at = u => { const l = lineFrom(ratings(s, u), g); return l ? { p: l.pHome, s: l.spread } : null; };
+  const open = at(weeks[0]);
+  if (open) pts.push({ label: 'Open', sub: 'Matchup open (preseason)', ...open });
+  weeks.filter(w => w < g.week && w + 1 < endU).forEach(w => { const v = at(w + 1); if (v) pts.push({ label: `Wk ${w}`, sub: `After Week ${w} results`, ...v }); });
+  saved.forEach(h => pts.push({ label: fmtShort(h.t), sub: 'Re-priced ' + new Date(h.t).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }), p: h.p, s: h.s, t: h.t }));
+  const cur = lineOf(g);
+  if (cur && cur.pHome != null) {
+    const last = pts[pts.length - 1], p = Math.round(cur.pHome * 1000) / 1000;
+    if (!last || Math.abs(last.p - p) >= 0.0005) pts.push({ label: played(g) ? 'Kickoff' : 'Now', sub: played(g) ? 'Closing line' : 'Current line', p, s: cur.spread });
+    else if (last) { last.label = played(g) ? 'Kickoff' : 'Now'; last.sub = (played(g) ? 'Closing line' : 'Current line') + (last.t ? ' · ' + last.sub : ''); }
+  }
+  return pts;
+}
+const fmtShort = ts => new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric' });
+
 // Commissioner's browser fills in anything missing from the board (lines for upcoming games, futures odds).
 export async function ensureFutures() {
   const L = D.league;

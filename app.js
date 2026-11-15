@@ -2,8 +2,8 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ratings, powerRankings, lastPlayedWeek, clinchScenarios
-} from './core.js?v=35';
+  gotwTally, coachStats, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
+} from './core.js?v=36';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['betting', 'Betting'], ['odds', 'Odds'],
@@ -737,6 +737,74 @@ async function placeBet() {
 }
 
 /* ---------- chart ---------- */
+/* ---------- Win-chance chart (game preview) ---------- */
+// Team colors can be very dark on our dark cards; lift them until the line reads.
+function liftColor(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || ''); if (!m) return '#9a9a9a';
+  let [r, g, b] = [0, 2, 4].map(i => parseInt(m[1].slice(i, i + 2), 16));
+  const lum = () => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  for (let i = 0; i < 12 && lum() < 0.42; i++) { r += (255 - r) * 0.18; g += (255 - g) * 0.18; b += (255 - b) * 0.18; }
+  return '#' + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
+}
+function colorGap(a, b) { const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)); const x = p(a), y = p(b); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]); }
+function winChart(g, A, H) {
+  const pts = winHistory(g); if (!pts.length) return '';
+  const done = played(g), n = pts.length;
+  const ca = liftColor(teamColor(A)); let ch = liftColor(teamColor(H));
+  const same = colorGap(ca, ch) < 70; if (same) ch = '#e8e2e3';
+  const narrow = innerWidth < 640, W = narrow ? 360 : 860, Ht = narrow ? 200 : 260, P = { l: 34, r: narrow ? 74 : 84, t: 12, b: 26 };
+  const x = i => P.l + (n === 1 ? (W - P.l - P.r) / 2 : i * (W - P.l - P.r) / (n - 1)), y = v => P.t + (1 - v) * (Ht - P.t - P.b);
+  const path = f => pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(f(p)).toFixed(1)}`).join('');
+  const fa = p => 1 - p.p, fh = p => p.p;
+  let svg = `<svg viewBox="0 0 ${W} ${Ht}" role="img" aria-label="Win chance from matchup open to ${done ? 'kickoff' : 'now'}" class="wpsvg">`;
+  [0, .25, .5, .75, 1].forEach(v => svg += `<line x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}" stroke="${v === .5 ? '#4a3a40' : '#2b2024'}" ${v === .5 ? 'stroke-dasharray="4 4"' : ''}/><text x="${P.l - 6}" y="${y(v) + 4}" fill="#a69a9c" font-size="11" text-anchor="end">${v * 100}%</text>`);
+  const step = Math.max(1, Math.ceil(n / (narrow ? 4 : 6)));
+  pts.forEach((p, i) => { if (i % step === 0 || i === n - 1) { if (i !== n - 1 && n - 1 - i < step * 0.6) return; svg += `<text x="${x(i)}" y="${Ht - 7}" fill="#a69a9c" font-size="11" text-anchor="${i === 0 && n > 1 ? 'start' : i === n - 1 && n > 1 ? 'end' : 'middle'}">${esc(p.label)}</text>`; } });
+  svg += `<path d="${path(fa)}" fill="none" stroke="${ca}" stroke-width="2.5" stroke-linejoin="round"/><path d="${path(fh)}" fill="none" stroke="${ch}" stroke-width="2.5" stroke-linejoin="round"${same ? ' stroke-dasharray="6 4"' : ''}/>`;
+  // Direct labels at the right end, nudged apart.
+  const ends = [{ v: fa(pts[n - 1]), t: A, c: ca }, { v: fh(pts[n - 1]), t: H, c: ch }].map(e => ({ ...e, yy: y(e.v) })).sort((a, b) => a.yy - b.yy);
+  if (ends[1].yy - ends[0].yy < 16) { const mid = (ends[0].yy + ends[1].yy) / 2; ends[0].yy = mid - 8; ends[1].yy = mid + 8; }
+  ends.forEach(e => svg += `<circle cx="${x(n - 1)}" cy="${y(e.v)}" r="4" fill="${e.c}" stroke="#1a1416" stroke-width="2"/><text x="${x(n - 1) + 9}" y="${e.yy + 4}" fill="#f3eeee" font-size="12" font-weight="800">${esc(e.t.abbr || e.t.name)} ${Math.round(e.v * 100)}%</text>`);
+  svg += `<g class="wpx" style="display:none"><line y1="${P.t}" y2="${Ht - P.b}" stroke="#a69a9c" stroke-width="1"/><circle r="4.5" fill="${ca}" stroke="#1a1416" stroke-width="2" class="wpa"/><circle r="4.5" fill="${ch}" stroke="#1a1416" stroke-width="2" class="wph"/></g>`;
+  svg += `<rect x="${P.l}" y="0" width="${W - P.l - P.r}" height="${Ht}" fill="transparent" class="wphit"/></svg>`;
+  const first = pts[0], last = pts[n - 1], mv = v => { const d = Math.round(v * 100); return d === 0 ? '<span class="muted">no change</span>' : `<span class="${d > 0 ? 'up' : 'down'}">${d > 0 ? '▲' : '▼'} ${Math.abs(d)}</span>`; };
+  const head = (t, c, now, open) => `<div class="wph-team"><i class="sw" style="background:${c}"></i><span class="wph-ab">${esc(t.abbr || t.name)}</span><b class="wph-v">${Math.round(now * 100)}%</b><span class="wph-mv">${mv(now - open)}</span></div>`;
+  const data = esc(JSON.stringify({ pts: pts.map(p => ({ l: p.label, s: p.sub, p: p.p })), W, Ht, P, n, A: A.abbr || A.name, H: H.abbr || H.name, open: first.p }));
+  const when = `${done ? 'Matchup open to kickoff' : 'Since the matchup opened'} · ${n} point${n === 1 ? '' : 's'}`;
+  return `<div class="card wpchart" data-wp="${data}" data-when="${esc(when)}"><div class="row spread" style="align-items:flex-end;gap:6px 14px"><div><h3 style="margin:0">Win chance</h3><div class="muted small wph-when">${esc(when)}</div></div>
+    <div class="wph">${head(A, ca, fa(last), fa(first))}${head(H, ch, fh(last), fh(first))}</div></div>
+    <div class="wpwrap">${svg}</div><p class="muted small" style="margin:6px 0 0">The model's chance for each team, updated whenever lines re-price (new scores, an advance or rating changes). Weeks before tracking started are rebuilt from the model as of each week. Touch or hover to see each point.</p></div>`;
+}
+// Crosshair + header readout for the win-chance chart.
+function wpHover(e) {
+  const card = e.target.closest && e.target.closest('.wpchart'); if (!card) return;
+  const svg = card.querySelector('svg'), D0 = JSON.parse(card.dataset.wp), r = svg.getBoundingClientRect();
+  const px = (e.touches ? e.touches[0].clientX : e.clientX) - r.left, vx = px / r.width * D0.W;
+  const span = D0.W - D0.P.l - D0.P.r, i = D0.n === 1 ? 0 : Math.max(0, Math.min(D0.n - 1, Math.round((vx - D0.P.l) / span * (D0.n - 1))));
+  const p = D0.pts[i], X = D0.P.l + (D0.n === 1 ? span / 2 : i * span / (D0.n - 1)), Y = v => D0.P.t + (1 - v) * (D0.Ht - D0.P.t - D0.P.b);
+  const g = svg.querySelector('.wpx'); g.style.display = '';
+  g.querySelector('line').setAttribute('x1', X); g.querySelector('line').setAttribute('x2', X);
+  g.querySelector('.wpa').setAttribute('cx', X); g.querySelector('.wpa').setAttribute('cy', Y(1 - p.p));
+  g.querySelector('.wph').setAttribute('cx', X); g.querySelector('.wph').setAttribute('cy', Y(p.p));
+  const v = card.querySelectorAll('.wph-v'), m = card.querySelectorAll('.wph-mv');
+  const mv = d => { d = Math.round(d * 100); return d === 0 ? '<span class="muted">no change</span>' : `<span class="${d > 0 ? 'up' : 'down'}">${d > 0 ? '▲' : '▼'} ${Math.abs(d)}</span>`; };
+  v[0].textContent = Math.round((1 - p.p) * 100) + '%'; v[1].textContent = Math.round(p.p * 100) + '%';
+  m[0].innerHTML = mv((1 - p.p) - (1 - D0.open)); m[1].innerHTML = mv(p.p - D0.open);
+  card.querySelector('.wph-when').textContent = p.s;
+}
+function wpReset(card) {
+  if (!card || !card.dataset.wp) return;
+  const D0 = JSON.parse(card.dataset.wp), p = D0.pts[D0.n - 1];
+  card.querySelector('.wpx').style.display = 'none';
+  const v = card.querySelectorAll('.wph-v'), m = card.querySelectorAll('.wph-mv');
+  const mv = d => { d = Math.round(d * 100); return d === 0 ? '<span class="muted">no change</span>' : `<span class="${d > 0 ? 'up' : 'down'}">${d > 0 ? '▲' : '▼'} ${Math.abs(d)}</span>`; };
+  v[0].textContent = Math.round((1 - p.p) * 100) + '%'; v[1].textContent = Math.round(p.p * 100) + '%';
+  m[0].innerHTML = mv((1 - p.p) - (1 - D0.open)); m[1].innerHTML = mv(p.p - D0.open);
+  card.querySelector('.wph-when').textContent = card.dataset.when;
+}
+document.addEventListener('pointermove', e => { if (e.target.closest && e.target.closest('.wpchart svg')) wpHover(e); });
+document.addEventListener('pointerdown', e => { if (e.target.closest && e.target.closest('.wpchart svg')) wpHover(e); });
+document.addEventListener('pointerout', e => { const c = e.target.closest && e.target.closest('.wpchart svg'); if (c && !c.contains(e.relatedTarget)) wpReset(c.closest('.wpchart')); });
 function trendChart(hist) {
   if (!hist.length) return '<div class="empty">The chart starts once the season schedule is published.</div>';
   const teams = userTeams(); if (!teams.length) return '<div class="empty">No coaches assigned yet.</div>';
@@ -935,6 +1003,7 @@ PAGES.game = function (id) {
       ${l && !g.forfeit ? `<div class="gp-odds"><div><span>Spread</span><b>${l.spread === 0 ? 'PK' : esc(fav.abbr || fav.name) + ' ' + fmtLine(-Math.abs(l.spread))}</b></div><div><span>Total</span><b>O/U ${l.total}</b></div>
         <div><span>Moneyline</span><b>${esc(A.abbr)} ${fmtOdds(l.mlAway)} · ${esc(H.abbr)} ${fmtOdds(l.mlHome)}</b></div></div>${probBar(g, l, done)}` : ''}
       ${canBet ? `<button class="gold" data-betgame="${g.week}" style="margin-top:12px">Bet this game${isGotw ? ' · +10% boost' : ''} →</button>` : ''}</div>
+    ${l && !g.forfeit ? winChart(g, A, H) : ''}
     <div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(title)}</h2>${paras.map(t => `<p>${esc(t)}</p>`).join('')}</div>
     ${trends.length ? `<div class="card"><h3 style="margin-top:0">Trends to watch</h3><ul class="clean gp-trends">${trends.slice(0, 6).map(t => `<li>${t}</li>`).join('')}</ul></div>` : ''}
     <div class="card"><h3 style="margin-top:0">Tale of the tape</h3><p class="muted small" style="margin-top:0"><span class="tb">✓ Green</span> = the edge in that category, <span class="tw">red</span> = behind.</p><div class="tablewrap"><table class="gp-tape">

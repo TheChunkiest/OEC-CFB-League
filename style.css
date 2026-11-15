@@ -416,3 +416,15 @@ tr.focus td{animation:focusRow 2.4s ease-out 1;background:rgba(245,184,46,.14)}
 .wact{display:flex;gap:6px;flex-shrink:0}
 .wact button.sm{min-height:32px;padding:4px 10px}
 details.legs summary{white-space:nowrap}
+
+/* Win-chance chart */
+.wpchart .wph{display:flex;gap:16px;flex-wrap:wrap}
+.wph-team{display:flex;align-items:baseline;gap:6px}
+.wph-team .sw{width:10px;height:10px;border-radius:3px;display:inline-block;align-self:center}
+.wph-ab{font-weight:800;color:var(--muted);font-size:13px}
+.wph-v{font-size:26px;font-weight:900;color:var(--text);font-variant-numeric:tabular-nums;line-height:1}
+.wph-mv{font-size:12px;font-weight:700}
+.wph-mv .up{color:var(--green)}.wph-mv .down{color:var(--loss)}
+.wpwrap{margin-top:10px;touch-action:pan-y}
+.wpsvg{width:100%;height:auto;display:block;cursor:crosshair}
+@media (max-width:640px){ .wph-v{font-size:22px} .wpchart .wph{gap:12px} }
