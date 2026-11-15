@@ -1,9 +1,9 @@
 import {
-  $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout,
+  $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, batch, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
-} from './core.js?v=43';
+  gotwTally, coachStats, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
+} from './core.js?v=44';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['betting', 'Betting'], ['odds', 'Odds'],
@@ -47,7 +47,7 @@ function gameCard(g, opts = {}) {
   const who = [a, h].filter(isUserTeam).length ? ` · ${isUserTeam(a) ? esc(a.coach) : 'CPU'} ${g.neutral ? 'vs' : '@'} ${isUserTeam(h) ? esc(h.coach) : 'CPU'}` : '';
   return `<div class="card game clickable${opts.gotw ? ' gotw' : ''}" data-game="${esc(g.id)}">${opts.gotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}<span class="go" aria-hidden="true">›</span><div class="teams">
       <div class="matchup"><span class="mt ${done ? (aw ? 'w' : 'l') : ''}">${chip(a.id, { season: g.season, week: g.week, href: '#game/' + g.id })}${sc('away', aw)}</span><span class="at">${g.neutral ? 'vs' : '@'}</span><span class="mt ${done ? (hw ? 'w' : 'l') : ''}">${chip(h.id, { season: g.season, week: g.week, href: '#game/' + g.id })}${sc('home', hw)}</span>${tags.join('')}</div>
-      <div class="meta">${status}${who}</div>
+      <div class="meta">${status}${who}${!done && kickoffOf(g) ? ` · <span class="kick">🕗 ${esc(fmtKick(kickoffOf(g), true))}</span>` : ''}</div>
       ${!done && odds ? `<div class="meta">${odds}</div>` : ''}${done || g.forfeit ? '' : probBar(g, l, done)}${opts.extra || ''}</div></div>`;
 }
 const sortTh = (st, key, label, cls = '', tbl = '') => `<th data-sort="${key}"${tbl ? ` data-st="${tbl}"` : ''} class="${cls}${st.key === key ? ' sorted' : ''}">${label}${st.key === key ? (st.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
@@ -784,6 +784,63 @@ async function placeBet() {
 }
 
 /* ---------- chart ---------- */
+/* ---------- Kickoff scheduling (game preview) ---------- */
+const toLocalInput = ts => { const d = new Date(ts - new Date(ts).getTimezoneOffset() * 60000); return d.toISOString().slice(0, 16); };
+function kickoffCard(g) {
+  const me = auth.profile, mineTeam = me && me.teamId && (me.teamId === g.home || me.teamId === g.away);
+  const inv = kickoffInvite(g), pend = pendingInvites(g), commish = isCommish();
+  if (!canSchedule(g) || (!mineTeam && !commish)) return '';
+  const opp = mineTeam ? team(me.teamId === g.home ? g.away : g.home) : null;
+  const slots = i => i.times.map(t => esc(fmtKick(t))).join(' · ');
+  let body = '';
+  if (inv) {
+    body = `<p style="margin:0">Kickoff is set for <b>${esc(fmtKick(inv.time))}</b>. Both coaches agreed.</p>
+      ${mineTeam || commish ? `<button class="sm ghost" data-kcan="${esc(inv.id)}" style="margin-top:8px">${commish && !mineTeam ? 'Clear kickoff' : 'Reschedule'}</button>` : ''}`;
+  } else {
+    const incoming = pend.filter(i => me && i.to === me.id), outgoing = pend.filter(i => me && i.from === me.id);
+    body += incoming.map(i => `<div class="kinv"><div><b>Coach ${esc(i.fromName || '')}</b> wants to play at one of these times. Tap the one that works:</div>
+      <div class="kslots">${i.times.map(t => `<button class="gold sm" data-kacc="${esc(i.id)}|${t}">${esc(fmtKick(t))}</button>`).join('')}<button class="sm ghost" data-kdec="${esc(i.id)}">None work</button></div></div>`).join('');
+    body += outgoing.map(i => `<div class="kinv"><div>Waiting on <b>Coach ${esc(i.toName || '')}</b> to pick: ${slots(i)}</div><button class="sm ghost" data-kcan="${esc(i.id)}" style="margin-top:6px">Cancel invite</button></div>`).join('');
+    if (commish && !mineTeam) body += pend.map(i => `<div class="kinv muted small">Pending: Coach ${esc(i.fromName || '')} → Coach ${esc(i.toName || '')}: ${slots(i)}</div>`).join('');
+    if (mineTeam && !outgoing.length) {
+      if (!opp.uid) body += `<p class="muted small" style="margin:0">Coach ${esc(opp.coach || '')} hasn't linked an account yet, so they can't get invites.</p>`;
+      else {
+        body += `<div class="kform"><div class="muted small" style="margin-bottom:6px">Propose up to ${KICK_SLOTS} times for Coach ${esc(opp.coach || '')} to choose from. Times show in each coach's own time zone.</div>
+          ${Array.from({ length: KICK_SLOTS }, (_, k) => `<input type="datetime-local" class="kt" min="${toLocalInput(Date.now())}" aria-label="Time option ${k + 1}">`).join('')}
+          <button data-kinv="${esc(g.id)}" style="margin-top:8px">${incoming.length ? 'Counter with these times' : 'Send invite'}</button></div>`;
+      }
+    }
+  }
+  return `<div class="card kcard"><h3 style="margin-top:0">🕗 Kickoff time</h3>${body}</div>`;
+}
+async function kickAction(t) {
+  const me = auth.profile, now = Date.now();
+  try {
+    if (t.dataset.kinv) {
+      const g = D.games.find(x => x.id === t.dataset.kinv), opp = team(me.teamId === g.home ? g.away : g.home);
+      const times = [...new Set($$('.kcard .kt').map(i => i.value).filter(Boolean).map(v => new Date(v).getTime()))].filter(x => x > now).sort((x, y) => x - y);
+      if (!times.length) return alert('Pick at least one time in the future.');
+      const ops = [{ op: 'set', col: 'invites', id: newId(), merge: false, data: { gameId: g.id, season: g.season, week: g.week, from: me.id, to: opp.uid, fromName: me.name || '', toName: opp.coach || '', times, status: 'pending', ts: now } }];
+      // A counter-offer closes the invite they sent you.
+      pendingInvites(g).filter(i => i.to === me.id).forEach(i => ops.push({ op: 'set', col: 'invites', id: i.id, data: { status: 'declined', respondedAt: now } }));
+      await batch(ops);
+    } else if (t.dataset.kacc) {
+      const [id, ts] = t.dataset.kacc.split('|'), inv = D.invites.find(i => i.id === id);
+      if (!confirm(`Lock in kickoff for ${fmtKick(+ts)}?`)) return;
+      const g = D.games.find(x => x.id === inv.gameId), ops = [{ op: 'set', col: 'invites', id, data: { status: 'accepted', time: +ts, respondedAt: now } }];
+      pendingInvites(g).filter(i => i.id !== id && (i.to === me.id || i.from === me.id)).forEach(i => ops.push({ op: 'set', col: 'invites', id: i.id, data: { status: i.to === me.id ? 'declined' : 'cancelled', respondedAt: now } }));
+      await batch(ops);
+    } else if (t.dataset.kdec) {
+      await put('invites', t.dataset.kdec, { status: 'declined', respondedAt: now });
+    } else if (t.dataset.kcan) {
+      const inv = D.invites.find(i => i.id === t.dataset.kcan);
+      if (inv.status === 'accepted' && !confirm('Clear this kickoff time? You can then send new times.')) return;
+      await put('invites', t.dataset.kcan, { status: 'cancelled', respondedAt: now });
+    }
+    await reload();
+  } catch (err) { alert(friendlyError(err)); }
+}
+
 /* ---------- Win-chance chart (game preview) ---------- */
 // Team colors can be very dark on our dark cards; lift them until the line reads.
 function liftColor(hex) {
@@ -1089,7 +1146,9 @@ PAGES.game = function (id) {
       ${side(A, coachA, g.awayScore, !hw)}<div class="gp-at">${g.neutral ? 'vs' : '@'}</div>${side(H, coachH, g.homeScore, hw)}
       ${l && !g.forfeit ? `<div class="gp-odds"><div><span>Spread</span><b>${l.spread === 0 ? 'PK' : esc(fav.abbr || fav.name) + ' ' + fmtLine(-Math.abs(l.spread))}</b></div><div><span>Total</span><b>O/U ${l.total}</b></div>
         <div><span>Moneyline</span><b>${esc(A.abbr)} ${fmtOdds(l.mlAway)} · ${esc(H.abbr)} ${fmtOdds(l.mlHome)}</b></div></div>${probBar(g, l, done)}` : ''}
+      ${!done && kickoffOf(g) ? `<div class="gp-kick">🕗 Kickoff <b>${esc(fmtKick(kickoffOf(g)))}</b></div>` : ''}
       ${canBet ? `<button class="gold" data-betgame="${g.week}" style="margin-top:12px">Bet this game${isGotw ? ' · +10% boost' : ''} →</button>` : ''}</div>
+    ${kickoffCard(g)}
     ${l && !g.forfeit ? winChart(g, A, H) : ''}
     <div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(title)}</h2>${paras.map(t => `<p>${esc(t)}</p>`).join('')}</div>
     ${trends.length ? `<div class="card"><h3 style="margin-top:0">Trends to watch</h3><ul class="clean gp-trends">${trends.slice(0, 6).map(t => `<li>${t}</li>`).join('')}</ul></div>` : ''}
@@ -1138,6 +1197,8 @@ function acctHtml(p) {
     const wk = g.type === 'ccg' ? 'Title game' : g.type === 'bowl' ? 'Bowl' : `Week ${g.week}`;
     bits.push(`<a class="nextg" href="#game/${esc(g.id)}">Next: ${wk} ${g.neutral ? 'vs' : home ? 'vs' : '@'} ${esc(opp.abbr || opp.name)} ›</a>`);
   }
+  const inv = p ? invitesFor(p.id) : [];
+  if (inv.length) bits.unshift(`<a class="nextg kinvpill" href="#game/${esc(inv[0].gameId)}">📅 ${inv.length === 1 ? 'Kickoff invite' : inv.length + ' kickoff invites'} ›</a>`);
   return `<div class="greet"><div class="hello">${hello}</div>${bits.length ? `<div class="gsub">${bits.join('')}</div>` : ''}</div>
     <div class="acctbtns">${isCommish() ? '<a class="btn gold" href="admin.html">Commissioner</a>' : ''}<a class="btn ghost" href="#account">Account</a></div>`;
 }
@@ -1165,7 +1226,7 @@ document.addEventListener('click', async e => {
   if (gc && !e.target.closest('a,button,input,select,label')) { location.hash = '#game/' + gc.dataset.game; window.scrollTo(0, 0); return; }
   const lx = e.target.closest('[data-livex]');
   if (lx) { try { localStorage.setItem('oecLiveDismissed', lx.dataset.livex); } catch (err) { /* ignore */ } showLive(); return; }
-  const t = e.target.closest('[data-sort],[data-metric],[data-trend],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-slip],[data-popular],[data-res],[data-act],[data-close],[data-stake],[data-acct],[data-cancel],[data-cashout]');
+  const t = e.target.closest('[data-sort],[data-metric],[data-trend],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-slip],[data-popular],[data-res],[data-act],[data-close],[data-stake],[data-acct],[data-cancel],[data-cashout],[data-kinv],[data-kacc],[data-kdec],[data-kcan]');
   if (!t) return;
   const page = (location.hash.slice(1) || 'home').split('/')[0];
   if (t.dataset.sort) {
@@ -1193,6 +1254,7 @@ document.addEventListener('click', async e => {
     catch (err) { alert(friendlyError(err)); }
   }
   else if (t.dataset.cancel) { if (confirm('Cancel this wager and refund the stake?')) { try { await del('wagers', t.dataset.cancel); await reload(); } catch (err) { alert(err.message); } } }
+  else if (t.dataset.kinv || t.dataset.kacc || t.dataset.kdec || t.dataset.kcan) kickAction(t);
   else if (t.dataset.act === 'place') placeBet();
   else if (t.dataset.act === 'saveSlip') saveSlip();
   else if (t.dataset.slip) showSlipImage(D.wagers.find(x => x.id === t.dataset.slip));

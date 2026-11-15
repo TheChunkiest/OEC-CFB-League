@@ -111,6 +111,43 @@ service cloud.firestore {
           || (resource.data.market != 'future' && resource.data.market != 'wins' && resource.data.market != 'parlay' && gameOf(resource.data.gameId).homeScore == null)));
     }
 
+    // Kickoff invites: a coach in a user game proposes 1-3 future times for a game this week or next;
+    // the other coach (whose account is linked to the opposing team) accepts one or declines.
+    // The sender can cancel while pending; either coach can cancel an accepted time to reschedule.
+    function validInvite(d) {
+      let L = league();
+      let g = gameOf(d.gameId);
+      let me = userDoc().data;
+      let oppTeam = me.teamId == g.home ? g.away : g.home;
+      let now = request.time.toMillis();
+      return isCoach() && d.from == request.auth.uid && d.status == 'pending'
+        && d.keys().hasOnly(['gameId', 'season', 'week', 'from', 'to', 'fromName', 'toName', 'times', 'status', 'ts'])
+        && d.times is list && d.times.size() >= 1 && d.times.size() <= 3
+        && d.times[0] is number && d.times[0] > now
+        && (d.times.size() < 2 || (d.times[1] is number && d.times[1] > now))
+        && (d.times.size() < 3 || (d.times[2] is number && d.times[2] > now))
+        && L.phase == 'Regular Season' && g.season == L.season && g.get('homeScore', null) == null
+        && (g.week == L.week || g.week == L.week + 1) && d.week == g.week && d.season == g.season
+        && (me.teamId == g.home || me.teamId == g.away)
+        && d.to != '' && d.to == get(/databases/$(database)/documents/teams/$(oppTeam)).data.uid;
+    }
+    function inviteUpdate() {
+      let o = resource.data;
+      let n = request.resource.data;
+      let ch = n.diff(o).affectedKeys();
+      return signedIn() && (
+        (o.status == 'pending' && request.auth.uid == o.to && ch.hasOnly(['status', 'time', 'respondedAt'])
+          && ((n.status == 'accepted' && n.time in o.times) || n.status == 'declined'))
+        || (o.status == 'pending' && request.auth.uid == o.from && ch.hasOnly(['status', 'respondedAt']) && n.status == 'cancelled')
+        || (o.status == 'accepted' && (request.auth.uid == o.to || request.auth.uid == o.from) && ch.hasOnly(['status', 'respondedAt']) && n.status == 'cancelled'));
+    }
+    match /invites/{id} {
+      allow read: if true;
+      allow create: if validInvite(request.resource.data);
+      allow update: if isCommish() || inviteUpdate();
+      allow delete: if isCommish();
+    }
+
     // Game of the Week votes: cast during week N for a game in week N+1. Doc id = season_week_uid.
     match /gotw/{id} {
       allow read: if true;

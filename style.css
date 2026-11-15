@@ -480,3 +480,15 @@ table.carousel td:first-child,table.carousel th:first-child{text-align:left}
 .place{display:inline-block;font-weight:900;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--card2);border:1px solid var(--line)}
 @media(max-width:440px){table.cseason .tag,table.cseason .place{font-size:9.5px;padding:2px 6px}table.cseason td,table.cseason th{padding-left:5px;padding-right:5px}}
 table.cseason td:first-child{white-space:normal;min-width:64px}
+
+/* Kickoff times */
+.kick{color:var(--gold);font-weight:700}
+.gp-kick{margin-top:12px;font-size:14px;color:var(--muted)}
+.gp-kick b{color:var(--text)}
+.kinv{padding:10px 0;border-bottom:1px solid var(--line)}
+.kinv:last-child{border-bottom:none}
+.kslots{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.kform{display:grid;gap:6px;padding-top:6px}
+.kform input{width:100%;max-width:280px}
+.kform button{justify-self:start}
+.kinvpill{border-color:var(--gold)!important;color:var(--gold)!important}

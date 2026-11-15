@@ -12,8 +12,8 @@ export const DEMO = !firebaseConfig || !firebaseConfig.apiKey || /PASTE|YOUR/i.t
 const FBV = '10.12.2';
 let fb = null;
 
-export const D = { league: {}, recruiting: { class: '', rows: [] }, teams: [], games: [], users: [], wagers: [], gotw: [], history: [], ballots: [] };
-const COLS = ['teams', 'games', 'users', 'wagers', 'gotw', 'history'];
+export const D = { league: {}, recruiting: { class: '', rows: [] }, teams: [], games: [], users: [], wagers: [], gotw: [], history: [], ballots: [], invites: [] };
+const COLS = ['teams', 'games', 'users', 'wagers', 'gotw', 'history', 'invites'];
 
 export function defaultLeague() {
   return {
@@ -40,6 +40,7 @@ export async function loadAll() {
     if (!demoLoaded) {
       const saved = sessionStorage.getItem('oecDemo');
       Object.assign(D, saved ? JSON.parse(saved) : await (await fetch('demo.json?v=' + Date.now())).json());
+      if (!D.invites) D.invites = [];
       demoLoaded = true;
     }
     return D;
@@ -592,6 +593,30 @@ export function boardOps(week, season = D.league.season) {
   if (season === L.season && week === L.week && L.phase === PHASES.REG) ops.push({ op: 'set', col: 'meta', id: 'league', data: { futures: futuresSnapshot(), winTotals: winTotalsSnapshot() } });
   return ops;
 }
+/* ---------- Kickoff times ---------- */
+// Coaches in a user game propose up to 3 time slots; the other coach accepts one (or declines).
+// Only this week's and next week's unplayed games can be scheduled. An accepted invite is the kickoff.
+export const KICK_SLOTS = 3;
+export function kickoffOf(g) {
+  const a = (D.invites || []).filter(i => i.gameId === g.id && i.status === 'accepted').sort((x, y) => (y.respondedAt || 0) - (x.respondedAt || 0))[0];
+  return a ? a.time : null;
+}
+export function kickoffInvite(g) { return (D.invites || []).filter(i => i.gameId === g.id && i.status === 'accepted').sort((x, y) => (y.respondedAt || 0) - (x.respondedAt || 0))[0] || null; }
+export function canSchedule(g, L = D.league) {
+  return !!g && L.phase === PHASES.REG && g.season === L.season && !played(g) && (g.type || 'reg') === 'reg'
+    && (g.week === L.week || g.week === L.week + 1) && isUserTeam(team(g.home)) && isUserTeam(team(g.away));
+}
+export const pendingInvites = g => (D.invites || []).filter(i => i.gameId === g.id && i.status === 'pending').sort((a, b) => b.ts - a.ts);
+export function invitesFor(uid) {
+  return (D.invites || []).filter(i => i.to === uid && i.status === 'pending' && (() => { const g = D.games.find(x => x.id === i.gameId); return g && canSchedule(g) && !kickoffOf(g); })());
+}
+export function fmtKick(ts, short = false) {
+  const d = new Date(ts), t = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  if (short) return `${d.toLocaleDateString('en-US', { weekday: 'short' })} ${t}`;
+  const tz = (d.toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ').pop()) || '';
+  return `${fmtAdvance(ts)} · ${t} ${tz}`;
+}
+
 /* ---------- Advance clock ---------- */
 // Projected next advance: 3 days after the last one, plus any extension (hours) the commissioner added.
 export const ADVANCE_DAYS = 3;
