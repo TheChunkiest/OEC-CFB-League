@@ -2,9 +2,9 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, batch, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, onLiveChange, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
-} from './core.js?v=46';
-import { lookupStadium } from './stadiums.js?v=1';
+  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
+} from './core.js?v=47';
+import { lookupStadium } from './programs.js?v=1';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['betting', 'Betting'], ['odds', 'Odds'],
@@ -147,7 +147,7 @@ const PAGES = {
     if (L.desk && L.desk.show && L.desk.text) html += `<div class="card banner"><h2>Commissioner's Desk</h2><div style="white-space:pre-wrap">${esc(L.desk.text)}</div></div>`;
     if (gt.game) html += gameCard(gt.game, { gotw: true, extra: `<div class="meta">${gt.counts[gt.game.id]} of ${gt.total} coach vote${gt.total === 1 ? '' : 's'}</div>` });
     else if (L.phase === PHASES.REG) html += `<div class="card gotw"><span class="ribbon">★ Game of the Week</span><div class="muted">No Game of the Week votes were cast for ${esc(weekLabel())}. <a href="#vote">Vote for next week's game →</a></div></div>`;
-    html += `<div class="grid2"><div><h2>This Week's Storylines</h2><div class="card">${stories.length ? stories.map(st => `<${st.href ? `a href="${esc(st.href)}"` : 'div'} class="story${st.href ? ' link' : ''}"><span class="tag">${esc(st.tag)}</span><h3>${esc(st.title)}</h3><p>${esc(st.body)}</p>${st.href ? '<span class="go" aria-hidden="true">›</span>' : ''}</${st.href ? 'a' : 'div'}>`).join('') : '<div class="empty">Storylines appear once games are played.</div>'}</div></div>
+    html += `<div class="grid2"><div><h2>This Week's Storylines</h2><div class="card">${stories.length ? stories.map(st => `<${st.href ? `a href="${esc(st.href)}"` : 'div'} class="story${st.href ? ' link' : ''}"><span class="tag">${esc(st.tag)}</span><h3>${esc(st.title)}</h3><p>${esc((() => { const vs = {}; vary(st.title, vs); return vary(st.body, vs); })())}</p>${st.href ? '<span class="go" aria-hidden="true">›</span>' : ''}</${st.href ? 'a' : 'div'}>`).join('') : '<div class="empty">Storylines appear once games are played.</div>'}</div></div>
       <div><h2>${esc(weekLabel())} Matchups</h2>${games.length ? weekOrder(games.filter(g => g.id !== gt.game?.id)).map(g => gameCard(g)).join('') || '<div class="card empty">Only the Game of the Week is on the slate.</div>' : '<div class="card empty">No games scheduled this week.</div>'}</div></div>
       <div class="grid"><div class="card"><h2>Power Rankings</h2><table>${pr.map(x => `<tr><td class="rank">${x.rank}</td><td>${chip(x.id)}</td><td class="num">${rec(x.rec)}</td><td class="num">${mvHtml(x.move)}</td></tr>`).join('')}</table><p><a href="#rankings">Full rankings →</a></p></div>
       <div class="card"><h2>Betting Leaders</h2>${leaders.length ? `<table>${leaders.map((x, i) => `<tr><td class="rank">${i + 1}</td><td>${esc(x.u.name)}</td><td class="num">${x.b.w}-${x.b.l}${x.b.p ? '-' + x.b.p : ''}</td><td class="num"><b>${x.b.balance.toLocaleString()}</b></td></tr>`).join('')}</table>` : '<div class="muted">No coaches linked yet.</div>'}<p><a href="#betting">Place wagers →</a></p></div></div>`;
@@ -837,9 +837,7 @@ function kickoffCard(g) {
   if (v) lines.push(`<div class="gpm"><span class="gpi">📍</span><span><b>${esc(v.name)}</b>${v.city ? ` <span class="muted">· ${esc(v.city)}</span>` : ''}</span></div>`);
   let ctl = '';
   if (!done && inv) {
-    ctl = `<div class="kcal"><a class="btn sm ghost" data-ics="${esc(g.id)}" href="cal/${esc(g.id)}.ics?v=${inv.respondedAt || 0}">Apple / iPhone Calendar</a><a class="btn sm ghost" href="${gcalHref(g, inv.time)}" target="_blank" rel="noopener">Google Calendar</a>
-      ${(mineTeam || commish) && can ? `<button class="sm kresched" data-kcan="${esc(inv.id)}">${commish && !mineTeam ? 'Clear kickoff' : 'Reschedule'}</button>` : ''}</div>
-      <div class="kicsnote muted small" hidden>The Apple Calendar file is on its way. It's made automatically within a few minutes of a time being agreed. Google Calendar works right away.</div>`;
+    ctl = `<div class="kcal"><a class="btn sm ghost" data-ics="${esc(g.id)}" href="cal/${esc(g.id)}.ics?v=${inv.respondedAt || 0}" title="Add to Apple / iPhone Calendar">📅 Apple</a><a class="btn sm ghost" href="${gcalHref(g, inv.time)}" target="_blank" rel="noopener" title="Add to Google Calendar">📅 Google</a>${(mineTeam || commish) && can ? `<button class="sm kresched" data-kcan="${esc(inv.id)}">${commish && !mineTeam ? 'Clear' : 'Reschedule'}</button>` : ''}</div>`;
   } else if (!done && mineTeam && !can && isUserTeam(team(g.home)) && isUserTeam(team(g.away))) {
     ctl = `<p class="muted small" style="margin:0">Kickoff invites open once this game is in the current or next week.</p>`;
   } else if (can && (mineTeam || commish)) {
@@ -868,7 +866,7 @@ async function checkIcs() {
   const a = document.querySelector('[data-ics]'); if (!a) return;
   let ok = false;
   try { ok = (await fetch(a.getAttribute('href'), { method: 'HEAD', cache: 'no-store' })).ok; } catch (e) { ok = false; }
-  if (!ok && a.isConnected) { a.classList.add('disabled'); a.removeAttribute('href'); const n = document.querySelector('.kicsnote'); if (n) n.hidden = false; }
+  if (!ok && a.isConnected) { a.classList.add('disabled'); a.removeAttribute('href'); a.title = 'The Apple Calendar file is still being made. Try again in a few minutes.'; }
 }
 function gcalHref(g, ts) {
   const [s, e] = calTimes(ts);
@@ -1234,7 +1232,10 @@ PAGES.game = function (id) {
         : `What's at stake: for ${H.name}, ${outH ? 'the title race is already over, but it can still play spoiler' : mh}. For ${A.name}, ${outA ? 'the title race is already over, but it can still play spoiler' : ma}.${cn ? ' ' + cn : ''}`);
     }
     const form = t => { const f = formOf(t), P = t === A ? PA : PH; if (!P.gp) return ''; const atsT = `${P.ats[0]}-${P.ats[1]}${P.ats[2] ? '-' + P.ats[2] : ''} against the spread`;
-      return `${t.name} ${f == null ? 'comes in' : f >= 4 ? 'comes in hot' : f <= -4 ? 'comes in cold' : 'comes in steady'}${f == null ? '' : `, playing ${Math.abs(f).toFixed(1)} points per game ${f >= 0 ? 'better' : 'worse'} than expected over its last three`}. It's averaging ${(P.pf / P.gp).toFixed(1)} points while allowing ${(P.pa / P.gp).toFixed(1)}, and it's ${atsT} this season.`; };
+      // The second team is called by its mascot (plural grammar) for variety: "The Boilermakers come in hot…".
+      const m = t === H && mascotOf(t), pl = !!m && /s$/.test(m), who = m ? `The ${m}` : t.name;
+      const v = (sg, p) => pl ? p : sg, its = pl ? 'their' : 'its', It = pl ? "They're" : "It's", it = pl ? "they're" : "it's";
+      return `${who} ${v('comes', 'come')} in${f == null ? '' : f >= 4 ? ' hot' : f <= -4 ? ' cold' : ' steady'}${f == null ? '' : `, playing ${Math.abs(f).toFixed(1)} points per game ${f >= 0 ? 'better' : 'worse'} than expected over ${its} last three`}. ${It} averaging ${(P.pf / P.gp).toFixed(1)} points while allowing ${(P.pa / P.gp).toFixed(1)}, and ${it} ${atsT} this season.`; };
     const fa = form(A), fh = form(H); if (fa || fh) paras.push([fa, fh].filter(Boolean).join(' '));
   }
   if (coachA !== 'CPU' && coachH !== 'CPU') {
@@ -1284,7 +1285,7 @@ PAGES.game = function (id) {
         <div><span>Moneyline</span><b>${esc(A.abbr)} ${fmtOdds(l.mlAway)}</b><b>${esc(H.abbr)} ${fmtOdds(l.mlHome)}</b></div></div>${probBar(g, l, done)}` : ''}
       ${canBet ? `<button class="gold" data-betgame="${g.week}" style="margin-top:12px">Bet this game${isGotw ? ' · +10% boost' : ''} →</button>` : ''}</div>
     ${l && !g.forfeit ? winChart(g, A, H) : ''}
-    <div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(title)}</h2>${paras.map(t => `<p>${esc(t)}</p>`).join('')}</div>
+    <div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(title)}</h2>${(() => { const vs = {}; return paras.map(t => `<p>${esc(vary(t, vs))}</p>`).join(''); })()}</div>
     ${trends.length ? `<div class="card"><h3 style="margin-top:0">Trends to watch</h3><ul class="clean gp-trends">${trends.slice(0, 6).map(t => `<li>${t}</li>`).join('')}</ul></div>` : ''}
     <div class="card"><h3 style="margin-top:0">Tale of the tape</h3><p class="muted small" style="margin-top:0"><span class="tb">✓ Green</span> = the edge in that category, <span class="tw">red</span> = behind.</p><div class="tablewrap"><table class="gp-tape">
       <tr><td class="num"><b>${esc(A.abbr || A.name)}</b></td><th></th><td><b>${esc(H.abbr || H.name)}</b></td></tr>

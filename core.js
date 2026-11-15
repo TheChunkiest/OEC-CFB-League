@@ -1,6 +1,7 @@
 // Shared data layer + league math for the OEC CFB League Hub.
 import { firebaseConfig } from './firebase-config.js';
 import { lookupColor } from './teamcolors.js';
+import { lookupProgram } from './programs.js?v=1';
 
 export const $ = s => document.querySelector(s);
 export const $$ = s => [...document.querySelectorAll(s)];
@@ -204,6 +205,29 @@ export function refreshProfile() { setProfile(); }
 
 /* ---------------- Helpers ---------------- */
 export const team = id => D.teams.find(t => t.id === id) || { id, name: id || '?', abbr: id, conf: '', div: '', coach: '', color: '' };
+export const mascotOf = t => (t && (t.mascot || lookupProgram(t.name)?.mascot)) || '';
+// Variety for generated text: after a team's first mention, some later mentions become its mascot
+// ("beat Purdue" → "beat the Boilermakers", "Purdue's defense" → "the Boilermakers' defense").
+// Only object/possessive spots are swapped, so sentences stay grammatical with plural mascots.
+export function vary(text, state) {
+  if (!text) return text;
+  if (!state || typeof state !== 'object') state = {};
+  const keep = [], prot = s => { keep.push(s); return '\u0001' + (keep.length - 1) + '\u0002'; };
+  const ts = D.teams.filter(t => t.name && mascotOf(t)).sort((a, b) => b.name.length - a.name.length);
+  ts.forEach(t => {
+    const m = mascotOf(t), nm = t.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (!new RegExp('\\b' + nm + '\\b').test(text)) return;
+    const S0 = state[t.id] || (state[t.id] = { seen: 0, n: 0 });
+    text = text.replace(new RegExp('(\\b(?:to|against|over|beat|beats|beating|beaten|with|at|by|from|of|vs\\.?|past|into|on|visits|hosts)\\s+)?([A-Z][A-Za-z0-9]*\'s?\\s+)?\\b' + nm + "\\b('s)?", 'g'), (all, prep, coach, poss, off, str) => {
+      S0.seen++;
+      // Swap only after a preposition/object verb, or for a possessive; a coach's name ("Boss' ") may sit in between.
+      if (S0.seen === 1 || (!prep && !poss) || (coach && !prep) || (S0.n++ % 2 === 1)) return prot(all);
+      const before = str.slice(0, off), start = !prep && !coach && /(^|[.!?:]\s+)$/.test(before);
+      return prot((prep || '') + (coach || '') + (coach ? '' : start ? 'The ' : 'the ') + m + (poss ? (/s$/.test(m) ? "'" : "'s") : ''));
+    });
+  });
+  return text.replace(/\u0001(\d+)\u0002/g, (_, i) => keep[+i]);
+}
 export const teamColor = t => (t && (t.color || lookupColor(t.name))) || '#6b6b6b';
 export const isUserTeam = t => !!(t && t.coach && t.coach.trim() && t.coach.trim().toUpperCase() !== 'CPU');
 export const leagueTeams = () => D.teams.filter(t => t.conf === D.league.conference);

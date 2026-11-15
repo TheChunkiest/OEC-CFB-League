@@ -562,3 +562,18 @@ details.kform{padding-top:2px}
 details.kform summary{cursor:pointer;color:var(--gold);font-weight:800;font-size:14px}
 details.kform[open] summary{margin-bottom:2px}
 details.kform input{display:block;width:100%;max-width:280px;margin-top:6px}
+
+/* Centered preview header */
+.gp-head>.muted.small:first-of-type{text-align:center}
+.gp-head .gp-meta{justify-items:center;text-align:center}
+.gp-head .gpm{justify-content:center;font-size:13px;color:var(--muted)}
+.gp-head .gpm b{font-weight:700;color:var(--text)}
+.gp-head .gpi{width:auto}
+.gp-head .kctl{display:flex;flex-direction:column;align-items:center;gap:6px}
+.gp-head .kcal{display:flex;flex-wrap:nowrap;justify-content:center;gap:6px;margin:2px 0 0}
+.gp-head .kcal .btn.sm,.gp-head .kcal button.sm{min-height:30px;padding:4px 10px;font-size:12px;white-space:nowrap}
+.gp-head details.kform{text-align:center}
+.gp-head details.kform input{margin:6px auto 0}
+.gp-head>button.gold{display:block;margin:12px auto 0}
+.gp-head .gp-name{font-size:23px}
+@media(max-width:640px){.gp-head .gp-name{font-size:19px}}
