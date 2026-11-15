@@ -907,7 +907,7 @@ function kickoffCard(g) {
   if (v) lines.push(`<div class="gpm"><span class="gpi">📍</span><span><b>${esc(v.name)}</b>${v.city ? ` <span class="muted">· ${esc(v.city)}</span>` : ''}</span></div>`);
   let ctl = '';
   if (!done && inv) {
-    ctl = `<div class="kcal"><a class="btn sm ghost" data-ics="${esc(g.id)}" href="cal/${esc(g.id)}.ics?v=${inv.respondedAt || 0}" title="Add to Apple / iPhone Calendar">📅 Apple</a><a class="btn sm ghost" href="${gcalHref(g, inv.time)}" target="_blank" rel="noopener" title="Add to Google Calendar">📅 Google</a>${(mineTeam || commish) && can ? `<button class="sm kresched" data-kcan="${esc(inv.id)}">${commish && !mineTeam ? 'Clear' : 'Reschedule'}</button>` : ''}</div>`;
+    ctl = `<div class="kcal"><span class="klbl">📅 Add to</span><a data-ics="${esc(g.id)}" href="cal/${esc(g.id)}.ics?v=${inv.respondedAt || 0}" title="Add to Apple / iPhone Calendar">Apple</a><span class="kdot">·</span><a href="${gcalHref(g, inv.time)}" target="_blank" rel="noopener" title="Add to Google Calendar">Google</a>${(mineTeam || commish) && can ? `<span class="kdot">·</span><button class="kresched" data-kcan="${esc(inv.id)}">${commish && !mineTeam ? 'Clear' : 'Reschedule'}</button>` : ''}</div>`;
   } else if (!done && mineTeam && !can && isUserTeam(team(g.home)) && isUserTeam(team(g.away))) {
     ctl = `<p class="muted small" style="margin:0">Kickoff invites open once this game is in the current or next week.</p>`;
   } else if (can && (mineTeam || commish)) {

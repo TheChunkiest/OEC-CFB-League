@@ -599,3 +599,12 @@ details.kform input{display:block;width:100%;max-width:280px;margin-top:6px}
 .gp-odds.final b.hit::before{content:"✓ "}
 .gp-odds.final b.push{color:var(--muted)}
 .gp-odds.final em{display:block;font-style:normal;font-size:12px;color:var(--muted);margin-top:2px}
+
+.gp-head .kcal{align-items:baseline;gap:6px;font-size:13px}
+.kcal .klbl{color:var(--muted)}
+.kcal a{color:var(--gold);font-weight:700;text-decoration:none}
+.kcal a:hover{text-decoration:underline}
+.kcal .kdot{color:var(--muted)}
+.kcal button.kresched,.gp-head .kcal button.kresched{background:none;border:0;padding:0;min-height:0;font:inherit;font-weight:700;color:#ff8a8f;cursor:pointer}
+.kcal button.kresched:hover{background:none;text-decoration:underline}
+.kcal a.disabled{color:var(--muted);font-weight:400;pointer-events:none}
