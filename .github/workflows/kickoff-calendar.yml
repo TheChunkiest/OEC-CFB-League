@@ -1,0 +1,121 @@
+name: Kickoff calendar
+# Builds real calendar files for agreed kickoff times so iPhone / Apple Calendar can open them:
+#   cal/<gameId>.ics  one file per scheduled game (the "Apple / iPhone Calendar" button)
+#   cal/league.ics    every upcoming kickoff in one feed you can subscribe to
+# Reads the public Firestore data (kickoff invites, games, teams) using firebase-config.js.
+# GitHub only starts scheduled workflows every 5 minutes (at best), so a new time can take a few minutes.
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: kickoff-calendar
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build calendar files
+        run: |
+          python3 - <<'PY'
+          import json, os, re, time, glob, urllib.request, urllib.parse
+          from datetime import datetime, timezone
+
+          cfg = open('firebase-config.js').read()
+          pid = re.search(r'projectId\s*:\s*["\']([^"\']+)', cfg).group(1)
+          key = re.search(r'apiKey\s*:\s*["\']([^"\']+)', cfg).group(1)
+          base = f'https://firestore.googleapis.com/v1/projects/{pid}/databases/(default)/documents'
+
+          def val(v):
+              if 'stringValue' in v: return v['stringValue']
+              if 'integerValue' in v: return int(v['integerValue'])
+              if 'doubleValue' in v: return float(v['doubleValue'])
+              if 'booleanValue' in v: return v['booleanValue']
+              if 'nullValue' in v: return None
+              if 'arrayValue' in v: return [val(x) for x in v['arrayValue'].get('values', [])]
+              if 'mapValue' in v: return {k: val(x) for k, x in v['mapValue'].get('fields', {}).items()}
+              return None
+
+          def docs(col):
+              out, tok = [], ''
+              while True:
+                  q = {'pageSize': 300, 'key': key}
+                  if tok: q['pageToken'] = tok
+                  with urllib.request.urlopen(f'{base}/{col}?' + urllib.parse.urlencode(q), timeout=30) as r:
+                      d = json.load(r)
+                  for x in d.get('documents', []):
+                      f = {k: val(v) for k, v in x.get('fields', {}).items()}
+                      f['id'] = x['name'].rsplit('/', 1)[1]
+                      out.append(f)
+                  tok = d.get('nextPageToken')
+                  if not tok: return out
+
+          def one(path):
+              try:
+                  with urllib.request.urlopen(f'{base}/{path}?key={key}', timeout=30) as r:
+                      return {k: val(v) for k, v in json.load(r).get('fields', {}).items()}
+              except Exception:
+                  return {}
+
+          invites = docs('invites')
+          teams = {t['id']: t for t in docs('teams')}
+          league = one('meta/league')
+          first = league.get('firstSeason') or 2026
+          now = time.time() * 1000
+
+          # Latest accepted invite per game = its kickoff.
+          kick = {}
+          for i in invites:
+              if i.get('status') != 'accepted' or not i.get('time'): continue
+              cur = kick.get(i['gameId'])
+              if not cur or (i.get('respondedAt') or 0) > (cur.get('respondedAt') or 0): kick[i['gameId']] = i
+
+          def tname(tid): return (teams.get(tid) or {}).get('name') or tid
+          def stamp(ms): return datetime.fromtimestamp(ms / 1000, timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+          def esc(s): return str(s).replace('\\', '\\\\').replace(';', '\\;').replace(',', '\\,').replace('\n', '\\n')
+
+          repo = os.environ.get('GITHUB_REPOSITORY', '')
+          site = f"https://{repo.split('/')[0].lower()}.github.io/{repo.split('/')[1]}/index.html" if '/' in repo else ''
+          events = {}
+          for gid, inv in kick.items():
+              g = one(f'games/{gid}')
+              if not g or g.get('homeScore') is not None: continue      # finished games drop off
+              if inv['time'] < now - 6 * 3600e3: continue
+              title = f"OEC: {tname(g.get('away'))} @ {tname(g.get('home'))}"
+              season = g.get('season') or league.get('season') or first
+              desc = f"Season {season - first + 1} · Week {g.get('week')} · Coach {inv.get('fromName','')} vs Coach {inv.get('toName','')}"
+              if site: desc += f"\n{site}#game/{gid}"
+              events[gid] = '\r\n'.join([
+                  'BEGIN:VEVENT', f'UID:{gid}@oec-cfb-league', f'DTSTAMP:{stamp(inv.get("respondedAt") or now)}',
+                  f'DTSTART:{stamp(inv["time"])}', f'DTEND:{stamp(inv["time"] + 3600e3)}',
+                  f'SUMMARY:{esc(title)}', f'DESCRIPTION:{esc(desc)}',
+                  'BEGIN:VALARM', 'TRIGGER:-PT30M', 'ACTION:DISPLAY', f'DESCRIPTION:{esc(title)}', 'END:VALARM', 'END:VEVENT'])
+
+          def cal(evs, name=None):
+              head = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//OEC CFB League Hub//Kickoffs//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH']
+              if name: head += [f'X-WR-CALNAME:{name}', 'REFRESH-INTERVAL;VALUE=DURATION:PT1H', 'X-PUBLISHED-TTL:PT1H']
+              return '\r\n'.join(head + evs + ['END:VCALENDAR']) + '\r\n'
+
+          os.makedirs('cal', exist_ok=True)
+          keep = {'cal/league.ics'}
+          for gid, ev in events.items():
+              p = f'cal/{gid}.ics'; keep.add(p)
+              open(p, 'w', newline='').write(cal([ev]))
+          open('cal/league.ics', 'w', newline='').write(cal(list(events.values()), 'OEC Kickoffs'))
+          for p in glob.glob('cal/*.ics'):
+              if p not in keep: os.remove(p)
+          print(f'{len(events)} scheduled game(s)')
+          PY
+      - name: Save
+        run: |
+          git config user.name "oec-calendar-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A cal
+          if git diff --cached --quiet; then echo "No changes"; exit 0; fi
+          git commit -m "Update kickoff calendar"
+          for i in 1 2 3; do git push && exit 0; git pull --rebase -X theirs; done
+          exit 1
