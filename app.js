@@ -1204,7 +1204,10 @@ PAGES.game = function (id) {
 
   // ----- story paragraphs -----
   const paras = [];
-  const recTxt = t => { const r = recs[t.id]; return `${r.w}-${r.l}${t.conf === L.conference && (r.cw + r.cl) ? `, ${r.cw}-${r.cl} ${t.div || L.conference}` : ''}`; };
+  // "(6-0 MAC, 2-0 Catholics)": conference record, then record against teams in the same division.
+  const divRec = t => { let w = 0, l = 0; D.games.filter(x => x.season === s && played(x) && (x.type || 'reg') === 'reg' && (x.home === t.id || x.away === t.id)).forEach(x => {
+    const o = team(x.home === t.id ? x.away : x.home); if (!t.div || o.div !== t.div || o.conf !== t.conf) return; const won = (x.home === t.id) === (+x.homeScore > +x.awayScore); won ? w++ : l++; }); return `${w}-${l}`; };
+  const recTxt = t => { const r = recs[t.id]; if (t.conf !== L.conference) return `${r.w}-${r.l}`; return `${r.cw}-${r.cl} ${L.conference}${t.div ? `, ${divRec(t)} ${t.div}` : ''}`; };
   const cTxt = c => c && c !== 'CPU' ? `${possN(c)} ` : '';
   if (done) {
     const w = +g.homeScore > +g.awayScore ? H : A, lo = w === H ? A : H, ws = Math.max(+g.homeScore, +g.awayScore), ls = Math.min(+g.homeScore, +g.awayScore);
