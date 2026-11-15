@@ -358,7 +358,7 @@ tr.clickable:hover td{background:rgba(245,184,46,.05)}
 .gp-odds{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0 4px}
 .gp-odds>div{background:rgba(255,255,255,.05);border-radius:8px;padding:8px 10px}
 .gp-odds span{display:block;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
-.gp-odds b{font-size:14px}
+.gp-odds b{font-size:14px;display:block;white-space:nowrap}
 .gp-head .pbar{font-size:13px;margin-top:16px}
 .gp-head .pbar .pb{height:10px}
 .gp-story p{font-size:15.5px;line-height:1.65;color:#e6dedf;margin:0 0 12px}
@@ -366,7 +366,7 @@ tr.clickable:hover td{background:rgba(245,184,46,.05)}
 .gp-tape th{text-align:center;color:var(--muted)}
 .gp-tape td{width:42%}
 .gp-tape td.tb,.tb{color:var(--green);font-weight:800}.gp-tape .ck{font-size:.85em;margin:0 5px}.gp-tape td.tw,.tw{color:var(--loss)}
-@media (max-width:640px){ .gp-odds{grid-template-columns:1fr 1fr} .gp-odds>div:last-child{grid-column:1/-1} .gp-name{font-size:18px} .gp-score{font-size:28px} .gp-story p{font-size:15px} }
+@media (max-width:640px){ .gp-odds{gap:6px} .gp-odds>div{padding:7px 8px} .gp-odds b{font-size:13px} .gp-name{font-size:18px} .gp-score{font-size:28px} .gp-story p{font-size:15px} }
 
 /* Clinching scenarios */
 .race{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}

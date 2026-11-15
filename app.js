@@ -21,7 +21,8 @@ const lineText = (g, l = lineOf(g)) => {
 // Badges for a matchup: CPU GAME (a coach vs a CPU team) and the division when both teams share one.
 function gameTags(g) {
   const h = team(g.home), a = team(g.away), out = [];
-  if (!isUserTeam(h) || !isUserTeam(a)) out.push('<span class="h2h cputag">CPU GAME</span>');
+  const cpu = side => { const c = coachOf(g, side); return !c || String(c).toUpperCase() === 'CPU'; };
+  if (cpu('home') || cpu('away')) out.push('<span class="h2h cputag">CPU GAME</span>');
   const conf = D.league.conference;
   if ((g.type || 'reg') === 'reg' && h.div && h.div === a.div && h.conf === conf && a.conf === conf) out.push(`<span class="h2h divtag" title="Both teams are in the ${esc(h.div)} division">${esc(h.div.toUpperCase())}</span>`);
   return out.join('');
@@ -1145,8 +1146,8 @@ PAGES.game = function (id) {
       <div class="muted small" style="text-transform:uppercase;letter-spacing:.8px;font-weight:800">Season ${seasonNum(s)} · ${g.type === 'ccg' ? 'League Championship' : g.type === 'bowl' ? 'Postseason' : 'Week ' + g.week}${done ? ' · Final' : ''}${gameTags(g) ? ' · ' + gameTags(g) : ''}</div>
       ${side(A, coachA, g.awayScore, !hw)}<div class="gp-at">${g.neutral ? 'vs' : '@'}</div>${side(H, coachH, g.homeScore, hw)}
       ${l && !g.forfeit ? `<div class="gp-odds"><div><span>Spread</span><b>${l.spread === 0 ? 'PK' : esc(fav.abbr || fav.name) + ' ' + fmtLine(-Math.abs(l.spread))}</b></div><div><span>Total</span><b>O/U ${l.total}</b></div>
-        <div><span>Moneyline</span><b>${esc(A.abbr)} ${fmtOdds(l.mlAway)} · ${esc(H.abbr)} ${fmtOdds(l.mlHome)}</b></div></div>${probBar(g, l, done)}` : ''}
-      ${!done && kickoffOf(g) ? `<div class="gp-kick">🕗 Kickoff <b>${esc(fmtKick(kickoffOf(g)))}</b></div>` : ''}
+        <div><span>Moneyline</span><b>${esc(A.abbr)} ${fmtOdds(l.mlAway)}</b><b>${esc(H.abbr)} ${fmtOdds(l.mlHome)}</b></div></div>${probBar(g, l, done)}` : ''}
+      ${done ? '' : kickoffOf(g) ? `<div class="gp-kick">🕗 Kickoff <b>${esc(fmtKick(kickoffOf(g)))}</b></div>` : `<div class="gp-kick">🕗 Coaches haven't set a time for this matchup.</div>`}
       ${canBet ? `<button class="gold" data-betgame="${g.week}" style="margin-top:12px">Bet this game${isGotw ? ' · +10% boost' : ''} →</button>` : ''}</div>
     ${kickoffCard(g)}
     ${l && !g.forfeit ? winChart(g, A, H) : ''}
@@ -1195,7 +1196,8 @@ function acctHtml(p) {
   if (g) {
     const home = g.home === T.id, opp = team(home ? g.away : g.home);
     const wk = g.type === 'ccg' ? 'Title game' : g.type === 'bowl' ? 'Bowl' : `Week ${g.week}`;
-    bits.push(`<a class="nextg" href="#game/${esc(g.id)}">Next: ${wk} ${g.neutral ? 'vs' : home ? 'vs' : '@'} ${esc(opp.abbr || opp.name)} ›</a>`);
+    const ko = kickoffOf(g);
+    bits.push(`<a class="nextg" href="#game/${esc(g.id)}">Next: ${wk} ${g.neutral ? 'vs' : home ? 'vs' : '@'} ${esc(opp.abbr || opp.name)}${ko ? ` · 🕗 ${esc(fmtKick(ko, true))}` : ''} ›</a>`);
   }
   const inv = p ? invitesFor(p.id) : [];
   if (inv.length) bits.unshift(`<a class="nextg kinvpill" href="#game/${esc(inv[0].gameId)}">📅 ${inv.length === 1 ? 'Kickoff invite' : inv.length + ' kickoff invites'} ›</a>`);
