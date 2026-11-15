@@ -1270,7 +1270,7 @@ PAGES.game = function (id) {
   return `<p><a href="#schedule/${g.week}">← Week ${g.week} schedule</a></p>
     <div class="card gp-head${isGotw ? ' gotw' : ''}">${isGotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}
       <div class="muted small" style="text-transform:uppercase;letter-spacing:.8px;font-weight:800">Season ${seasonNum(s)} · ${g.type === 'ccg' ? 'League Championship' : g.type === 'bowl' ? 'Postseason' : 'Week ' + g.week}${done ? ' · Final' : ''}${gameTags(g) ? ' · ' + gameTags(g) : ''}</div>
-      ${side(A, coachA, g.awayScore, !hw)}<div class="gp-at">${g.neutral ? 'vs' : '@'}</div>${side(H, coachH, g.homeScore, hw)}
+      <div class="gp-vs">${side(A, coachA, g.awayScore, !hw)}<div class="gp-at">${g.neutral ? 'vs' : '@'}</div>${side(H, coachH, g.homeScore, hw)}</div>
       ${l && !g.forfeit ? `<div class="gp-odds"><div><span>Spread</span><b>${l.spread === 0 ? 'PK' : esc(fav.abbr || fav.name) + ' ' + fmtLine(-Math.abs(l.spread))}</b></div><div><span>Total</span><b>O/U ${l.total}</b></div>
         <div><span>Moneyline</span><b>${esc(A.abbr)} ${fmtOdds(l.mlAway)}</b><b>${esc(H.abbr)} ${fmtOdds(l.mlHome)}</b></div></div>${probBar(g, l, done)}` : ''}
       ${canBet ? `<button class="gold" data-betgame="${g.week}" style="margin-top:12px">Bet this game${isGotw ? ' · +10% boost' : ''} →</button>` : ''}</div>

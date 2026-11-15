@@ -540,3 +540,14 @@ a.btn.disabled{opacity:.45;pointer-events:none}
 .rcase.good .rlab{color:var(--green)}
 .rcase.bad .rlab{color:#ff8a8f}
 .rcase ul{margin:2px 0 0;padding-left:18px}
+
+/* Preview header: teams side by side */
+.gp-vs{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:start;gap:8px;margin:12px 0 4px}
+.gp-vs .gp-team{flex-direction:column;align-items:center;text-align:center;gap:6px;padding:4px 0;min-width:0}
+.gp-vs .gp-team>div{min-width:0}
+.gp-vs .gp-team .sw.big{width:48px;height:8px;border-radius:99px}
+.gp-vs .gp-name{font-size:21px;overflow-wrap:anywhere}
+.gp-vs .gp-name .rk{display:block;margin:0 0 2px;font-size:.62em}
+.gp-vs .gp-score{margin:2px 0 0}
+.gp-vs .gp-at{margin:0;align-self:center;padding-top:6px;font-size:15px}
+@media(max-width:640px){.gp-vs .gp-name{font-size:17px}}
