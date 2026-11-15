@@ -27,6 +27,11 @@ function gameTags(g) {
   if ((g.type || 'reg') === 'reg' && h.div && h.div === a.div && h.conf === conf && a.conf === conf) out.push(`<span class="h2h divtag" title="Both teams are in the ${esc(h.div)} division">${esc(h.div.toUpperCase())}</span>`);
   return out.join('');
 }
+// Week order: Game of the Week first, then games still to play (earliest kickoff first), then finals.
+function weekOrder(games, gotwId) {
+  const rank = g => g.id === gotwId ? 0 : played(g) ? 2 : 1;
+  return games.map((g, i) => ({ g, i })).sort((x, y) => rank(x.g) - rank(y.g) || ((kickoffOf(x.g) || Infinity) - (kickoffOf(y.g) || Infinity)) || x.i - y.i).map(x => x.g);
+}
 function gameCard(g, opts = {}) {
   const h = team(g.home), a = team(g.away), done = played(g);
   const hw = done && +g.homeScore > +g.awayScore, aw = done && !hw;
@@ -127,7 +132,7 @@ const PAGES = {
     if (gt.game) html += gameCard(gt.game, { gotw: true, extra: `<div class="meta">${gt.counts[gt.game.id]} of ${gt.total} coach vote${gt.total === 1 ? '' : 's'}</div>` });
     else if (L.phase === PHASES.REG) html += `<div class="card gotw"><span class="ribbon">★ Game of the Week</span><div class="muted">No Game of the Week votes were cast for ${esc(weekLabel())}. <a href="#vote">Vote for next week's game →</a></div></div>`;
     html += `<div class="grid2"><div><h2>This Week's Storylines</h2><div class="card">${stories.length ? stories.map(st => `<${st.href ? `a href="${esc(st.href)}"` : 'div'} class="story${st.href ? ' link' : ''}"><span class="tag">${esc(st.tag)}</span><h3>${esc(st.title)}</h3><p>${esc(st.body)}</p>${st.href ? '<span class="go" aria-hidden="true">›</span>' : ''}</${st.href ? 'a' : 'div'}>`).join('') : '<div class="empty">Storylines appear once games are played.</div>'}</div></div>
-      <div><h2>${esc(weekLabel())} Matchups</h2>${games.length ? games.filter(g => g.id !== gt.game?.id).map(g => gameCard(g)).join('') || '<div class="card empty">Only the Game of the Week is on the slate.</div>' : '<div class="card empty">No games scheduled this week.</div>'}</div></div>
+      <div><h2>${esc(weekLabel())} Matchups</h2>${games.length ? weekOrder(games.filter(g => g.id !== gt.game?.id)).map(g => gameCard(g)).join('') || '<div class="card empty">Only the Game of the Week is on the slate.</div>' : '<div class="card empty">No games scheduled this week.</div>'}</div></div>
       <div class="grid"><div class="card"><h2>Power Rankings</h2><table>${pr.map(x => `<tr><td class="rank">${x.rank}</td><td>${chip(x.id)}</td><td class="num">${rec(x.rec)}</td><td class="num">${mvHtml(x.move)}</td></tr>`).join('')}</table><p><a href="#rankings">Full rankings →</a></p></div>
       <div class="card"><h2>Betting Leaders</h2>${leaders.length ? `<table>${leaders.map((x, i) => `<tr><td class="rank">${i + 1}</td><td>${esc(x.u.name)}</td><td class="num">${x.b.w}-${x.b.l}${x.b.p ? '-' + x.b.p : ''}</td><td class="num"><b>${x.b.balance.toLocaleString()}</b></td></tr>`).join('')}</table>` : '<div class="muted">No coaches linked yet.</div>'}<p><a href="#betting">Place wagers →</a></p></div></div>`;
     return html;
@@ -154,7 +159,7 @@ const PAGES = {
     return `<div class="row spread"><h2 style="margin:0">Schedule &amp; Scores</h2>
       <select data-nav="schedule">${weeks.map(w => `<option value="${w}" ${w === wk ? 'selected' : ''}>Week ${w}</option>`).join('')}</select></div>
       <p class="muted small">Lines for upcoming weeks update after every advance. You can bet any upcoming week on the Betting page, and a bet keeps the line you took.</p>
-      ${games.length ? games.map(g => gameCard(g, { gotw: gt && gt.id === g.id })).join('') : '<div class="card empty">No games for this week.</div>'}`;
+      ${games.length ? weekOrder(games, gt && gt.id).map(g => gameCard(g, { gotw: gt && gt.id === g.id })).join('') : '<div class="card empty">No games for this week.</div>'}`;
   },
 
   odds(focus) {
@@ -1257,6 +1262,7 @@ function header() {
   const p = auth.profile;
   $('#acct').innerHTML = auth.user ? acctHtml(p) : '<a class="btn" href="#account">Coach Login</a>';
   $('#footAdmin').innerHTML = isCommish() ? ' · <a href="admin.html">Commissioner Tools</a>' : '';
+  const fc = $('#footCal'); if (fc) fc.href = subscribeHref();
 }
 // Header greeting: time of day on the viewer's device, their balance and next game.
 function greeting() { const h = new Date().getHours(); return h >= 4 && h < 12 ? 'Good morning' : h >= 12 && h < 17 ? 'Good afternoon' : 'Good evening'; }

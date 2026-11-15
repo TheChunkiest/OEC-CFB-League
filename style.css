@@ -48,6 +48,8 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;line-height:
 .sbtn.yt{background:#c4161c}
 .sbtn.tt{background:#111;border-color:#444}
 .sbtn.tt i{color:#25f4ee;font-style:normal}
+.sbtn.cal{background:#2a2023;border-color:var(--gold);color:var(--gold)}
+.social{flex-wrap:wrap;justify-content:center}
 
 nav{display:flex;gap:4px;overflow-x:auto;padding:10px 16px;position:sticky;top:0;background:rgba(9,9,10,.94);backdrop-filter:blur(6px);z-index:20;border-bottom:1px solid var(--line);justify-content:safe center}
 nav a{padding:7px 13px;border-radius:8px;color:var(--muted);white-space:nowrap;font-weight:700;font-size:14px}
