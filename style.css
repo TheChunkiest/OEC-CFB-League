@@ -514,3 +514,18 @@ a.btn.disabled{opacity:.45;pointer-events:none}
 .srk.top{background:rgba(46,204,113,.15);border-color:rgba(46,204,113,.4);color:var(--green)}
 .srk.bot{background:rgba(211,18,28,.14);border-color:rgba(211,18,28,.4);color:#ff8a8f}
 @media(max-width:700px){.tstats{grid-template-columns:1fr}}
+
+/* Teams page grid + stat board */
+.tgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:22px}
+.tcard{display:block;background:var(--card);border:1px solid var(--line);border-top:4px solid var(--tc);border-radius:12px;padding:10px 12px;color:inherit;text-decoration:none;min-width:0}
+.tcard:hover{text-decoration:none;border-color:var(--tc)}
+.tcard.me{box-shadow:0 0 0 2px var(--gold) inset}
+.tc-top{display:flex;align-items:baseline;gap:6px;min-width:0}
+.tc-pl{font-size:11px;font-weight:900;color:var(--muted)}
+.tc-name{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tc-rec{font-weight:900;font-size:18px;margin-top:2px}
+.tc-sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:640px){.tgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.tc-name{font-size:14px}.tc-rec{font-size:16px}}
+.tsboard th.sortable{cursor:pointer;white-space:nowrap}
+.tsv{position:relative;min-width:110px}
+.tsv i{display:block;height:4px;border-radius:99px;margin-top:4px;margin-left:auto;opacity:.85}

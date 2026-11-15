@@ -241,11 +241,15 @@ const PAGES = {
   },
 
   teams() {
-    const R = records(S()), all = D.teams.filter(t => t.conf === D.league.conference);
-    return divisions().map(d => `<h2>${esc(d ? D.league.conference + ' ' + d : D.league.conference)}</h2><div class="grid">${all.filter(t => !d || t.div === d).map(t =>
-      `<a class="card" style="border-left:6px solid ${esc(teamColor(t))};color:inherit;text-decoration:none;display:block" href="#team/${esc(t.id)}">
-        <div class="row spread"><b style="font-size:16px">${esc(t.name)}</b><span class="pill">${rec(R[t.id])}</span></div>
-        <div class="muted small">${isUserTeam(t) ? 'Coach ' + esc(t.coach) : 'CPU'} · OVR ${t.ovr || '–'} · OFF ${t.off || '–'} · DEF ${t.def || '–'}</div></a>`).join('')}</div>`).join('');
+    const s = S(), R = records(s), all = D.teams.filter(t => t.conf === D.league.conference), me = myTeam()?.id;
+    const grids = divisions().map(d => {
+      const ids = orderGroup(all.filter(t => !d || t.div === d).map(t => t.id), s);
+      return `<h2>${esc(d ? D.league.conference + ' ' + d : D.league.conference)}</h2><div class="tgrid">${ids.map((id, i) => { const t = team(id); return `<a class="tcard${id === me ? ' me' : ''}" style="--tc:${esc(teamColor(t))}" href="#team/${esc(id)}">
+        <div class="tc-top"><span class="tc-pl">${i + 1}</span><b class="tc-name">${esc(t.name)}</b></div>
+        <div class="tc-rec">${rec(R[id])}${streak(R[id]) !== '–' ? `<span class="muted small"> · ${streak(R[id])}</span>` : ''}</div>
+        <div class="muted small tc-sub">${isUserTeam(t) ? esc(t.coach) : 'CPU'} · ${t.ovr || '–'} OVR</div></a>`; }).join('')}</div>`;
+    }).join('');
+    return grids + statsBoard(s);
   },
 
   team(id) {
@@ -1085,6 +1089,25 @@ const TEAM_STATS = [
   ['Betting', [['ats', 'Against the spread', 1], ['ou', 'Over / under', 0], ['fav', 'As favorite', 1], ['dog', 'As underdog', 1]]],
   ['Team', [['ovr', 'Overall', 1], ['off', 'Offense', 1], ['def', 'Defense', 1], ['power', 'Power ranking', 0], ['expW', 'Projected wins', 1], ['title', 'Title odds', 1]]],
 ];
+// Teams page: league-wide stat leaderboard. Pick a stat, tap the header to flip the order.
+function statsBoard(s) {
+  const lt = leagueTeams(); if (!lt.length) return '';
+  const opts = TEAM_STATS.map(([g, rows]) => [g, rows.filter(r => r[0] !== 'ou')]);
+  const flat = opts.flatMap(([, rows]) => rows), key = flat.some(r => r[0] === UI.tsKey) ? UI.tsKey : 'ppg';
+  const [, label, dir0, tip] = flat.find(r => r[0] === key), dir = (key === 'power' ? -1 : dir0 || 1) * (UI.tsFlip ? -1 : 1);
+  const lines = lt.map(t => ({ t, x: teamStatLine(t.id, s)[key] }));
+  const has = lines.filter(l => l.x.v != null).sort((p, q) => (q.x.v - p.x.v) * dir || p.t.name.localeCompare(q.t.name)), none = lines.filter(l => l.x.v == null);
+  // Rank by the stat's "better" direction (ties share a rank), regardless of display order.
+  const better = key === 'power' ? -1 : dir0 || 1, rankOf2 = v => has.filter(l => (l.x.v - v) * better > 1e-9).length + 1;
+  const me = myTeam()?.id, top = has.length ? Math.max(...has.map(l => Math.abs(l.x.v))) : 1;
+  const rows = [...has, ...none].map(l => { const r = l.x.v == null ? null : rankOf2(l.x.v), tie = r && has.filter(o => Math.abs(o.x.v - l.x.v) <= 1e-9).length > 1;
+    const w = l.x.v == null || key === 'power' ? 0 : Math.max(4, Math.abs(l.x.v) / (top || 1) * 100);
+    return `<tr class="clickable${l.t.id === me ? ' me' : ''}" data-team="${esc(l.t.id)}"><td class="rank">${r ? (tie ? 'T-' : '') + r : '–'}</td><td>${chip(l.t.id)}${subSm(rec(records(s)[l.t.id]))}</td>
+      <td class="hide-sm muted small">${rec(records(s)[l.t.id])}</td><td class="num tsv"><b>${l.x.f}</b>${w ? `<i style="width:${w.toFixed(0)}%;background:${esc(liftColor(teamColor(l.t)))}"></i>` : ''}</td></tr>`; }).join('');
+  return `<h2>${s} Season Stats</h2><div class="card"><div class="row spread" style="gap:8px"><select data-tstat aria-label="Stat">${opts.map(([g, rows]) => `<optgroup label="${g}">${rows.map(([k, l]) => `<option value="${k}" ${k === key ? 'selected' : ''}>${l}</option>`).join('')}</optgroup>`).join('')}</select>
+    <span class="muted small">${tip ? esc(tip) + ' · ' : ''}Tap the column header to flip the order.</span></div>
+    <div class="tablewrap" style="margin-top:8px"><table class="tsboard"><tr><th>#</th><th>Team</th><th class="hide-sm">Record</th><th class="num sortable" data-tsflip="1">${esc(label)} ${UI.tsFlip ? '▲' : '▼'}</th></tr>${rows}</table></div></div>`;
+}
 function teamStatsCard(tid, s) {
   const lt = leagueTeams(), inL = lt.some(t => t.id === tid), all = Object.fromEntries((inL ? lt : [...lt, team(tid)]).map(t => [t.id, teamStatLine(t.id, s)]));
   const me = all[tid], n = lt.length, r0 = records(s)[tid];
@@ -1310,6 +1333,8 @@ document.addEventListener('click', async e => {
   if (gc && !e.target.closest('a,button,input,select,label')) { location.hash = '#game/' + gc.dataset.game; window.scrollTo(0, 0); return; }
   const lx = e.target.closest('[data-livex]');
   if (lx) { try { localStorage.setItem('oecLiveDismissed', lx.dataset.livex); } catch (err) { /* ignore */ } showLive(); return; }
+  const tf = e.target.closest('[data-tsflip]'); if (tf) { UI.tsFlip = !UI.tsFlip; route(); return; }
+  const tr = e.target.closest('tr[data-team]'); if (tr && !e.target.closest('a')) { location.hash = '#team/' + tr.dataset.team; return; }
   const t = e.target.closest('[data-sort],[data-metric],[data-trend],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-slip],[data-popular],[data-res],[data-act],[data-close],[data-stake],[data-acct],[data-cancel],[data-cashout],[data-kinv],[data-kacc],[data-kdec],[data-kcan]');
   if (!t) return;
   const page = (location.hash.slice(1) || 'home').split('/')[0];
@@ -1361,6 +1386,7 @@ document.addEventListener('input', e => { if (e.target.id === 'stake') updToWin(
 document.addEventListener('change', e => {
   if (e.target.dataset.betweek) { UI.betWeek = +e.target.value; route(); }
   if (e.target.dataset.nav) location.hash = '#' + e.target.dataset.nav + '/' + e.target.value;
+  if (e.target.matches('[data-tstat]')) { UI.tsKey = e.target.value; UI.tsFlip = false; route(); }
   if (e.target.type === 'radio') { const grp = $$(`input[name="${e.target.name}"]`); grp.forEach(r => r.closest('.vote-opt')?.classList.toggle('on', r.checked)); }
 });
 document.addEventListener('submit', async e => {
