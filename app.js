@@ -790,14 +790,18 @@ const toLocalInput = ts => { const d = new Date(ts - new Date(ts).getTimezoneOff
 function kickoffCard(g) {
   const me = auth.profile, mineTeam = me && me.teamId && (me.teamId === g.home || me.teamId === g.away);
   const inv = kickoffInvite(g), pend = pendingInvites(g), commish = isCommish();
-  if (!canSchedule(g) || (!mineTeam && !commish)) return '';
-  const opp = mineTeam ? team(me.teamId === g.home ? g.away : g.home) : null;
+  if (played(g)) return '';
+  const can = canSchedule(g), opp = mineTeam ? team(me.teamId === g.home ? g.away : g.home) : null;
   const slots = i => i.times.map(t => esc(fmtKick(t))).join(' · ');
   let body = '';
   if (inv) {
-    body = `<p style="margin:0">Kickoff is set for <b>${esc(fmtKick(inv.time))}</b>. Both coaches agreed.</p>
-      ${mineTeam || commish ? `<button class="sm ghost" data-kcan="${esc(inv.id)}" style="margin-top:8px">${commish && !mineTeam ? 'Clear kickoff' : 'Reschedule'}</button>` : ''}`;
+    body = `<div class="kset"><b>${esc(fmtKick(inv.time))}</b><span class="muted small">Agreed by both coaches</span></div>
+      <div class="kcal"><a class="btn sm ghost" href="${icsHref(g, inv.time)}" download="OEC-${esc(team(g.away).abbr || 'away')}-at-${esc(team(g.home).abbr || 'home')}.ics">Apple / iPhone Calendar</a><a class="btn sm ghost" href="${gcalHref(g, inv.time)}" target="_blank" rel="noopener">Google Calendar</a>
+      ${(mineTeam || commish) && can ? `<button class="sm ghost" data-kcan="${esc(inv.id)}">${commish && !mineTeam ? 'Clear kickoff' : 'Reschedule'}</button>` : ''}</div>`;
+  } else if (!can || (!mineTeam && !commish)) {
+    body = `<p class="muted" style="margin:0">Coaches haven't set a time for this matchup.</p>${mineTeam && !can && isUserTeam(team(g.home)) && isUserTeam(team(g.away)) ? `<p class="muted small" style="margin:6px 0 0">Invites open once this game is in the current or next week.</p>` : ''}`;
   } else {
+    body += `<p class="muted" style="margin:0 0 4px">Coaches haven't set a time for this matchup.</p>`;
     const incoming = pend.filter(i => me && i.to === me.id), outgoing = pend.filter(i => me && i.from === me.id);
     body += incoming.map(i => `<div class="kinv"><div><b>Coach ${esc(i.fromName || '')}</b> wants to play at one of these times. Tap the one that works:</div>
       <div class="kslots">${i.times.map(t => `<button class="gold sm" data-kacc="${esc(i.id)}|${t}">${esc(fmtKick(t))}</button>`).join('')}<button class="sm ghost" data-kdec="${esc(i.id)}">None work</button></div></div>`).join('');
@@ -813,6 +817,21 @@ function kickoffCard(g) {
     }
   }
   return `<div class="card kcard"><h3 style="margin-top:0">🕗 Kickoff time</h3>${body}</div>`;
+}
+// Calendar links for an agreed kickoff (90-minute block).
+const calTimes = ts => { const f = d => new Date(d).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); return [f(ts), f(ts + 90 * 60000)]; };
+const calTitle = g => `OEC: ${team(g.away).name} @ ${team(g.home).name}`;
+const calDesc = g => `${seasonNum(g.season) ? 'Season ' + seasonNum(g.season) + ' · ' : ''}Week ${g.week} · Coach ${coachOf(g, 'away')} @ Coach ${coachOf(g, 'home')}\n${location.origin + location.pathname}#game/${g.id}`;
+function icsHref(g, ts) {
+  const [s, e] = calTimes(ts), esc2 = x => String(x).replace(/[\\;,]/g, m => '\\' + m).replace(/\n/g, '\\n');
+  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//OEC CFB League Hub//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'BEGIN:VEVENT',
+    `UID:${g.id}-${ts}@oec-cfb`, `DTSTAMP:${calTimes(Date.now())[0]}`, `DTSTART:${s}`, `DTEND:${e}`, `SUMMARY:${esc2(calTitle(g))}`, `DESCRIPTION:${esc2(calDesc(g))}`,
+    'BEGIN:VALARM', 'TRIGGER:-PT30M', 'ACTION:DISPLAY', `DESCRIPTION:${esc2(calTitle(g))}`, 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+  return 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics);
+}
+function gcalHref(g, ts) {
+  const [s, e] = calTimes(ts);
+  return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(calTitle(g)) + '&dates=' + s + '/' + e + '&details=' + encodeURIComponent(calDesc(g));
 }
 async function kickAction(t) {
   const me = auth.profile, now = Date.now();
@@ -1147,7 +1166,6 @@ PAGES.game = function (id) {
       ${side(A, coachA, g.awayScore, !hw)}<div class="gp-at">${g.neutral ? 'vs' : '@'}</div>${side(H, coachH, g.homeScore, hw)}
       ${l && !g.forfeit ? `<div class="gp-odds"><div><span>Spread</span><b>${l.spread === 0 ? 'PK' : esc(fav.abbr || fav.name) + ' ' + fmtLine(-Math.abs(l.spread))}</b></div><div><span>Total</span><b>O/U ${l.total}</b></div>
         <div><span>Moneyline</span><b>${esc(A.abbr)} ${fmtOdds(l.mlAway)}</b><b>${esc(H.abbr)} ${fmtOdds(l.mlHome)}</b></div></div>${probBar(g, l, done)}` : ''}
-      ${done ? '' : kickoffOf(g) ? `<div class="gp-kick">🕗 Kickoff <b>${esc(fmtKick(kickoffOf(g)))}</b></div>` : `<div class="gp-kick">🕗 Coaches haven't set a time for this matchup.</div>`}
       ${canBet ? `<button class="gold" data-betgame="${g.week}" style="margin-top:12px">Bet this game${isGotw ? ' · +10% boost' : ''} →</button>` : ''}</div>
     ${kickoffCard(g)}
     ${l && !g.forfeit ? winChart(g, A, H) : ''}

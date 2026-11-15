@@ -492,3 +492,9 @@ table.cseason td:first-child{white-space:normal;min-width:64px}
 .kform input{width:100%;max-width:280px}
 .kform button{justify-self:start}
 .kinvpill{border-color:var(--gold)!important;color:var(--gold)!important}
+
+.kset{display:flex;flex-direction:column;gap:2px}
+.kset b{font-size:18px}
+.kcal{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+a.btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+a.btn.sm{padding:6px 11px;font-size:12px;min-height:34px;border-radius:8px}
