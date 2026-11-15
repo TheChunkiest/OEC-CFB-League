@@ -1,4 +1,8 @@
 name: YouTube live check
+# Checks whether the OEC YouTube channel is live about once a minute and updates live.json.
+# GitHub only starts scheduled workflows every 5 minutes (at best), so each run checks
+# 5 times, a minute apart. The site reads live.json every minute to show the pop-up.
+# Best results: add a repo secret named YT_API_KEY (a YouTube Data API v3 key).
 on:
   schedule:
     - cron: '*/5 * * * *'
@@ -11,6 +15,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-24.04
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v5
       - name: Check channel
@@ -53,27 +58,43 @@ jobs:
               return {"live": True, "videoId": vid.group(1), "url": "https://www.youtube.com/watch?v=" + vid.group(1),
                       "title": (title.group(1) if title else "Live on YouTube").replace("&amp;", "&").replace("&#39;", "'").replace("&quot;", '"')}
 
-          try:
-              new = via_api() if key else via_page()
-              print("Method:", "YouTube API" if key else "page check (add YT_API_KEY secret for reliability)")
-          except Exception as e:
-              print("Check failed, leaving live.json alone:", e); raise SystemExit(0)
-          old = {}
-          if os.path.exists("live.json"):
-              try: old = json.load(open("live.json"))
-              except Exception: pass
-          if new["live"]:
-              new["checkedAt"] = int(time.time() * 1000)
-          elif old.get("live") is False or (not old.get("live") and "live" in old):
-              print("No change:", new); raise SystemExit(0)
-          json.dump(new, open("live.json", "w"), indent=1)
-          open(os.environ["GITHUB_OUTPUT"], "a").write("changed=true\n")
-          print("Updated:", new)
-      - name: Save
-        if: steps.check.outputs.changed == 'true'
-        run: |
-          git config user.name "oec-live-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add live.json
-          git commit -m "YouTube live status update"
-          git push
+          import subprocess
+          def git(*a): return subprocess.run(["git", *a], check=False, capture_output=True, text=True)
+          git("config", "user.name", "oec-live-bot"); git("config", "user.email", "actions@users.noreply.github.com")
+
+          def save(data, why):
+              json.dump(data, open("live.json", "w"), indent=1)
+              git("add", "live.json")
+              if git("diff", "--cached", "--quiet").returncode == 0: return
+              git("commit", "-m", "YouTube live status: " + why)
+              for _ in range(3):
+                  if git("push").returncode == 0: print("Pushed:", why); return
+                  git("pull", "--rebase", "-X", "theirs")
+              print("Push failed")
+
+          CHECKS, GAP = 5, 60
+          for i in range(CHECKS):
+              t0 = time.time()
+              try:
+                  new = via_api() if key else via_page()
+              except Exception as e:
+                  print(f"[{i+1}/{CHECKS}] check failed:", e); new = None
+              if new is not None:
+                  old = {}
+                  if os.path.exists("live.json"):
+                      try: old = json.load(open("live.json"))
+                      except Exception: pass
+                  now = int(time.time() * 1000)
+                  if new["live"]:
+                      # Commit when going live (or the video changes); while still live, re-stamp
+                      # checkedAt about every 5 minutes so the site knows it's fresh (it ignores a
+                      # "live" status not confirmed in 25 minutes) without a commit every minute.
+                      if not old.get("live") or old.get("videoId") != new.get("videoId"):
+                          new["checkedAt"] = now; save(new, "live")
+                      elif now - int(old.get("checkedAt") or 0) > 4.5 * 60e3:
+                          new["checkedAt"] = now; save(new, "still live")
+                      else: print(f"[{i+1}/{CHECKS}] still live")
+                  elif old.get("live") or "live" not in old:
+                      save({"live": False}, "offline")
+                  else: print(f"[{i+1}/{CHECKS}] not live")
+              if i < CHECKS - 1: time.sleep(max(0, GAP - (time.time() - t0)))
