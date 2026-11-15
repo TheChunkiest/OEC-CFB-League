@@ -928,8 +928,8 @@ function kickoffCard(g) {
 }
 // Calendar links for an agreed kickoff (90-minute block).
 const calTimes = ts => { const f = d => new Date(d).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); return [f(ts), f(ts + 60 * 60000)]; };
-const calTitle = g => `OEC: ${team(g.away).name} @ ${team(g.home).name}`;
-const calDesc = g => `${seasonNum(g.season) ? 'Season ' + seasonNum(g.season) + ' · ' : ''}Week ${g.week} · Coach ${coachOf(g, 'away')} @ Coach ${coachOf(g, 'home')}\n${location.origin + location.pathname}#game/${g.id}`;
+const calTitle = g => `S${seasonNum(g.season)}, W${g.week}: ${team(g.away).name} @ ${team(g.home).name}`;
+const calDesc = () => 'Watch live now at https://youtube.com/@originalentertainingcrackers?si=op40_dOeDBsH25EV';
 const subscribeHref = () => 'webcal://' + location.host + location.pathname.replace(/[^/]*$/, '') + 'cal/league.ics';
 // The .ics files are written by a GitHub Action a few minutes after a time is agreed; until then, say so.
 async function checkIcs() {

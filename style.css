@@ -547,7 +547,7 @@ a.btn.disabled{opacity:.45;pointer-events:none}
 .gp-vs .gp-team>div{min-width:0}
 .gp-vs .gp-team .sw.big{width:48px;height:8px;border-radius:99px}
 .gp-vs .gp-name{font-size:21px;overflow-wrap:anywhere}
-.gp-vs .gp-name .rk{display:block;margin:0 0 2px;font-size:.62em}
+.gp-vs .gp-name .rk{display:inline;margin:0 5px 0 0;font-size:.62em;vertical-align:.2em;white-space:nowrap}
 .gp-vs .gp-score{margin:2px 0 0}
 .gp-vs .gp-at{margin:0;align-self:center;padding-top:6px;font-size:15px}
 @media(max-width:640px){.gp-vs .gp-name{font-size:17px}}
