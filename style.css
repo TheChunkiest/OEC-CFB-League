@@ -588,3 +588,8 @@ details.kform input{display:block;width:100%;max-width:280px;margin-top:6px}
 .card.popular .vodds{color:var(--gold);line-height:1;flex-shrink:0}
 .card.popular .vfoot{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:10px}
 .card.popular{padding-top:26px}
+
+/* More breathing room between games on the lines board */
+.betgrid .betgame:not(.gotw){border-top:1px solid var(--line);padding-top:6px;margin-top:10px}
+.betgrid .hdr+.hdr+.hdr+.betgame{border-top:none;margin-top:0}
+.betgame .tm.matchup{padding-top:12px}
