@@ -13,6 +13,12 @@ const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-
 const L = () => D.league;
 const teamOpts = (sel, blank, filter = () => true) => (blank ? `<option value="">${blank === true ? '—' : esc(blank)}</option>` : '') +
   D.teams.filter(filter).slice().sort((a, b) => a.name.localeCompare(b.name)).map(t => `<option value="${esc(t.id)}" ${t.id === sel ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
+// Account team picker: league teams, then any coached team outside the league (or the one this account already has).
+const acctTeamOpts = u => {
+  const conf = L().conference, opt = t => `<option value="${esc(t.id)}" ${t.id === u.teamId ? 'selected' : ''}>${esc(t.name)}</option>`, byName = (a, b) => a.name.localeCompare(b.name);
+  const inL = D.teams.filter(t => t.conf === conf).sort(byName), out = D.teams.filter(t => t.conf !== conf && (isUserTeam(t) || t.id === u.teamId)).sort(byName);
+  return `<option value="">Not linked</option><optgroup label="${esc(conf)}">${inL.map(opt).join('')}</optgroup>${out.length ? `<optgroup label="Outside the ${esc(conf)}">${out.map(opt).join('')}</optgroup>` : ''}`;
+};
 const flash = m => { ST.msg = m; ST.clear = true; render(); window.scrollTo(0, 0); };
 const findTeam = s => { const q = String(s || '').trim().toLowerCase(); return D.teams.find(t => t.id === q || t.name.toLowerCase() === q || (t.abbr || '').toLowerCase() === q); };
 
@@ -248,8 +254,14 @@ const views = {
     const us = D.users.slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     return `<div class="card"><h2>Coach Accounts</h2><p class="muted small">Coaches create their own login on the hub (Coach Login → Create account). Link each account to a team here so they can bet and vote. Commissioners can use these tools; you can be a coach and the commissioner at the same time.</p>
       ${us.length ? `<div class="tablewrap"><table class="stack-sm"><tr><th>Coach name</th><th>Team</th><th>Role</th></tr>${us.map(u => `<tr data-user="${esc(u.id)}"><td data-l="Coach"><input data-k="name" value="${esc(u.name)}"></td>
-        <td data-l="Team"><select data-k="teamId">${teamOpts(u.teamId, 'Not linked', t => t.conf === L().conference)}</select></td><td data-l="Role"><select data-k="role"><option value="coach" ${u.role !== 'commish' ? 'selected' : ''}>Coach</option><option value="commish" ${u.role === 'commish' ? 'selected' : ''}>Commissioner</option></select></td></tr>`).join('')}</table></div>
-        <div style="margin-top:10px"><button data-act="saveUsers">Save accounts</button></div>` : '<p class="muted">No one has signed up yet.</p>'}</div>`;
+        <td data-l="Team"><select data-k="teamId">${acctTeamOpts(u)}</select></td><td data-l="Role"><select data-k="role"><option value="coach" ${u.role !== 'commish' ? 'selected' : ''}>Coach</option><option value="commish" ${u.role === 'commish' ? 'selected' : ''}>Commissioner</option></select></td></tr>`).join('')}</table></div>
+        <div style="margin-top:10px"><button data-act="saveUsers">Save accounts</button></div>` : '<p class="muted">No one has signed up yet.</p>'}</div>
+      ${us.length ? `<div class="card"><h3 style="margin-top:0">Coach from outside the ${esc(L().conference)}</h3>
+        <p class="muted small">For a coach who joined mid-season and plays outside the ${esc(L().conference)} this year. Their team is added as non-conference, so they can bet, vote and show on the betting leaderboard, but they won't appear in the standings, odds or power rankings. When they join the ${esc(L().conference)}, open the Preseason tab, change the team's Conf to ${esc(L().conference)}, pick a division and save.</p>
+        <div class="row"><div><label>Their team</label><input id="ocTeam" list="ocTeams" placeholder="Oregon State" style="width:170px"><datalist id="ocTeams">${D.teams.filter(t => t.conf !== L().conference).map(t => `<option value="${esc(t.name)}">`).join('')}</datalist></div>
+          <div><label>Abbreviation</label><input id="ocAbbr" placeholder="ORST" maxlength="5" style="width:90px"></div>
+          <div><label>Account</label><select id="ocUser"><option value="">Pick an account</option>${us.slice().sort((a, b) => !!a.teamId - !!b.teamId).map(u => `<option value="${esc(u.id)}">${esc(u.name || '(no name)')}${u.teamId ? ' · ' + esc(team(u.teamId).name) : ' · not linked'}</option>`).join('')}</select></div>
+          <button data-act="addOutside">Add team &amp; link</button></div></div>` : ''}`;
   },
 
   betting() {
@@ -520,6 +532,21 @@ const ACT = {
       if (data.teamId) ops.push({ op: 'set', col: 'teams', id: data.teamId, data: { uid: id, coach: data.name } });
     });
     await batch(ops); refreshProfile(); flash('Accounts saved.');
+  },
+  async addOutside() {
+    const name = $('#ocTeam').value.trim(), uid = $('#ocUser').value, u = D.users.find(x => x.id === uid);
+    if (!name) return alert('Enter their team name (e.g. Oregon State).');
+    if (!u) return alert('Pick the account to link.');
+    const ex = findTeam(name);
+    if (ex && ex.conf === L().conference) return alert(`${ex.name} is already a ${L().conference} team. Link it in the table above instead.`);
+    const id = ex ? ex.id : slug(name), abbr = ($('#ocAbbr').value.trim() || (ex && ex.abbr) || name.replace(/[^A-Za-z]/g, '').slice(0, 4)).toUpperCase();
+    const ops = [];
+    if (ex) ops.push({ op: 'set', col: 'teams', id, data: { abbr, coach: u.name || '', uid } });
+    else ops.push({ op: 'set', col: 'teams', id, data: { name, abbr, conf: 'Non-Conf', div: '', coach: u.name || '', uid, color: lookupColor(name) || '#777777', ovr: null, off: null, def: null }, merge: false });
+    if (u.teamId && u.teamId !== id && team(u.teamId).uid === uid) ops.push({ op: 'set', col: 'teams', id: u.teamId, data: { uid: '' } });
+    ops.push({ op: 'set', col: 'users', id: uid, data: { teamId: id } });
+    await batch(ops); await loadAll(); refreshProfile();
+    flash(`${ex ? ex.name : name} is linked to ${u.name}. They can bet now (1,000 Crackers this season).`);
   },
   async repost() { await batch(lineOps(L().week)); flash('Lines re-posted.'); },
   async awardsToggle() { const A = L().awards || {}; await put('meta', 'league', { awards: { ...A, open: !A.open, season: L().season } }); flash('Voting ' + (L().awards.open ? 'opened' : 'closed') + '.'); },
