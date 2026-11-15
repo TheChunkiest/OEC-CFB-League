@@ -452,3 +452,7 @@ details.legs summary{white-space:nowrap}
 .trstats .up,.trstats .down{font-size:13px}
 .trwrap{margin-top:8px;touch-action:pan-y}
 .trsvg{width:100%;height:auto;display:block;cursor:crosshair}
+
+/* Same-division badge (next to USER GAME) */
+.h2h.divtag{background:var(--red);color:#fff;margin-left:4px}
+.h2h+.h2h.divtag{margin-left:4px}
