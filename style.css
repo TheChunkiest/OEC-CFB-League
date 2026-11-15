@@ -195,7 +195,8 @@ td.wrap{white-space:normal;min-width:140px}
   .titleblock .sub{font-size:11.5px;line-height:1.35}
   .hdr-right{grid-column:1/-1;flex-direction:row;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
   .badges{gap:6px}
-  .badge{min-width:0;padding:4px 10px;border-radius:9px;display:flex;align-items:baseline;gap:6px}
+  .badge{min-width:0;padding:4px 10px;border-radius:9px;display:flex;align-items:center;gap:6px}
+  .badge b{line-height:1}
   .badge span{font-size:9px;letter-spacing:1px}
   .badge b{font-size:18px}
   .badge.gold b{font-size:16px}
@@ -341,7 +342,8 @@ tr.clickable:hover td{background:rgba(245,184,46,.05)}
 .pbar .pb i{display:block;height:100%}
 .pbar.pre{opacity:.7}
 .pbar em{position:absolute;left:50%;top:-12px;transform:translateX(-50%);font-style:normal;font-size:9.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted)}
-.betgame .pbar.tm{grid-column:1/-1;margin:0 0 2px}
+.betgame .pbar.tm{grid-column:1/-1;margin:0 0 2px;padding-top:0}
+.badge[hidden]{display:none!important}
 .prevlink{margin-left:auto;font-size:12px;font-weight:700;white-space:nowrap}
 /* Game preview page */
 .gp-head{padding-top:18px}
