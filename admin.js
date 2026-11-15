@@ -1,8 +1,8 @@
 import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
-  orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally
-} from './core.js?v=38';
+  orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance
+} from './core.js?v=39';
 import { lookupColor } from './teamcolors.js';
 
 const TABS = [['advance', 'Weekly Advance'], ['games', 'Games'], ['top25', 'Top 25'], ['ratings', 'Ratings'], ['betting', 'Betting'], ['coaches', 'Coaches & Accounts'], ['awards', 'Awards'], ['preseason', 'Preseason'], ['settings', 'Settings & History']];
@@ -19,6 +19,16 @@ const acctTeamOpts = u => {
   const inL = D.teams.filter(t => t.conf === conf).sort(byName), out = D.teams.filter(t => t.conf !== conf && (isUserTeam(t) || t.id === u.teamId)).sort(byName);
   return `<option value="">Not linked</option><optgroup label="${esc(conf)}">${inL.map(opt).join('')}</optgroup>${out.length ? `<optgroup label="Outside the ${esc(conf)}">${out.map(opt).join('')}</optgroup>` : ''}`;
 };
+// Advance clock: the header shows a projected advance 3 days after the last one (+24h when extended).
+const toLocalInput = ts => { const d = new Date(ts - new Date(ts).getTimezoneOffset() * 60000); return d.toISOString().slice(0, 16); };
+function advClock() {
+  const lg = L(), p = projectedAdvance(), ext = lg.advExt || 0;
+  return `<div class="card"><div class="row spread"><h3 style="margin:0">Advance clock</h3>${p ? `<span class="muted small">Header shows: <b>Projected advance ${esc(fmtAdvance(p))}</b>${ext ? ` (includes +${ext}h)` : ''}</span>` : '<span class="muted small">Not set yet. The header badge appears once it is.</span>'}</div>
+    <p class="muted small">Every advance records its time automatically; the next one is projected 3 days later. Set the time here if this week's advance happened before this feature existed.</p>
+    <div class="row"><div><label>Last advance</label><input type="datetime-local" id="advAt" value="${lg.advancedAt ? toLocalInput(lg.advancedAt) : ''}"></div>
+      <button data-act="saveAdvAt">Save time</button>
+      ${ext ? `<button class="ghost" data-act="advExt" data-h="0">Remove +${ext}h extension</button>` : `<button class="ghost" data-act="advExt" data-h="24">Add 24-hour extension</button>`}</div></div>`;
+}
 const flash = m => { ST.msg = m; ST.clear = true; render(); window.scrollTo(0, 0); };
 const findTeam = s => { const q = String(s || '').trim().toLowerCase(); return D.teams.find(t => t.id === q || t.name.toLowerCase() === q || (t.abbr || '').toLowerCase() === q); };
 
@@ -170,6 +180,10 @@ function wizard() {
 /* ---------- views ---------- */
 const views = {
   advance() {
+    const lg = L(), body = views.advanceBody();
+    return ((lg.phase === PHASES.REG || lg.phase === PHASES.CCG) && !ST.done ? advClock() : '') + body;
+  },
+  advanceBody() {
     const lg = L(), s = lg.season;
     if (!D.teams.length) return `<div class="card"><h2>Welcome, Commissioner</h2><p>The database is empty. Load the league history and the current season (Seasons 1–3 through Week 9) from <code>league-data.json</code>. This adds all teams, coaches, divisions, results, champions, awards and "Holy Shit" moments, then posts Week 10 lines.</p><button class="gold" data-act="importSeed">Load league data</button></div>`;
     if (lg.phase === PHASES.PRE) return `<div class="card"><h2>Offseason</h2><p>The ${s} season is wrapped up${D.history.find(h => h.season === s) ? ' and in the history books' : ''}. Fill out the <b>Preseason</b> form to set up next season: coaches, team ratings and the schedule. Publishing it opens Week 0 betting and posts preseason odds.</p><button data-tab="preseason">Open Preseason form →</button></div>`;
@@ -373,11 +387,11 @@ const ACT = {
     const desk = dr.desk.on && dr.desk.text ? { show: true, text: dr.desk.text } : { show: false, text: '' };
     if (dr.poll && pollChanged(dr.poll, W)) await put('meta', 'league', { polls: { [pollKey(W + 1)]: dr.poll } });
     if (last) {
-      await put('meta', 'league', { week: W + 1, phase: PHASES.CCG, bettingOpen: false, desk, futures: { ...(lg.futures || {}), open: false }, winTotals: { season: 0, odds: {} }, awards: { open: false, season: lg.season, categories: lg.awards?.season === lg.season ? (lg.awards.categories || []) : [] } });
+      await put('meta', 'league', { week: W + 1, advancedAt: Date.now(), advExt: 0, phase: PHASES.CCG, bettingOpen: false, desk, futures: { ...(lg.futures || {}), open: false }, winTotals: { season: 0, odds: {} }, awards: { open: false, season: lg.season, categories: lg.awards?.season === lg.season ? (lg.awards.categories || []) : [] } });
       await batch(settleOps([]));
     } else {
       const gotwG = gotwTally(lg.season, W + 1, { includeOpen: true }).game;
-      await put('meta', 'league', { week: W + 1, bettingOpen: true, desk, gotw: { season: lg.season, week: W + 1, gameId: gotwG ? gotwG.id : '' } });
+      await put('meta', 'league', { week: W + 1, advancedAt: Date.now(), advExt: 0, bettingOpen: true, desk, gotw: { season: lg.season, week: W + 1, gameId: gotwG ? gotwG.id : '' } });
       await batch(lineOps(W + 1));
     }
     const settled = D.wagers.filter(w => w.settledAt && Date.now() - w.settledAt < 60000).length;
@@ -400,12 +414,12 @@ const ACT = {
     const desk = deskValue();
     if (W >= lg.finalWeek) {
       if (poll && pollChanged(poll, W)) await put('meta', 'league', { polls: { [pollKey(W + 1)]: poll } });
-      await put('meta', 'league', { week: W + 1, phase: PHASES.CCG, bettingOpen: false, desk, futures: { ...(lg.futures || {}), open: false }, winTotals: { season: 0, odds: {} }, awards: { open: false, season: lg.season, categories: lg.awards?.season === lg.season ? (lg.awards.categories || []) : [] } });
+      await put('meta', 'league', { week: W + 1, advancedAt: Date.now(), advExt: 0, phase: PHASES.CCG, bettingOpen: false, desk, futures: { ...(lg.futures || {}), open: false }, winTotals: { season: 0, odds: {} }, awards: { open: false, season: lg.season, categories: lg.awards?.season === lg.season ? (lg.awards.categories || []) : [] } });
       await batch(settleOps([]));
       ST.desk = 'no'; flash('Regular season complete. Win-total bets are settled. Set up the championship game and awards ballot below.');
     } else {
       if (poll && pollChanged(poll, W)) await put('meta', 'league', { polls: { [pollKey(W + 1)]: poll } });
-      await put('meta', 'league', { week: W + 1, bettingOpen: true, desk });
+      await put('meta', 'league', { week: W + 1, advancedAt: Date.now(), advExt: 0, bettingOpen: true, desk });
       await batch(lineOps(W + 1));
       ST.desk = 'no'; flash(`Advanced to Week ${W + 1}. Lines posted, betting open, odds and power rankings updated.`);
     }
@@ -499,7 +513,7 @@ const ACT = {
     if (L().phase !== PHASES.PRE && s !== L().season && !confirm(`The ${L().season} season hasn't been finalized. Publish ${s} anyway?`)) return;
     if (!confirm(`Publish the ${s} season? This posts preseason odds and opens betting.`)) return;
     const first = Math.min(...sg.map(g => g.week));
-    await put('meta', 'league', { season: s, finalWeek: fw, week: first, phase: PHASES.REG, bettingOpen: true, desk: deskValue(), awards: { open: false, season: s, categories: [], results: [] } });
+    await put('meta', 'league', { season: s, finalWeek: fw, week: first, advancedAt: Date.now(), advExt: 0, phase: PHASES.REG, bettingOpen: true, desk: deskValue(), awards: { open: false, season: s, categories: [], results: [] } });
     await batch(lineOps(first, s));
     ST.desk = 'no'; ST.tab = 'advance'; flash(`${s} season published. Week ${first} lines are posted and preseason odds are live.`);
   },
@@ -532,6 +546,14 @@ const ACT = {
       if (data.teamId) ops.push({ op: 'set', col: 'teams', id: data.teamId, data: { uid: id, coach: data.name } });
     });
     await batch(ops); refreshProfile(); flash('Accounts saved.');
+  },
+  async saveAdvAt() {
+    const v = $('#advAt').value; if (!v) return alert('Pick the date and time of the last advance.');
+    await put('meta', 'league', { advancedAt: new Date(v).getTime() }); flash('Advance clock saved.');
+  },
+  async advExt(e) {
+    const h = +(e?.dataset?.h || 0);
+    await put('meta', 'league', { advExt: h }); flash(h ? 'Added a 24-hour extension to this week.' : 'Extension removed.');
   },
   async addOutside() {
     const name = $('#ocTeam').value.trim(), uid = $('#ocUser').value, u = D.users.find(x => x.id === uid);
@@ -627,7 +649,7 @@ document.addEventListener('click', async e => {
   try {
     if (t.dataset.tab) { ST.tab = t.dataset.tab; ST.msg = ''; render(); if (t.dataset.tab === 'awards') { try { await loadBallots(true); } catch (err) { console.error(err); ST.msg = 'Could not load ballots from Firebase (' + err.message + '). Make sure the latest Firestore rules are published.'; } render(); } }
     else if (t.dataset.desk) { ST.desk = t.dataset.desk; const keep = $('#deskText')?.value; $$('[data-desk]').forEach(b => b.classList.toggle('on', b.dataset.desk === ST.desk)); $('#deskText').parentElement.hidden = ST.desk !== 'yes'; if (keep) $('#deskText').value = keep; }
-    else if (t.dataset.act) { t.disabled = true; await ACT[t.dataset.act](); }
+    else if (t.dataset.act) { t.disabled = true; await ACT[t.dataset.act](t); }
     else if (t.dataset.delgame) { if (confirm('Delete this game? Open wagers on it will be voided.')) { await batch([{ op: 'del', col: 'games', id: t.dataset.delgame }, ...D.wagers.filter(w => w.gameId === t.dataset.delgame && w.status === 'open').map(w => ({ op: 'set', col: 'wagers', id: w.id, data: { status: 'void', payout: 0, settledAt: Date.now() } }))]); await batch(parlayOps()); await refreshBooks(); render(); } }
     else if (t.dataset.delteam) { const id = t.dataset.delteam; if (D.games.some(g => g.home === id || g.away === id)) return alert('This team has games scheduled. Delete those first.'); if (confirm('Delete ' + team(id).name + '?')) { if (D.teams.find(x => x.id === id)?._new) D.teams = D.teams.filter(x => x.id !== id); else await batch([{ op: 'del', col: 'teams', id }]); render(); } }
     else if (t.dataset.void) { if (confirm('Void this wager and refund the stake?')) { await put('wagers', t.dataset.void, { status: 'void', payout: 0, settledAt: Date.now() }); render(); } }

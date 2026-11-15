@@ -592,6 +592,22 @@ export function boardOps(week, season = D.league.season) {
   if (season === L.season && week === L.week && L.phase === PHASES.REG) ops.push({ op: 'set', col: 'meta', id: 'league', data: { futures: futuresSnapshot(), winTotals: winTotalsSnapshot() } });
   return ops;
 }
+/* ---------- Advance clock ---------- */
+// Projected next advance: 3 days after the last one, plus any extension (hours) the commissioner added.
+export const ADVANCE_DAYS = 3;
+export function projectedAdvance(L = D.league) {
+  if (!L || !L.advancedAt || (L.phase !== PHASES.REG && L.phase !== PHASES.CCG)) return null;
+  return L.advancedAt + ADVANCE_DAYS * 864e5 + (L.advExt || 0) * 36e5;
+}
+export function fmtAdvance(ts) {
+  const d = new Date(ts), now = new Date(), day = 864e5;
+  const t = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  const sameDay = (a, b) => a.toDateString() === b.toDateString();
+  if (sameDay(d, now)) return 'Today ' + t;
+  if (sameDay(d, new Date(now.getTime() + day))) return 'Tomorrow ' + t;
+  return d.toLocaleDateString('en-US', { weekday: 'short' }) + ' ' + t;
+}
+
 /* ---------- Win-chance history (for the game preview chart) ---------- */
 // Every re-price appends a point when the home win chance moves; capped so the doc stays small.
 function histPoint(g, l) {
