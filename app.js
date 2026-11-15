@@ -78,20 +78,36 @@ const scenText = list => list.slice(0, 4).map(sc => sc.map(litText).join(' + '))
 const berthOf = r => r.k === 1 && r.div ? `the ${esc(r.div)}` : 'a title game spot';
 function raceHtml(r, order) {
   if (!r || r.skip === 'done') return '';
-  if (r.skip) return `<div class="race"><h4>Clinching scenarios</h4><p class="muted small">These show up once the race gets down to the last few weeks.</p></div>`;
+  const prize = r.k === 1 && r.div ? `the ${esc(r.div)} title` : 'a spot in the title game';
+  if (r.skip) return `<div class="race"><h4>Race for ${prize}</h4><p class="muted small" style="margin:0">Clinching scenarios show up once the race gets down to the last few weeks.</p></div>`;
   const byId = Object.fromEntries(r.teams.map(t => [t.id, t])), rows = order.map(id => byId[id]).filter(Boolean);
-  const live = rows.filter(t => t.status !== 'eliminated'), out = rows.filter(t => t.status === 'eliminated');
+  const nm = id => esc(team(id).name), list = ids => ids.length <= 1 ? ids.join('') : ids.slice(0, -1).join(', ') + ' and ' + ids[ids.length - 1];
   const wk = r.now.length ? `Week ${Math.max(...r.now.map(g => g.week))}` : 'this week';
-  const line = t => {
-    if (t.status === 'clinched') return `<li><div class="rh">${chip(t.id)}<span class="rs ok">✓ Clinched</span></div></li>`;
-    const tag = t.destiny ? '<span class="rs gold">Controls own destiny</span>' : '<span class="rs">Needs help</span>';
-    const parts = [];
-    if (t.clinch.length) parts.push(`<div><span class="rl">Clinches in ${wk} if</span> ${scenText(t.clinch)}</div>`);
-    if (t.elim.length) parts.push(`<div><span class="rl bad">Eliminated in ${wk} if</span> ${scenText(t.elim)}</div>`);
-    return `<li><div class="rh">${chip(t.id)}${tag}</div>${parts.join('')}</li>`;
+  const clinched = rows.filter(t => t.status === 'clinched'), out = rows.filter(t => t.status === 'eliminated');
+  const control = rows.filter(t => t.status === 'alive' && t.destiny), help = rows.filter(t => t.status === 'alive' && !t.destiny);
+  // Summary sentence for the whole race.
+  const sum = [];
+  if (clinched.length) sum.push(`<b>${list(clinched.map(t => nm(t.id)))}</b> ${clinched.length > 1 ? 'have' : 'has'} clinched.`);
+  if (control.length) sum.push(`<b>${list(control.map(t => nm(t.id)))}</b> ${control.length > 1 ? 'control their own destiny' : 'controls its own destiny'}: win out and ${control.length > 1 ? "they're" : "it's"} in.`);
+  if (help.length) sum.push(`${list(help.map(t => nm(t.id)))} ${help.length > 1 ? 'need' : 'needs'} help.`);
+  if (out.length) sum.push(`${list(out.map(t => nm(t.id)))} ${out.length > 1 ? 'are' : 'is'} out.`);
+  // One result, from this team's point of view: "they beat X", "they lose to X" or "X beats Y".
+  const res = (x, me) => { const w = x.homeWon ? x.g.home : x.g.away, l = x.homeWon ? x.g.away : x.g.home;
+    return w === me ? `they beat ${nm(l)}` : l === me ? `they lose to ${nm(w)}` : `${nm(w)} beats ${nm(l)}`; };
+  const scen = (sc, me) => sc.map(x => res(x, me)).join(' <b>and</b> ');
+  const block = (label, cls, list2, me) => !list2.length ? '' : list2.length === 1
+    ? `<div class="rcase ${cls}"><span class="rlab">${label}</span> ${scen(list2[0], me)}.</div>`
+    : `<div class="rcase ${cls}"><span class="rlab">${label} any of these happen:</span><ul>${list2.slice(0, 5).map(sc => `<li>${scen(sc, me)}</li>`).join('')}</ul></div>`;
+  const pill = t => t.status === 'clinched' ? '<span class="rs ok">✓ Clinched</span>' : t.status === 'eliminated' ? '<span class="rs out">Out</span>' : t.destiny ? '<span class="rs gold">In control</span>' : '<span class="rs">Needs help</span>';
+  const card = t => {
+    if (t.status !== 'alive') return '';
+    const body = block(`✓ Clinches in ${wk} if`, 'good', t.clinch, t.id) + block(`✕ Eliminated in ${wk} if`, 'bad', t.elim, t.id);
+    return `<li><div class="rh">${chip(t.id)}${pill(t)}</div>${body || `<div class="muted small">Nothing can be decided for them in ${wk}.</div>`}</li>`;
   };
-  return `<div class="race"><h4>Clinching scenarios · ${wk}</h4><p class="muted small">The race for ${berthOf(r)}. Ties that reach point differential can't be predicted, so those count as still open.</p>
-    <ul class="racelist">${live.map(line).join('')}</ul>${(() => { const q = live.filter(t => t.status === 'alive' && !t.clinch.length && !t.elim.length); return q.length ? `<p class="small muted" style="margin:0 0 4px">${q.length === live.length ? 'Nobody' : q.map(t => abT(t.id)).join(', ')} can't clinch or be eliminated in ${wk}.</p>` : ''; })()}${out.length ? `<p class="small muted" style="margin-bottom:0">Eliminated: ${out.map(t => abT(t.id)).join(', ')}</p>` : ''}</div>`;
+  return `<div class="race"><h4>Race for ${prize}</h4><p class="rsum">${sum.join(' ')}</p>
+    <div class="muted small" style="margin:10px 0 2px;font-weight:800;letter-spacing:.6px;text-transform:uppercase">What can happen in ${wk}</div>
+    <ul class="racelist">${rows.map(card).join('')}</ul>
+    <p class="muted small" style="margin:6px 0 0">"In control" means winning every remaining game guarantees it. A tie that comes down to point differential can't be predicted, so it counts as still open.</p></div>`;
 }
 // One sentence for a game preview: does this result clinch or eliminate anyone?
 function clinchNote(g) {
