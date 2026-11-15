@@ -1,7 +1,7 @@
 // Shared data layer + league math for the OEC CFB League Hub.
 import { firebaseConfig } from './firebase-config.js';
-import { lookupColor } from './teamcolors.js';
-import { lookupProgram, lookupAbbr } from './programs.js?v=2';
+import { lookupColor } from './programs.js?v=3';
+import { lookupProgram, lookupAbbr } from './programs.js?v=3';
 
 export const $ = s => document.querySelector(s);
 export const $$ = s => [...document.querySelectorAll(s)];

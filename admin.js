@@ -2,9 +2,8 @@ import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf
-} from './core.js?v=50';
-import { lookupColor } from './teamcolors.js';
-import { lookupAbbr } from './programs.js?v=2';
+} from './core.js?v=51';
+import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
 
 // Tabs: the weekly job lives on "This Week"; everything else is occasional. Awards only shows when it matters.
 const TABS = () => [['advance', 'This Week'], ['games', 'Scores & Schedule'], ['teams', 'Teams & Coaches'], ['betting', 'Sportsbook'],
@@ -234,7 +233,7 @@ const views = {
       <div class="card"><h3 style="margin-top:0">Teams, coaches & ratings</h3><p class="muted small">Every user team belongs in the league conference (${esc(lg.conference)}). Add any non-conference opponents as "Non-Conf" so they can be scheduled. OVR/OFF/DEF drive the odds. Division is optional (e.g. East/West).</p>
         <div class="tablewrap"><table id="teamTbl" class="stack-sm"><tr><th>Team</th><th>Abbr</th><th>Conf</th><th>Div</th><th>Coach</th><th>Account</th><th>Color</th><th>OVR</th><th>OFF</th><th>DEF</th><th></th></tr>
         ${ts.map(t => teamRow(t)).join('')}</table></div>
-        <div class="row" style="margin-top:10px"><button class="ghost sm" data-act="addTeam">+ Add team</button><button data-act="saveTeams">Save teams</button><button class="ghost sm" data-act="seedRatings">Apply ratings from league-data.json</button></div></div>
+        <div class="row" style="margin-top:10px">${programSelect('id="newTeam" style="max-width:190px"', '', usedNames())}<button class="ghost sm" data-act="addTeam">+ Add team</button><button data-act="saveTeams">Save teams</button><button class="ghost sm" data-act="seedRatings">Apply ratings from league-data.json</button></div></div>
       <div class="card"><h3 style="margin-top:0">${next} schedule (${sg.length} games)</h3><p class="muted small">Add user-vs-user games and each user team's games vs CPU teams.</p>
         <div class="row"><input id="sgW" type="number" value="0" style="width:70px" title="Week"><select id="sgA">${teamOpts('', 'Away')}</select> @ <select id="sgH">${teamOpts('', 'Home')}</select><label class="row" style="margin:0"><input type="checkbox" id="sgN" style="width:auto"> Neutral</label><button class="ghost" data-act="addSched">Add game</button></div>
         <label>Bulk add — one game per line: <code>week, away team, home team</code> (add <code>, neutral</code> if needed). Team name or abbreviation.</label><textarea id="bulk" rows="4" placeholder="0, Liberty, Kennesaw State&#10;1, KENN, Ohio"></textarea><button class="ghost sm" data-act="bulkSched" style="margin-top:6px">Add these games</button> <span id="bulkMsg" class="muted"></span>
@@ -279,7 +278,7 @@ const views = {
         <div style="margin-top:10px"><button data-act="saveUsers">Save accounts</button></div>` : '<p class="muted">No one has signed up yet.</p>'}</div>
       ${us.length ? `<div class="card"><h3 style="margin-top:0">Coach from outside the ${esc(L().conference)}</h3>
         <p class="muted small">For a coach who joined mid-season and plays outside the ${esc(L().conference)} this year. Their team is added as non-conference, so they can bet, vote and show on the betting leaderboard, but they won't appear in the standings, odds or power rankings. When they join the ${esc(L().conference)}, open the New Season tab, change the team's Conf to ${esc(L().conference)}, pick a division and save.</p>
-        <div class="row"><div><label>Their team</label><input id="ocTeam" list="ocTeams" placeholder="Oregon State" style="width:170px"><datalist id="ocTeams">${D.teams.filter(t => t.conf !== L().conference).map(t => `<option value="${esc(t.name)}">`).join('')}</datalist></div>
+        <div class="row"><div><label>Their team</label>${programSelect('id="ocTeam" style="width:180px"', '', new Set(D.teams.filter(t => t.conf === L().conference).map(t => t.name.toLowerCase())))}</div>
           <div><label>Abbreviation</label><input id="ocAbbr" placeholder="ORST" maxlength="5" style="width:90px"></div>
           <div><label>Account</label><select id="ocUser"><option value="">Pick an account</option>${us.slice().sort((a, b) => !!a.teamId - !!b.teamId).map(u => `<option value="${esc(u.id)}">${esc(u.name || '(no name)')}${u.teamId ? ' · ' + esc(team(u.teamId).name) : ' · not linked'}</option>`).join('')}</select></div>
           <button data-act="addOutside">Add team &amp; link</button></div></div>` : ''}`;
@@ -349,9 +348,16 @@ function gotyPicker(h) {
     <select data-goty="${esc(h.id)}" data-i="${i}" style="max-width:100%;min-width:0"><option value="">${cur ? 'Not linked' : 'Not linked: pick the game'}</option>${games.map(g => `<option value="${esc(g.id)}" ${cur && cur.id === g.id ? 'selected' : ''}>${esc(lbl(g))}</option>`).join('')}</select>
     <button class="sm" data-savegoty="${esc(h.id)}">Save link</button>${cur && !a.gameId ? '<span class="muted small">Matched automatically</span>' : ''}</div>`;
 }
+// School picker: every FBS program, plus the current name if it isn't on the list, plus "Other…" for anything else.
+function programSelect(attrs, current, exclude = new Set()) {
+  const list = programList().filter(p => p.name === current || !exclude.has(p.name.toLowerCase()));
+  const has = !current || list.some(p => p.name === current);
+  return `<select ${attrs}>${current ? '' : '<option value="">Pick a school</option>'}${has ? '' : `<option selected>${esc(current)}</option>`}${list.map(p => `<option ${p.name === current ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}<option value="__other">Other (type a name)…</option></select>`;
+}
+const usedNames = () => new Set(D.teams.map(t => t.name.toLowerCase()));
 function teamRow(t) {
   const lg = L();
-  return `<tr data-team="${esc(t.id)}"><td data-l="Team"><input data-k="name" value="${esc(t.name)}" style="width:150px"></td><td data-l="Abbr"><input data-k="abbr" value="${esc(t.abbr || '')}" style="width:70px"></td>
+  return `<tr data-team="${esc(t.id)}"><td data-l="Team">${programSelect('data-k="name" style="width:160px"', t.name, usedNames())}</td><td data-l="Abbr"><input data-k="abbr" value="${esc(t.abbr || '')}" style="width:70px"></td>
     <td data-l="Conf"><select data-k="conf"><option ${t.conf === lg.conference ? 'selected' : ''}>${esc(lg.conference)}</option><option value="Non-Conf" ${t.conf !== lg.conference ? 'selected' : ''}>Non-Conf</option></select></td>
     <td data-l="Div"><input data-k="div" value="${esc(t.div || '')}" style="width:70px"></td><td data-l="Coach"><input data-k="coach" value="${esc(t.coach || '')}" placeholder="CPU" style="width:110px"></td>
     <td data-l="Account"><select data-k="uid"><option value="">—</option>${D.users.map(u => `<option value="${esc(u.id)}" ${u.id === t.uid ? 'selected' : ''}>${esc(u.name)}</option>`).join('')}</select></td>
@@ -499,9 +505,11 @@ const ACT = {
     ST.desk = 'no'; ST.tab = 'preseason'; flash(`${s} is in the books. Set up next season below.`);
   },
   addTeam() {
-    const name = prompt('Team name (e.g. Kennesaw State)'); if (!name) return;
+    let name = $('#newTeam')?.value || '';
+    if (name === '__other') name = (prompt('Team name') || '').trim();
+    if (!name) return alert('Pick a school first.');
     let id = slug(name); if (D.teams.find(t => t.id === id)) return alert('That team already exists.');
-    D.teams.push({ id, name, abbr: name.replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase(), conf: L().conference, div: '', coach: '', uid: '', color: lookupColor(name) || '#777777', ovr: 75, off: 75, def: 75, _new: true });
+    D.teams.push({ id, name, abbr: lookupAbbr(name) || name.replace(/[^A-Za-z]/g, '').slice(0, 4).toUpperCase(), conf: L().conference, div: '', coach: '', uid: '', color: lookupColor(name) || '#777777', ovr: 75, off: 75, def: 75, _new: true });
     render();
   },
 
@@ -585,7 +593,8 @@ const ACT = {
     await put('meta', 'league', { advExt: h }); flash(h ? 'Added a 24-hour extension to this week.' : 'Extension removed.');
   },
   async addOutside() {
-    const name = $('#ocTeam').value.trim(), uid = $('#ocUser').value, u = D.users.find(x => x.id === uid);
+    let name = $('#ocTeam').value.trim(); const uid = $('#ocUser').value, u = D.users.find(x => x.id === uid);
+    if (name === '__other') name = (prompt('Their team name') || '').trim();
     if (!name) return alert('Enter their team name (e.g. Oregon State).');
     if (!u) return alert('Pick the account to link.');
     const ex = findTeam(name);
@@ -704,8 +713,13 @@ document.addEventListener('click', async e => {
 document.addEventListener('change', e => {
   if (e.target.id === 'gwSel') { ST.gamesWeek = +e.target.value; render(); }
   if (e.target.id === 'gwNew' && e.target.value !== '') { ST.gamesWeek = +e.target.value; render(); }
-  if (e.target.dataset.k === 'name' && e.target.closest('[data-team]')) { const tr = e.target.closest('tr'), c = lookupColor(e.target.value), ci = tr.querySelector('[data-k=color]'), ai = tr.querySelector('[data-k=abbr]'), ab = lookupAbbr(e.target.value); if (c && (ci.value === '#777777' || ci.value === '#6b6b6b')) ci.value = c; if (ab && ai && !ai.value) ai.value = ab; }
-  if (e.target.id === 'ocTeam') { const ab = lookupAbbr(e.target.value); if (ab && !$('#ocAbbr').value) $('#ocAbbr').value = ab; }
+  if (e.target.dataset.k === 'name' && e.target.closest('[data-team]')) {
+    const sel = e.target, tr = sel.closest('tr');
+    if (sel.value === '__other') { const n = (prompt('Team name') || '').trim(); if (!n) { sel.selectedIndex = 0; return; } sel.insertAdjacentHTML('afterbegin', `<option selected>${esc(n)}</option>`); sel.value = n; }
+    const p = lookupProgram(sel.value);   // picking a school fills in its abbreviation and color
+    if (p) { tr.querySelector('[data-k=abbr]').value = p.abbr; tr.querySelector('[data-k=color]').value = p.color; }
+  }
+  if (e.target.id === 'ocTeam') { const ab = lookupAbbr(e.target.value); if (ab) $('#ocAbbr').value = ab; }
 });
 
 (async function init() {
