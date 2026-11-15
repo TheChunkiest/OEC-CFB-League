@@ -635,3 +635,4 @@ ol.steps li{padding-left:2px}
 
 .social .sbreak{flex-basis:100%;height:0}
 @media(max-width:400px){footer .social .sbtn.cal{font-size:12px;padding:5px 10px;gap:4px}}
+.card.gotw{margin-top:26px}
