@@ -401,3 +401,18 @@ a.story.link .go{position:absolute;right:4px;top:50%;transform:translateY(-50%);
 /* Row a storyline linked to */
 tr.focus td{animation:focusRow 2.4s ease-out 1;background:rgba(245,184,46,.14)}
 @keyframes focusRow{0%,30%{background:rgba(245,184,46,.38)}100%{background:rgba(245,184,46,.14)}}
+
+/* My Wagers list */
+.wlist{display:flex;flex-direction:column}
+.wager{padding:12px 0;border-bottom:1px solid var(--line)}
+.wager:first-child{padding-top:2px}
+.wager:last-child{border-bottom:none;padding-bottom:2px}
+.wtop{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.wlbl{font-size:15px;line-height:1.35;min-width:0}
+.wtop .pill{flex-shrink:0;white-space:nowrap}
+.wbot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:6px}
+.wmeta{color:var(--muted);font-size:12.5px}
+.wmeta b{color:var(--text)}
+.wact{display:flex;gap:6px;flex-shrink:0}
+.wact button.sm{min-height:32px;padding:4px 10px}
+details.legs summary{white-space:nowrap}
