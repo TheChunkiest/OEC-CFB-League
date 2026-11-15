@@ -2,7 +2,7 @@ import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally
-} from './core.js?v=36';
+} from './core.js?v=37';
 import { lookupColor } from './teamcolors.js';
 
 const TABS = [['advance', 'Weekly Advance'], ['games', 'Games'], ['top25', 'Top 25'], ['ratings', 'Ratings'], ['betting', 'Betting'], ['coaches', 'Coaches & Accounts'], ['awards', 'Awards'], ['preseason', 'Preseason'], ['settings', 'Settings & History']];
@@ -138,7 +138,7 @@ function wizard() {
         <h3>Top 25 entering ${nextLbl}</h3><p class="muted small" style="margin-top:0">Copy the new in-game poll. Leave everything as-is to keep this week's rankings.</p>${pollEditor(W, dr.poll)}</div>
       ${deskBlock()}
       ${last ? `<div class="card"><h3 style="margin-top:0">Up next: championship setup</h3><p class="muted small" style="margin:0">After you confirm, you'll set the championship matchup and the awards ballot.</p></div>` :
-      `<div class="card"><h3 style="margin-top:0">Week ${W + 1} schedule (${nxt.length} game${nxt.length === 1 ? '' : 's'})</h3>${nxt.length ? `<div class="tablewrap"><table>${nxt.map(g => `<tr><td class="wrap">${esc(team(g.away).name)} ${g.neutral ? 'vs' : '@'} ${esc(team(g.home).name)}${isUserTeam(team(g.home)) && isUserTeam(team(g.away)) ? ' <span class="h2h">USER GAME</span>' : ''}</td><td class="num"><button class="sm danger" data-delgame="${esc(g.id)}">✕</button></td></tr>`).join('')}</table></div>` : '<p class="muted">No games scheduled yet.</p>'}
+      `<div class="card"><h3 style="margin-top:0">Week ${W + 1} schedule (${nxt.length} game${nxt.length === 1 ? '' : 's'})</h3>${nxt.length ? `<div class="tablewrap"><table>${nxt.map(g => `<tr><td class="wrap">${esc(team(g.away).name)} ${g.neutral ? 'vs' : '@'} ${esc(team(g.home).name)}${!isUserTeam(team(g.home)) || !isUserTeam(team(g.away)) ? ' <span class="h2h cputag">CPU GAME</span>' : ''}</td><td class="num"><button class="sm danger" data-delgame="${esc(g.id)}">✕</button></td></tr>`).join('')}</table></div>` : '<p class="muted">No games scheduled yet.</p>'}
         <div class="row" style="margin-top:8px"><select id="wA">${teamOpts('', 'Away')}</select> @ <select id="wH">${teamOpts('', 'Home')}</select><button class="ghost sm" data-act="wizAddGame">+ Add game</button></div></div>`}
       <div class="card row spread"><button class="ghost" data-act="wizBack">← Back</button><button data-act="wizNext">Next: review →</button></div>`;
   }
@@ -220,7 +220,7 @@ const views = {
       <div class="card"><h3 style="margin-top:0">${next} schedule (${sg.length} games)</h3><p class="muted small">Add user-vs-user games and each user team's games vs CPU teams.</p>
         <div class="row"><input id="sgW" type="number" value="0" style="width:70px" title="Week"><select id="sgA">${teamOpts('', 'Away')}</select> @ <select id="sgH">${teamOpts('', 'Home')}</select><label class="row" style="margin:0"><input type="checkbox" id="sgN" style="width:auto"> Neutral</label><button class="ghost" data-act="addSched">Add game</button></div>
         <label>Bulk add — one game per line: <code>week, away team, home team</code> (add <code>, neutral</code> if needed). Team name or abbreviation.</label><textarea id="bulk" rows="4" placeholder="0, Liberty, Kennesaw State&#10;1, KENN, Ohio"></textarea><button class="ghost sm" data-act="bulkSched" style="margin-top:6px">Add these games</button> <span id="bulkMsg" class="muted"></span>
-        <div class="tablewrap" style="margin-top:10px"><table>${sg.map(g => `<tr><td>Wk ${g.week}</td><td class="wrap">${esc(team(g.away).name)} ${g.neutral ? 'vs' : '@'} ${esc(team(g.home).name)}${isUserTeam(team(g.home)) && isUserTeam(team(g.away)) ? ' <span class="h2h">USER GAME</span>' : ''}</td><td class="num">${played(g) ? g.awayScore + '-' + g.homeScore : ''}</td><td class="num"><button class="sm danger" data-delgame="${esc(g.id)}">✕</button></td></tr>`).join('')}</table></div></div>
+        <div class="tablewrap" style="margin-top:10px"><table>${sg.map(g => `<tr><td>Wk ${g.week}</td><td class="wrap">${esc(team(g.away).name)} ${g.neutral ? 'vs' : '@'} ${esc(team(g.home).name)}${!isUserTeam(team(g.home)) || !isUserTeam(team(g.away)) ? ' <span class="h2h cputag">CPU GAME</span>' : ''}</td><td class="num">${played(g) ? g.awayScore + '-' + g.homeScore : ''}</td><td class="num"><button class="sm danger" data-delgame="${esc(g.id)}">✕</button></td></tr>`).join('')}</table></div></div>
       ${deskBlock()}
       <div class="card"><button class="gold" data-act="publish">Publish ${next} season → open Week ${sg.length ? Math.min(...sg.map(g => g.week)) : 0}</button>
         <p class="muted small">Publishing sets the current season and week, posts preseason odds and Week ${sg.length ? Math.min(...sg.map(g => g.week)) : 0} lines, opens betting (every coach starts with 1,000 Crackers) and starts a fresh odds chart. Save teams first.</p></div>`;

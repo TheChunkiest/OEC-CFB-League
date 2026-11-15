@@ -456,3 +456,5 @@ details.legs summary{white-space:nowrap}
 /* Same-division badge (next to USER GAME) */
 .h2h.divtag{background:var(--red);color:#fff;margin-left:4px}
 .h2h+.h2h.divtag{margin-left:4px}
+
+.h2h.cputag{background:#cfd6dc;color:#14181c}

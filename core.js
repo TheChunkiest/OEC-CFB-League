@@ -180,7 +180,7 @@ export const rankOf = (id, season, week) => pollFor(season ?? D.league.season, w
 export const rankName = (id, season, week) => { const r = rankOf(id, season, week); return (r ? '#' + r + ' ' : '') + team(id).name; };
 export function chip(id, opts = {}) {
   const t = team(id), r = rankOf(id, opts.season, opts.week);
-  return `<a class="chip" href="#team/${esc(t.id)}"><i class="sw" style="background:${esc(teamColor(t))}"></i>${r ? `<span class="rk">#${r}</span>` : ''}${esc(opts.abbr ? (t.abbr || t.name) : t.name)}</a>`;
+  return `<a class="chip" href="${esc(opts.href || '#team/' + t.id)}"><i class="sw" style="background:${esc(teamColor(t))}"></i>${r ? `<span class="rk">#${r}</span>` : ''}${esc(opts.abbr ? (t.abbr || t.name) : t.name)}</a>`;
 }
 
 /* ---------------- Ratings & lines ---------------- */
