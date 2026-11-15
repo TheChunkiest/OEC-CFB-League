@@ -125,7 +125,7 @@ ul.clean{margin:0;padding-left:20px}
 .notice{border-left:4px solid var(--gold);background:#1f1709;padding:10px 12px;border-radius:8px;margin-bottom:14px;font-size:14px}
 .err{color:var(--loss)}
 .pill{display:inline-block;padding:2px 9px;border-radius:999px;background:#2a2023;font-size:12px;font-weight:700}
-.pill.won{background:#123c24;color:#7ef0ad}.pill.lost{background:#47161a;color:#ffadb0}.pill.push,.pill.void{background:#333;color:#ccc}.pill.open{background:#3a2c08;color:var(--gold)}
+.pill.won{background:#123c24;color:#7ef0ad}.pill.lost{background:#47161a;color:#ffadb0}.pill.push,.pill.void{background:#333;color:#ccc}.pill.cashed{background:#0f3a48;color:#8fe3ff}.pill.open{background:#3a2c08;color:var(--gold)}
 .bar{height:8px;background:#2a2023;border-radius:99px;overflow:hidden;min-width:60px}
 .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--red),var(--gold))}
 .betgrid{display:grid;grid-template-columns:minmax(150px,1.3fr) repeat(3,minmax(96px,1fr));gap:6px;align-items:center}

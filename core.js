@@ -543,8 +543,19 @@ function evalParlay(w) {
   }
   return { legs, status, payout };
 }
+/* ---- Cash out: once more than half of a parlay's legs have won (and none lost), the bettor can take the stake back
+   plus 75% of what the winning legs alone would have paid, at the odds locked in when the bet was placed.
+   Current lines never enter into it, so there is no way to profit from line movement. ---- */
+export const CASHOUT_SHARE = 0.75;
+export function cashOutValue(w) {
+  if (!w || w.market !== 'parlay' || w.status !== 'open') return null;
+  const legs = w.legs || [], won = legs.filter(l => l.result === 'won');
+  if (legs.some(l => l.result === 'lost') || won.length * 2 <= legs.length || !legs.some(l => !l.result || l.result === 'open')) return null;
+  const profit = Math.floor(w.stake * (won.reduce((p, l) => p * decOf(l.odds), 1) - 1) * CASHOUT_SHARE);
+  return { profit, total: w.stake + profit, won: won.length, legs: legs.length };
+}
 export function parlayOps(regrade = false) {
-  return D.wagers.filter(w => w.market === 'parlay' && (regrade ? w.status !== 'void' : w.status === 'open')).map(w => {
+  return D.wagers.filter(w => w.market === 'parlay' && (regrade ? w.status !== 'void' && w.status !== 'cashed' : w.status === 'open')).map(w => {
     const r = evalParlay(w);
     const same = r.status === w.status && r.payout === (w.payout || 0) && r.legs.every((l, i) => l.result === (w.legs[i] || {}).result);
     return same ? null : { op: 'set', col: 'wagers', id: w.id, data: { status: r.status, payout: r.payout, legs: r.legs, ...(r.status !== w.status && r.status !== 'open' ? { settledAt: Date.now() } : {}) } };
@@ -557,7 +568,7 @@ export function bankroll(uid, season = D.league.season) {
     if (x.status === 'open') { b.open += x.stake; b.balance -= x.stake; return; }
     if (x.status === 'void') return;
     b.risked += x.stake; b.net += x.payout || 0; b.balance += x.payout || 0;
-    if (x.status === 'won') b.w++; else if (x.status === 'lost') b.l++; else b.p++;
+    if (x.status === 'won' || x.status === 'cashed') b.w++; else if (x.status === 'lost') b.l++; else b.p++;
   });
   return b;
 }

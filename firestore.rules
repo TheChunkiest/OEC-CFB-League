@@ -78,10 +78,33 @@ service cloud.firestore {
         || (d.market == 'parlay' && validParlay(d, L))
         || (d.market != 'future' && d.market != 'wins' && d.market != 'parlay' && validGameWager(d)));
     }
+    // Parlay cash out: the owner can settle their own open parlay early once more than half its legs have won
+    // (none lost, at least one still open). Pays at most the stake's profit on the winning legs alone x 0.75,
+    // using the odds locked in at placement. Legs are unrolled because rules have no loops (max 6 legs).
+    function legDec(l) { return l.odds > 0 ? 1.0 + l.odds / 100.0 : 1.0 + 100.0 / (0 - l.odds); }
+    function res(ls, i) { return ls.size() > i ? ls[i].get('result', 'open') : 'none'; }
+    function wonD(ls, i) { return res(ls, i) == 'won' ? legDec(ls[i]) : 1.0; }
+    function wonN(ls, i) { return res(ls, i) == 'won' ? 1 : 0; }
+    function lostN(ls, i) { return res(ls, i) == 'lost' ? 1 : 0; }
+    function openN(ls, i) { return res(ls, i) == 'open' ? 1 : 0; }
+    function validCashOut() {
+      let o = resource.data;
+      let n = request.resource.data;
+      let ls = o.legs;
+      let won = wonN(ls, 0) + wonN(ls, 1) + wonN(ls, 2) + wonN(ls, 3) + wonN(ls, 4) + wonN(ls, 5);
+      let lost = lostN(ls, 0) + lostN(ls, 1) + lostN(ls, 2) + lostN(ls, 3) + lostN(ls, 4) + lostN(ls, 5);
+      let pending = openN(ls, 0) + openN(ls, 1) + openN(ls, 2) + openN(ls, 3) + openN(ls, 4) + openN(ls, 5);
+      let dec = wonD(ls, 0) * wonD(ls, 1) * wonD(ls, 2) * wonD(ls, 3) * wonD(ls, 4) * wonD(ls, 5);
+      return signedIn() && o.uid == request.auth.uid && o.market == 'parlay' && o.status == 'open' && ls.size() <= 6
+        && n.diff(o).affectedKeys().hasOnly(['status', 'payout', 'cashedAt', 'settledAt'])
+        && n.status == 'cashed' && n.payout is number && n.payout >= 0
+        && won * 2 > ls.size() && lost == 0 && pending > 0
+        && n.payout <= o.stake * (dec - 1.0) * 0.75 + 0.01;
+    }
     match /wagers/{id} {
       allow read: if true;
       allow create: if isCoach() && validWager(request.resource.data);
-      allow update: if isCommish();
+      allow update: if isCommish() || validCashOut();
       allow delete: if isCommish() || (signedIn() && resource.data.uid == request.auth.uid && resource.data.status == 'open'
         && league().bettingOpen == true
         && (((resource.data.market == 'future' || resource.data.market == 'wins') && league().phase == 'Regular Season')
