@@ -143,7 +143,7 @@ const PAGES = {
     const stories = storylines();
     const pr = currentPower().slice(0, 5);
     const leaders = D.users.filter(u => u.teamId).map(u => ({ u, b: bankroll(u.id) })).sort((a, b) => b.b.net - a.b.net || b.b.balance - a.b.balance).slice(0, 5);
-    let html = '';
+    let html = installTip();
     if (L.desk && L.desk.show && L.desk.text) html += `<div class="card banner"><h2>Commissioner's Desk</h2><div style="white-space:pre-wrap">${esc(L.desk.text)}</div></div>`;
     if (gt.game) html += gameCard(gt.game, { gotw: true, extra: `<div class="meta">${gt.counts[gt.game.id]} of ${gt.total} coach vote${gt.total === 1 ? '' : 's'}</div>` });
     else if (L.phase === PHASES.REG) html += `<div class="card gotw"><span class="ribbon">★ Game of the Week</span><div class="muted">No Game of the Week votes were cast for ${esc(weekLabel())}. <a href="#vote">Vote for next week's game →</a></div></div>`;
@@ -1229,6 +1229,31 @@ function coachMeetings(c1, c2, exceptId) {
 }
 function meetingWinner(g) { const hw = +g.homeScore > +g.awayScore; return { coach: coachOf(g, hw ? 'home' : 'away'), team: hw ? g.home : g.away, ws: Math.max(+g.homeScore, +g.awayScore), ls: Math.min(+g.homeScore, +g.awayScore), lteam: hw ? g.away : g.home, lcoach: coachOf(g, hw ? 'away' : 'home') }; }
 
+// ---- Add to Home Screen ----
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isPhone = () => isIOS() || /Android/.test(navigator.userAgent);
+function installTip() {
+  let dismissed = false; try { dismissed = localStorage.getItem('oecA2HS') === '1'; } catch (e) { }
+  if (!isPhone() || isStandalone() || dismissed) return '';
+  return `<div class="card a2hs"><span>📱 Add the OEC Hub to your Home Screen.</span><span class="a2hs-act"><a href="#install">Show me how</a><button class="x" data-a2hsx aria-label="Dismiss">✕</button></span></div>`;
+}
+PAGES.install = function () {
+  const ios = isIOS(), and = /Android/.test(navigator.userAgent);
+  const iphone = `<div class="card"><h3 style="margin-top:0">iPhone / iPad</h3><ol class="steps">
+    <li>Open the site in <b>Safari</b>. Other apps' built-in browsers can't add it; Chrome works too on newer iOS.</li>
+    <li>Tap the <b>Share</b> button (the square with the up arrow). In Safari it's at the bottom of the screen, or behind the <b>⋯</b> button.</li>
+    <li>Scroll down and tap <b>Add to Home Screen</b>.</li>
+    <li>Keep the name "OEC Hub" and tap <b>Add</b>.</li></ol></div>`;
+  const android = `<div class="card"><h3 style="margin-top:0">Android</h3><ol class="steps">
+    <li>Open the site in <b>Chrome</b>.</li>
+    <li>Tap the <b>⋮</b> menu in the top right.</li>
+    <li>Tap <b>Add to Home screen</b> (or <b>Install app</b>), then <b>Install</b> or <b>Add</b>.</li></ol></div>`;
+  return `<h2>Add to Home Screen</h2>
+    ${isStandalone() ? '<div class="notice">✅ You\'re already using the Home Screen app.</div>' : ''}
+    <div class="card"><p style="margin:0">The OEC Hub works like an app once it's on your Home Screen: it gets its own icon, opens full screen without the browser bars, and stays logged in.</p></div>
+    ${and && !ios ? android + iphone : iphone + android}`;
+};
 PAGES.game = function (id) {
   const g = D.games.find(x => x.id === id); if (!g) return '<div class="card empty">Game not found.</div>';
   const L = D.league, s = g.season, A = team(g.away), H = team(g.home), done = played(g), l = lineOf(g), p = winPct(g, l);
@@ -1427,6 +1452,7 @@ function route() {
 async function reload() { await loadAll(); refreshProfile(); if (D.league.awards?.open && auth.user) await loadBallots(false); route(); }
 
 document.addEventListener('click', async e => {
+  if (e.target.closest('[data-a2hsx]')) { try { localStorage.setItem('oecA2HS', '1'); } catch (x) { } e.target.closest('.a2hs')?.remove(); return; }
   const bg = e.target.closest('[data-betgame]');
   if (bg) { UI.betWeek = +bg.dataset.betgame; location.hash = '#betting'; return; }
   const gc = e.target.closest('[data-game]');
