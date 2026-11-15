@@ -1,9 +1,9 @@
 import {
-  $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, batch, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout,
+  $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, batch, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout, PUSH_PREFS, pushDefaults, pushLocal, pushSupported, pushEnable, pushPrefs, pushDisable,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
   gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
-} from './core.js?v=47';
+} from './core.js?v=48';
 import { lookupStadium } from './programs.js?v=1';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -400,7 +400,7 @@ const PAGES = {
     if (auth.user) {
       const p = auth.profile;
       return `<h2>My Account</h2><div class="card"><p>Signed in as <b>${esc(p?.name || auth.user.email)}</b>${p?.teamId ? ' · ' + chip(p.teamId) : ''}${p?.role === 'commish' ? ' · <span class="tag gold">Commissioner</span>' : ''}</p>
-        ${p && !p.teamId ? '<div class="notice">Your account is waiting for the commissioner to link it to your team.</div>' : ''}<button class="ghost" data-act="logout">Log out</button></div>`;
+        ${p && !p.teamId ? '<div class="notice">Your account is waiting for the commissioner to link it to your team.</div>' : ''}<button class="ghost" data-act="logout">Log out</button></div>${pushCard()}`;
     }
     const m = UI.acct;
     return `<h2>Coach Login</h2><div class="card" style="max-width:440px">${DEMO ? '<div class="notice">Demo mode: any email works. Password <b>coach</b> logs in as a regular coach; anything else logs in as the commissioner.</div>' : ''}
@@ -1229,6 +1229,22 @@ function coachMeetings(c1, c2, exceptId) {
 }
 function meetingWinner(g) { const hw = +g.homeScore > +g.awayScore; return { coach: coachOf(g, hw ? 'home' : 'away'), team: hw ? g.home : g.away, ws: Math.max(+g.homeScore, +g.awayScore), ls: Math.min(+g.homeScore, +g.awayScore), lteam: hw ? g.away : g.home, lcoach: coachOf(g, hw ? 'away' : 'home') }; }
 
+// ---- Phone notifications (Account page) ----
+function pushCard() {
+  const head = '<h2>Phone Notifications</h2>';
+  if (!pushSupported()) {
+    if (isIOS() && !isStandalone()) return head + `<div class="card"><p style="margin-top:0">On iPhone, notifications work once the OEC Hub is on your Home Screen (iOS 16.4 or newer). Add it, open it from the Home Screen icon, log in, then come back here.</p><a class="btn sm" href="#install">📱 How to add it</a></div>`;
+    return head + '<div class="card muted">This browser can\'t receive notifications. Try Safari on iPhone (from the Home Screen) or Chrome on Android.</div>';
+  }
+  if (!D.league.pushKey) return head + `<div class="card muted">Notifications aren't switched on for the league yet.${isCommish() ? ' Set them up in Commissioner Tools → Settings.' : ''}</div>`;
+  if (Notification.permission === 'denied') return head + `<div class="card"><p style="margin:0">Notifications are blocked for this site. Turn them back on in your phone's Settings → Notifications → OEC Hub${isIOS() ? '' : ' (or the browser\'s site settings)'}, then come back here.</p></div>`;
+  const cur = Notification.permission === 'granted' ? pushLocal() : null;
+  if (!cur) return head + `<div class="card"><p style="margin-top:0">Get a notification when the league advances, before your game kicks off, and when a coach sends you kickoff times.</p><button data-act="pushOn">🔔 Turn on notifications</button></div>`;
+  const pf = { ...pushDefaults(), ...(cur.prefs || {}) };
+  return head + `<div class="card"><p style="margin-top:0">🔔 On for this device. Pick what you want:</p>
+    <div class="pushprefs">${PUSH_PREFS.map(([k, l]) => `<label class="chk"><input type="checkbox" data-pushpref="${k}" ${pf[k] ? 'checked' : ''}> ${esc(l)}</label>`).join('')}</div>
+    <button class="ghost sm" data-act="pushOff" style="margin-top:10px">Turn off on this device</button></div>`;
+}
 // ---- Add to Home Screen ----
 const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -1497,6 +1513,11 @@ document.addEventListener('click', async e => {
   else if (t.dataset.act === 'clearLegs') { UI.legs = []; route(); }
   else if (t.dataset.act === 'reviewParlay') showParlaySlip();
   else if (t.dataset.act === 'logout') logout();
+  else if (t.dataset.act === 'pushOn' || t.dataset.act === 'pushOff') {
+    t.disabled = true;
+    try { if (t.dataset.act === 'pushOn') await pushEnable(); else await pushDisable(); } catch (err) { alert(err.message || String(err)); }
+    route();
+  }
   else if (t.dataset.act === 'gotw') {
     const v = $('input[name=gotw]:checked'); if (!v) return alert('Pick a game first.');
     const s = S(), w = D.league.week + 1, uid = auth.profile.id;
@@ -1511,6 +1532,12 @@ document.addEventListener('click', async e => {
 });
 document.addEventListener('input', e => { if (e.target.id === 'stake') updToWin(); });
 document.addEventListener('change', e => {
+  if (e.target.matches('[data-pushpref]')) {
+    const prefs = { ...pushDefaults(), ...(pushLocal()?.prefs || {}) };
+    $$('[data-pushpref]').forEach(c => { prefs[c.dataset.pushpref] = c.checked; });
+    pushPrefs(prefs).catch(err => alert(err.message || String(err)));
+    return;
+  }
   if (e.target.dataset.betweek) { UI.betWeek = +e.target.value; route(); }
   if (e.target.dataset.nav) location.hash = '#' + e.target.dataset.nav + '/' + e.target.value;
   if (e.target.matches('[data-tstat]')) { UI.tsKey = e.target.value; UI.tsFlip = false; route(); }

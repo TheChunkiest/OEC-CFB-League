@@ -2,7 +2,7 @@ import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf
-} from './core.js?v=47';
+} from './core.js?v=48';
 import { lookupColor } from './teamcolors.js';
 
 const TABS = [['advance', 'Weekly Advance'], ['games', 'Games'], ['top25', 'Top 25'], ['ratings', 'Ratings'], ['betting', 'Betting'], ['coaches', 'Coaches & Accounts'], ['awards', 'Awards'], ['preseason', 'Preseason'], ['settings', 'Settings & History']];
@@ -306,6 +306,17 @@ const views = {
       <label>Rules (one per line)</label><textarea id="stRules" rows="6">${esc((lg.rules && lg.rules.length ? lg.rules : DEFAULT_RULES).join('\n'))}</textarea>
       <label>Extra links on the Rules page (one per line: <code>Label | https://…</code>)</label><textarea id="stLinks" rows="3">${esc((lg.links || []).map(l => l.label + ' | ' + l.url).join('\n'))}</textarea>
       <div class="row" style="margin-top:10px"><button data-act="saveSettings">Save settings</button></div></div>
+      <div class="card"><h2>Phone Notifications</h2>
+        ${lg.pushKey ? `<p class="muted small" style="margin-top:0">✅ Key saved. Coaches can turn on notifications from their Account page.</p>` : `<p class="muted small" style="margin-top:0">One-time setup, all free:</p><ol class="steps small">
+          <li>Firebase console → ⚙️ Project settings → <b>Cloud Messaging</b> → Web configuration → <b>Generate key pair</b>. Copy the key and paste it below.</li>
+          <li>Project settings → <b>Service accounts</b> → <b>Generate new private key</b>. It downloads a .json file.</li>
+          <li>GitHub repo → Settings → Secrets and variables → Actions → <b>New repository secret</b>. Name: <code>FIREBASE_SERVICE_ACCOUNT</code>. Value: everything in that .json file.</li>
+          <li>Paste the new <code>push</code> rules into Firestore rules.</li></ol>`}
+        <label>Web push key (public "key pair" from step 1)</label><input id="stPush" value="${esc(lg.pushKey || '')}" placeholder="B…" style="width:100%">
+        <div class="row" style="margin-top:10px"><button data-act="savePush">Save key</button></div>
+        <label style="margin-top:14px">Send everyone a notification</label><input id="annText" maxlength="140" placeholder="e.g. Advancing tonight at 10, get your games in!" style="width:100%">
+        <div class="row" style="margin-top:8px"><button data-act="announce">Send</button>${lg.announce?.text ? `<span class="muted small">Last sent: “${esc(lg.announce.text)}”</span>` : ''}</div>
+        <p class="muted small">Notifications go out within about 5 to 15 minutes (whenever GitHub runs the Kickoff calendar workflow).</p></div>
       <div class="card"><h2>YouTube Live Pop-up</h2>
         <p class="muted small">The site checks the OEC channel automatically about every 5 minutes and shows a "Live now" pop-up while you're streaming. Automatic status: <b id="autoLive">checking…</b></p>
         <p>Manual pop-up is <b>${lg.live?.on && lg.live?.since && Date.now() - lg.live.since < 6 * 3600e3 ? 'ON' : 'OFF'}</b>${lg.live?.on && lg.live?.since && Date.now() - lg.live.since < 6 * 3600e3 ? ` <span class="muted small">(turns itself off at ${new Date(lg.live.since + 6 * 3600e3).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })})</span>` : ''}. Use this to show it instantly, or if the automatic check misses a stream. It turns itself off after 6 hours.</p>
@@ -586,6 +597,14 @@ const ACT = {
 
   async liveOn() { try { localStorage.removeItem('oecLiveDismissed'); } catch (e) { /* ignore */ } await put('meta', 'league', { live: { on: true, url: $('#liveUrl').value.trim(), title: $('#liveTitle').value.trim(), since: Date.now() } }); flash('Live pop-up is ON for everyone on the site.'); },
   async liveOff() { await put('meta', 'league', { live: { on: false, url: '', title: '', since: 0 } }); flash('Live pop-up is OFF. (It still appears automatically if the channel is detected live.)'); },
+  async savePush() {
+    await put('meta', 'league', { pushKey: $('#stPush').value.trim() }); flash('Notification key saved.');
+  },
+  async announce() {
+    const text = $('#annText').value.trim(); if (!text) return alert('Type a message first.');
+    if (!confirm(`Send to every coach with notifications on?\n\n“${text}”`)) return;
+    await put('meta', 'league', { announce: { id: Date.now().toString(36), text, ts: Date.now() } }); flash('Queued. It goes out with the next workflow run.');
+  },
   async saveSettings() {
     await put('meta', 'league', {
       name: $('#stName').value.trim(), rules: $('#stRules').value.split('\n').map(s => s.trim()).filter(Boolean),

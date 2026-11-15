@@ -5,6 +5,10 @@ name: Kickoff calendar
 #   archive.json      past seasons' games and bets (refreshed daily) so the site doesn't read them from the database
 # Reads the public Firestore data (kickoff invites, games, teams) using firebase-config.js.
 # GitHub only starts scheduled workflows every 5 minutes (at best), so a new time can take a few minutes.
+# Phone notifications: when the FIREBASE_SERVICE_ACCOUNT secret is set, the same run also sends free Firebase
+# Cloud Messaging notifications (advances, commissioner news, kickoff reminders, kickoff invites). It reuses the
+# documents the calendar already read and adds about 4 small reads per run; device tokens are only read when
+# there is something to send. What has already been sent is remembered in push-state.json.
 on:
   schedule:
     - cron: '*/5 * * * *'   # each run reads only upcoming invites plus 3 docs per scheduled game
@@ -17,13 +21,18 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    env:
+      SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-      - name: Build calendar files
+      - name: Notification tools
+        if: env.SA != ''
+        run: python3 -m pip install -q --break-system-packages google-auth requests || python3 -m pip install -q google-auth requests
+      - name: Build calendar files (and send notifications)
         run: |
           python3 - <<'PY'
-          import json, os, re, time, glob, urllib.request, urllib.parse
+          import json, os, re, time, glob, urllib.request, urllib.parse, urllib.error
           from datetime import datetime, timezone
 
           cfg = open('firebase-config.js').read()
@@ -93,8 +102,12 @@ jobs:
           repo = os.environ.get('GITHUB_REPOSITORY', '')
           site = f"https://{repo.split('/')[0].lower()}.github.io/{repo.split('/')[1]}/index.html" if '/' in repo else ''
           events = {}
+          gcache = {}
+          def game(gid):
+              if gid not in gcache: gcache[gid] = one(f'games/{gid}')
+              return gcache[gid]
           for gid, inv in kick.items():
-              g = one(f'games/{gid}')
+              g = game(gid)
               if not g or g.get('homeScore') is not None: continue      # finished games drop off
               if inv['time'] < now - 6 * 3600e3: continue
               season = g.get('season') or first
@@ -146,12 +159,136 @@ jobs:
                   if same and old_arch: arch['generatedAt'] = int(now)
                   json.dump(arch, open('archive.json', 'w'), separators=(',', ':'))
                   print(f"archive: {len(arch['games'])} games, {len(arch['wagers'])} bets from seasons {arch['seasons']}")
+
+          # ---------------- Phone notifications ----------------
+          def notify():
+              from google.oauth2 import service_account
+              from google.auth.transport.requests import Request
+              creds = service_account.Credentials.from_service_account_info(json.loads(os.environ['SA']),
+                  scopes=['https://www.googleapis.com/auth/firebase.messaging', 'https://www.googleapis.com/auth/datastore'])
+              creds.refresh(Request())
+              H = {'Authorization': f'Bearer {creds.token}', 'Content-Type': 'application/json'}
+              def call(url, body=None, method=None):
+                  rq = urllib.request.Request(url, data=json.dumps(body).encode() if body is not None else None, headers=H, method=method)
+                  with urllib.request.urlopen(rq, timeout=30) as r: return json.load(r)
+              def query(col, field, op, value):
+                  v = {'booleanValue': value} if isinstance(value, bool) else {'integerValue': str(value)}
+                  rows = call(f'{base}:runQuery', {'structuredQuery': {'from': [{'collectionId': col}], 'where': {'fieldFilter': {'field': {'fieldPath': field}, 'op': op, 'value': v}}}})
+                  out = []
+                  for row in rows:
+                      x = row.get('document')
+                      if not x: continue
+                      f = {k: val(v) for k, v in x.get('fields', {}).items()}; f['id'] = x['name'].rsplit('/', 1)[1]; out.append(f)
+                  return out
+
+              try: st = json.load(open('push-state.json'))
+              except Exception: st = {}
+              fresh = not st
+              lg = one('meta/league')
+              advkey = f"{lg.get('season')}|{lg.get('week')}|{lg.get('phase')}"
+              ann = (lg.get('announce') or {})
+              link = site or './index.html'
+              def ab(tid): t = teams.get(tid) or one(f'teams/{tid}'); teams[tid] = t; return (t or {}).get('abbr') or tname(tid)
+              def uid_of(tid): tname(tid); return (teams.get(tid) or {}).get('uid')
+
+              devices = None
+              def devs():
+                  nonlocal devices
+                  if devices is None: devices = [d for d in docs_auth('push')]
+                  return devices
+              def docs_auth(col):
+                  out, tok = [], ''
+                  while True:
+                      q = {'pageSize': 300}
+                      if tok: q['pageToken'] = tok
+                      d = call(f'{base}/{col}?' + urllib.parse.urlencode(q))
+                      for x in d.get('documents', []):
+                          f = {k: val(v) for k, v in x.get('fields', {}).items()}; f['id'] = x['name'].rsplit('/', 1)[1]; out.append(f)
+                      tok = d.get('nextPageToken')
+                      if not tok: return out
+              sent = 0
+              def send(dev, title, body, url, tag=None):
+                  nonlocal sent
+                  msg = {'message': {'token': dev['token'], 'data': {'title': title, 'body': body, 'link': url, 'tag': tag or ''},
+                         'webpush': {'headers': {'Urgency': 'high', 'TTL': '21600'}}}}
+                  try:
+                      call(f'https://fcm.googleapis.com/v1/projects/{pid}/messages:send', msg); sent += 1
+                  except urllib.error.HTTPError as e:
+                      err = e.read().decode(errors='ignore')
+                      if e.code == 404 or 'UNREGISTERED' in err or ('INVALID_ARGUMENT' in err and 'token' in err.lower()):
+                          try: call(f"{base}/push/{dev['id']}", method='DELETE')   # phone uninstalled or turned it off
+                          except Exception: pass
+                      else: print('send failed', e.code, err[:200])
+              def to(pref, title, body, url, uids=None, skip=(), tag=None):
+                  for d in devs():
+                      if not (d.get('prefs') or {}).get(pref): continue
+                      if uids is not None and d.get('uid') not in uids: continue
+                      if d.get('uid') in skip: continue
+                      send(d, title, body, url, tag)
+
+              if fresh:   # first run: remember where things stand, send nothing
+                  st = {'adv': advkey, 'ann': ann.get('id'), 'inv': int(now), 'resp': int(now), 'kick': {}}
+              else:
+                  # League advanced
+                  if advkey != st.get('adv'):
+                      ph = lg.get('phase') or ''
+                      t = f"🏈 Week {lg.get('week')} is here" if ph == 'Regular Season' else f'🏈 {ph}'
+                      to('advance', t, 'The league advanced. Results are in and new lines are up.', link + '#home', tag='advance')
+                      st['adv'] = advkey
+                  # Commissioner announcement
+                  if ann.get('id') and ann.get('id') != st.get('ann'):
+                      to('advance', '📣 From the Commissioner', ann.get('text', ''), link + '#home', tag='news')
+                      st['ann'] = ann.get('id')
+                  # Kickoff reminders (GitHub runs every 5 to 15 minutes, so remind anything starting within 45)
+                  sk = st.setdefault('kick', {})
+                  for gid, inv in kick.items():
+                      t = inv['time']
+                      if not (now < t <= now + 45 * 60e3) or sk.get(gid) == t: continue
+                      g = game(gid)
+                      if not g or g.get('homeScore') is not None: continue
+                      mins = max(1, round((t - now) / 60e3 / 5) * 5)
+                      mu = {uid_of(g.get('home')), uid_of(g.get('away'))} - {None}
+                      m = f"{ab(g.get('away'))} @ {ab(g.get('home'))}"
+                      to('mygame', f'⏰ Kickoff in about {mins} min', f'Your game, {m}, is coming up.', f'{link}#game/{gid}', uids=mu, tag='k' + gid)
+                      to('league', f'📺 {m} kicks off in about {mins} min', 'Watch it live on the OEC YouTube channel.', 'https://youtube.com/@originalentertainingcrackers', skip=mu, tag='k' + gid)
+                      sk[gid] = t
+                  st['kick'] = {k: v for k, v in sk.items() if v > now - 24 * 3600e3}
+                  # Kickoff invites sent, and replies to them
+                  new = query('invites', 'ts', 'GREATER_THAN', int(st.get('inv') or now))
+                  resp = query('invites', 'respondedAt', 'GREATER_THAN', int(st.get('resp') or now))
+                  countered = {(i.get('gameId'), i.get('from')) for i in new}
+                  for i in new:
+                      if i.get('status') != 'pending': continue
+                      g = game(i['gameId']); m = f"{ab(g.get('away'))} @ {ab(g.get('home'))}" if g else 'your game'
+                      to('invites', f"📅 Coach {i.get('fromName') or ''} sent kickoff times", f'Pick a time for {m}.', f"{link}#game/{i['gameId']}", uids={i.get('to')}, tag='i' + i['gameId'])
+                  for i in resp:
+                      g = game(i['gameId']); m = f"{ab(g.get('away'))} @ {ab(g.get('home'))}" if g else 'your game'
+                      if i.get('status') == 'accepted':
+                          to('invites', '✅ Kickoff time set', f"Coach {i.get('toName') or ''} picked a time for {m}.", f"{link}#game/{i['gameId']}", uids={i.get('from')}, tag='i' + i['gameId'])
+                      elif i.get('status') == 'declined' and (i['gameId'], i.get('to')) not in countered:
+                          to('invites', 'Kickoff times declined', f"Coach {i.get('toName') or ''} couldn't make those times for {m}. Send new ones.", f"{link}#game/{i['gameId']}", uids={i.get('from')}, tag='i' + i['gameId'])
+                  if new: st['inv'] = max(int(i.get('ts') or 0) for i in new)
+                  if resp: st['resp'] = max(int(i.get('respondedAt') or 0) for i in resp)
+              # Welcome message for devices that just turned notifications on (confirms it works)
+              for d in query('push', 'welcomed', 'EQUAL', False):
+                  send(d, '🔔 Notifications are on', "You'll get OEC Hub alerts on this device. Change them anytime on your Account page.", link + '#account', 'welcome')
+                  try: call(f"{base}/push/{d['id']}?updateMask.fieldPaths=welcomed", {'fields': {'welcomed': {'booleanValue': True}}}, method='PATCH')
+                  except Exception as e: print('welcome flag failed', e)
+              old = None
+              try: old = json.load(open('push-state.json'))
+              except Exception: pass
+              if old != st: json.dump(st, open('push-state.json', 'w'), separators=(',', ':'), sort_keys=True)
+              print(f'notifications: {sent} sent')
+
+          if os.environ.get('SA'):
+              try: notify()
+              except Exception as e: print('notifications skipped:', repr(e)[:300])
           PY
       - name: Save
         run: |
           git config user.name "oec-calendar-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add -A cal archive.json
+          git add -A cal archive.json push-state.json 2>/dev/null || git add -A cal archive.json
           if git diff --cached --quiet; then echo "No changes"; exit 0; fi
           git commit -m "Update kickoff calendar"
           for i in 1 2 3; do git push && exit 0; git pull --rebase -X theirs; done

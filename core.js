@@ -34,7 +34,7 @@ async function fbInit() {
   let db;
   try { db = fs.initializeFirestore(a, { localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() }) }); }
   catch (e) { db = fs.getFirestore(a); }
-  fb = { au, fs, auth: au.getAuth(a), db };
+  fb = { au, fs, auth: au.getAuth(a), db, app: a, base };
   return fb;
 }
 
@@ -1082,3 +1082,40 @@ export function storylines() {
 }
 // In-place Fisher-Yates shuffle with a seeded generator (same order all week, new order next week).
 function shuffle(a, r) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+/* ---------------- Phone notifications ----------------
+   The site only registers this device's push token in the `push` collection. Sending happens in the
+   GitHub workflow (free Firebase Cloud Messaging), so there is no server to pay for. */
+export const PUSH_PREFS = [['advance', 'League advances & commissioner news'], ['mygame', 'My game is about to kick off'], ['invites', 'Kickoff invites & replies'], ['league', 'Any league game going live']];
+export const pushDefaults = () => ({ advance: true, mygame: true, invites: true, league: false });
+export const pushLocal = () => { try { return JSON.parse(localStorage.getItem('oecPush') || 'null'); } catch (e) { return null; } };
+const pushSave = v => { try { v ? localStorage.setItem('oecPush', JSON.stringify(v)) : localStorage.removeItem('oecPush'); } catch (e) { } };
+export const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+export async function pushEnable(prefs) {
+  const uid = auth.user?.uid; if (!uid) throw new Error('Log in first.');
+  const key = D.league.pushKey; if (!key) throw new Error('The commissioner hasn\'t finished setting up notifications yet.');
+  if (await Notification.requestPermission() !== 'granted') throw new Error('Notifications were not allowed. You can allow them in your phone\'s Settings.');
+  let token = 'demo-token';
+  if (!DEMO) {
+    const { app, base } = await fbInit();
+    const m = await import(base + 'firebase-messaging.js');
+    if (!(await m.isSupported())) throw new Error('This browser can\'t receive notifications.');
+    const reg = await navigator.serviceWorker.register('push-sw.js');
+    await navigator.serviceWorker.ready;
+    token = await m.getToken(m.getMessaging(app), { vapidKey: key, serviceWorkerRegistration: reg });
+  }
+  const old = pushLocal(), id = old?.id || ('d' + Math.random().toString(36).slice(2, 12) + Date.now().toString(36));
+  const rec = { id, prefs: prefs || old?.prefs || pushDefaults() };
+  await put('push', id, { uid, token, prefs: rec.prefs, ts: Date.now(), welcomed: false }, false);
+  pushSave(rec); return rec;
+}
+export async function pushPrefs(prefs) {
+  const cur = pushLocal(); if (!cur) return;
+  await put('push', cur.id, { prefs, ts: Date.now() }); pushSave({ ...cur, prefs });
+}
+export async function pushDisable() {
+  const cur = pushLocal(); if (!cur) return;
+  try { await batch([{ op: 'del', col: 'push', id: cur.id }]); } catch (e) { }
+  if (!DEMO) { try { const { app, base } = await fbInit(); const m = await import(base + 'firebase-messaging.js'); await m.deleteToken(m.getMessaging(app)); } catch (e) { } }
+  pushSave(null);
+}
