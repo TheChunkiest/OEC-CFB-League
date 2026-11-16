@@ -65,6 +65,26 @@ function aiExtras(g, A, H) {
   const ctl = commish && rec ? `<p class="muted small" style="margin:8px 0 0"><a href="javascript:void 0" data-act="momRedo" data-gid="${esc(g.id)}">${pending ? 'Redo requested' : 'Redo with AI'}</a>${rec.r ? ` · <a href="javascript:void 0" data-momhide="${esc(g.id)}|recap">${hidden.includes('recap') ? 'Show AI recap' : 'Hide AI recap'}</a>` : ''}</p>` : '';
   return stars + ctl;
 }
+// Game preview: players to watch, from the AI's read of each team's broadcasts. A player gets called out
+// harder when his side of the ball lines up with something the other team has struggled with lately.
+const UNIT = { QB: 'pass', WR: 'pass', TE: 'pass', RB: 'run', FB: 'run', DL: 'rush', DE: 'rush', DT: 'rush', LB: 'rush', CB: 'cover', S: 'cover', K: 'kick', P: 'kick' };
+const WEAK = { pass: /pass|secondary|coverage|deep|air|receiver|corner|safet/i, run: /run|rush|ground|tackl|gap|between the tackles/i,
+  rush: /protect|sack|pressure|o-?line|offensive line|blocking|hold/i, cover: /interception|turnover|pick|throw|forc|decision/i, kick: /kick|field goal|special teams|punt/i };
+const WEAKTXT = { pass: 'against the pass', run: 'against the run', rush: 'in pass protection', cover: 'with turnovers', kick: 'on special teams' };
+function playersToWatch(A, H, s) {
+  if (!AI.moms) { loadMoments(); return ''; }
+  const one = (t, o) => {
+    const p = teamPlayers(t.id, s).filter(x => x.grade && x.grade >= 6.5)[0]; if (!p) return '';
+    const weak = teamScouting(o.id, s).map(x => x.bad || '').join(' '), u = UNIT[p.pos], hit = u && WEAK[u]?.test(weak);
+    const last = p.lines[0]?.l ? ` (last time out: ${p.lines[0].l.replace(/\.$/, '')})` : '';
+    const who = `${p.pos ? p.pos + ' ' : ''}${p.name}`;
+    return hit ? `Keep an eye on ${who} of ${t.name}${last}: ${o.name} has struggled ${WEAKTXT[u]} lately, and that's his side of the ball.`
+      : `On the other side, ${who} has been the standout for ${t.name}${p.games > 1 ? ` across ${p.games} broadcast games` : ''}${last}.`;
+  };
+  const out = [one(A, H), one(H, A)].filter(Boolean);
+  if (out[0]) out[0] = out[0].replace(/^On the other side, /, '');
+  return out.length ? 'Players to watch: ' + out.join(' ') : '';
+}
 // Team page: the players the AI has seen this season, and what's been working / where the team struggles.
 function scoutCard(t, s = D.league.season) {
   if (!AI.moms) { loadMoments(); return ''; }
@@ -1644,6 +1664,7 @@ PAGES.game = function (id) {
       const v = (sg, p) => pl ? p : sg, its = pl ? 'their' : 'its', It = pl ? "They're" : "It's", it = pl ? "they're" : "it's";
       return `${who} ${v('comes', 'come')} in${f == null ? '' : f >= 4 ? ' hot' : f <= -4 ? ' cold' : ' steady'}${f == null ? '' : `, playing ${Math.abs(f).toFixed(1)} points per game ${f >= 0 ? 'better' : 'worse'} than expected over ${its} last three`}. ${It} averaging ${(P.pf / P.gp).toFixed(1)} points while allowing ${(P.pa / P.gp).toFixed(1)}, and ${it} ${atsT} this season.`; };
     const fa = form(A), fh = form(H); if (fa || fh) paras.push([fa, fh].filter(Boolean).join(' '));
+    const pw = playersToWatch(A, H, s); if (pw) paras.push(pw);
   }
   if (coachA !== 'CPU' && coachH !== 'CPU') {
     if (!meets.length) paras.push(`This ${done ? 'was' : 'is'} the first meeting ever between ${coachA} and ${coachH}.`);
