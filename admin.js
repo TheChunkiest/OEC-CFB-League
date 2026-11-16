@@ -9,6 +9,17 @@ import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.
 const TABS = () => [['advance', 'This Week'], ['games', 'Scores & Schedule'], ['teams', 'Teams & Coaches'], ['betting', 'Sportsbook'],
   ...(L().phase === PHASES.CCG || L().phase === PHASES.POST || L().awards?.open ? [['awards', 'Awards']] : []), ['preseason', 'New Season'], ['settings', 'Settings']];
 const ST = { tab: 'advance', desk: 'no', gamesWeek: null, msg: '', step: 1, draft: null, done: null };
+// A reload keeps you where you were: the tab, the week picked on Scores & Schedule, open sections and the scroll
+// spot are remembered for this browser tab (opening Commissioner Tools fresh still starts on This Week).
+const SAVED = (() => { try { return JSON.parse(sessionStorage.getItem('oecAdminView') || 'null') || {}; } catch (e) { return {}; } })();
+if (SAVED.tab) ST.tab = SAVED.tab;
+if (SAVED.gamesWeek != null) ST.gamesWeek = SAVED.gamesWeek;
+if (SAVED.open) ST.open = SAVED.open;
+let restoreY = SAVED.y || 0;
+const saveView = () => { try { sessionStorage.setItem('oecAdminView', JSON.stringify({ tab: ST.tab, gamesWeek: ST.gamesWeek, open: ST.open || {}, y: Math.round(scrollY) })); } catch (e) { } };
+addEventListener('pagehide', saveView);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveView(); });
+setTimeout(() => { restoreY = 0; }, 8000);   // stop trying to restore the scroll spot once things have settled
 const DEFAULT_AWARDS = ['MVP', 'Offensive Player of the Year', 'Defensive Player of the Year', 'Best Offense', 'Best Defense', 'Game of the Year'];
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -343,7 +354,7 @@ const views = {
   playbooks() {
     const lg = L(), ks = pbSeason(lg), open = pbOpen(lg), ts = D.teams.filter(isUserTeam).sort((a, b) => a.name.localeCompare(b.name));
     const used = k => [...new Set(D.teams.flatMap(t => Object.values(t.pb || {}).map(p => p && p[k]).filter(Boolean)))].sort();
-    return `<details class="card" id="pbCard"><summary><b>Playbooks</b> <span class="muted small">(S${seasonNum(ks)})</span></summary>
+    return `<details class="card" id="pbCard" data-keepopen="pb" ${ST.open?.pb ? 'open' : ''}><summary><b>Playbooks</b> <span class="muted small">(S${seasonNum(ks)})</span></summary>
       <p class="muted small">${open ? `Playbook changes are open (${esc(lg.phase)}). Saves count for Season ${seasonNum(ks)}.` : 'Playbooks are locked during the season. They open again in the Postseason. A team with no playbook on record can still be filled in.'} Each season's playbook is kept for team pages and coach history.</p>
       <datalist id="pbOffL">${used('off').map(v => `<option value="${esc(v)}">`).join('')}</datalist><datalist id="pbDefL">${used('def').map(v => `<option value="${esc(v)}">`).join('')}</datalist>
       ${ts.map(t => { const p = playbookOf(t, ks, t.coach) || {}, lock = pbLocked(t, lg); return `<div class="row" data-pb="${esc(t.id)}" style="padding:8px 0;border-bottom:1px solid var(--line)">
@@ -827,7 +838,7 @@ function syncTeams() {
   });
 }
 const KEEP = ['deskText', 'psSeason', 'psFinal', 'psConf', 'sNotes'];
-document.addEventListener('toggle', e => { const k = e.target?.dataset?.keepopen; if (k) { ST.open = ST.open || {}; ST.open[k] = e.target.open; } }, true);
+document.addEventListener('toggle', e => { const k = e.target?.dataset?.keepopen; if (k) { ST.open = ST.open || {}; ST.open[k] = e.target.open; saveView(); } }, true);
 function render() {
   syncTeams();
   const kept = {}; KEEP.forEach(id => { const el = document.getElementById(id); if (el) kept[id] = el.value; });
@@ -837,6 +848,8 @@ function render() {
   $('#panel').innerHTML = (ST.msg ? `<div class="notice">${esc(ST.msg)}</div>` : '') + views[ST.tab]();
   if (!ST.clear) KEEP.forEach(id => { const el = document.getElementById(id); if (el && kept[id] != null) el.value = kept[id]; });
   ST.msg = ''; ST.clear = false;
+  saveView();
+  if (restoreY) requestAnimationFrame(() => { if (restoreY && document.documentElement.scrollHeight >= restoreY + innerHeight * 0.6) { scrollTo(0, restoreY); restoreY = 0; } });
   if ($('#autoLive')) fetch('live.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : { live: false }).then(j => { const el = $('#autoLive'); if (!el) return; const fresh = j.live && j.checkedAt && Date.now() - j.checkedAt < 25 * 60e3; el.textContent = fresh ? 'LIVE — ' + (j.title || '') + ' (checked ' + Math.round((Date.now() - j.checkedAt) / 60e3) + ' min ago)' : j.live ? 'stale "live" status ignored — the checker hasn\'t confirmed it recently' : 'not live'; }).catch(() => { const el = $('#autoLive'); if (el) el.textContent = 'not set up yet'; });
 }
 document.addEventListener('click', async e => {
