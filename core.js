@@ -64,6 +64,10 @@ export const onLiveChange = fn => liveSubs.add(fn);
 // a file the GitHub workflow writes once a day, so they cost no database reads. Any past season missing
 // from the archive (e.g. the day a new season starts) is read once from the database instead.
 const SEASONAL = ['games', 'wagers', 'gotw', 'invites'], PAST = ['games', 'wagers'];
+// Collections in season.json: a copy of the current season (plus teams, users, history) that the GitHub workflow
+// refreshes whenever enough has changed. Visitors load that file for free and only read documents changed since.
+const SNAP = ['games', 'wagers', 'gotw', 'invites', 'teams', 'users', 'history'];
+const live1 = d => !d.deleted;
 let unsubs = [], liveSeason = null;
 async function startListeners() {
   const { fs, db } = await fbInit();
@@ -86,19 +90,33 @@ async function startListeners() {
   await first[0];
   const season = liveSeason = D.league.season;
   watch(fs.doc(db, 'meta', 'recruiting'), s => { D.recruiting = s.exists() ? s.data() : { class: '', rows: [] }; }, 'recruiting');
-  ['teams', 'users', 'history'].forEach(c => watch(fs.collection(db, c), s => { D[c] = s.docs.map(d => ({ ...d.data(), id: d.id })); }, c));
-  SEASONAL.forEach(c => watch(fs.query(fs.collection(db, c), fs.where('season', '==', season)), s => { cur[c] = s.docs.map(d => ({ ...d.data(), id: d.id })); merge(c); }, c));
+  let snap = null;
+  try { const r = await fetch('season.json?t=' + Math.floor(Date.now() / 60000), { cache: 'no-cache' }); if (r.ok) snap = await r.json(); } catch (e) { /* not built yet */ }
+  if (snap && snap.season === season && snap.T) {
+    const since = fs.Timestamp.fromMillis(snap.T);
+    SNAP.forEach(c => {
+      const base = new Map((snap[c] || []).map(d => [d.id, d]));
+      watch(fs.query(fs.collection(db, c), fs.where('upd', '>', since)), s => {
+        const m = new Map(base); s.docs.forEach(d => m.set(d.id, { ...d.data(), id: d.id }));
+        const all = [...m.values()].filter(live1);
+        if (SEASONAL.includes(c)) { cur[c] = all.filter(d => d.season === season); merge(c); } else D[c] = all;
+      }, c);
+    });
+  } else {   // no usable snapshot yet: read the current season directly
+    ['teams', 'users', 'history'].forEach(c => watch(fs.collection(db, c), s => { D[c] = s.docs.map(d => ({ ...d.data(), id: d.id })).filter(live1); }, c));
+    SEASONAL.forEach(c => watch(fs.query(fs.collection(db, c), fs.where('season', '==', season)), s => { cur[c] = s.docs.map(d => ({ ...d.data(), id: d.id })).filter(live1); merge(c); }, c));
+  }
   // Past seasons: archive file first, then the database for anything it doesn't cover.
   first.push((async () => {
     let arch = null;
     try { const r = await fetch('archive.json?d=' + new Date().toISOString().slice(0, 10), { cache: 'no-cache' }); if (r.ok) arch = await r.json(); } catch (e) { /* no archive yet */ }
     const have = new Set((arch && arch.seasons) || []);
-    PAST.forEach(c => { past[c] = ((arch && arch[c]) || []).filter(x => x.season < season); });
+    PAST.forEach(c => { past[c] = ((arch && arch[c]) || []).filter(x => x.season < season && live1(x)); });
     const firstS = D.league.firstSeason || 2026, missing = [];
     for (let y = firstS; y < season; y++) if (!have.has(y)) missing.push(y);
     if (missing.length) await Promise.all(PAST.map(async c => {
       const s = await fs.getDocs(fs.query(fs.collection(db, c), fs.where('season', 'in', missing.slice(-10))));
-      past[c] = past[c].concat(s.docs.map(d => ({ ...d.data(), id: d.id })));
+      past[c] = past[c].concat(s.docs.map(d => ({ ...d.data(), id: d.id })).filter(live1));
     }));
     PAST.forEach(merge);
   })());
@@ -138,8 +156,15 @@ export async function batch(ops) {
   for (let i = 0; i < ops.length; i += 400) {
     const b = fs.writeBatch(db);
     ops.slice(i, i + 400).forEach(o => {
-      const ref = fs.doc(db, o.col, o.id);
-      if (o.op === 'del') b.delete(ref); else b.set(ref, strip(o.data), { merge: o.merge !== false });
+      const ref = fs.doc(db, o.col, o.id), snap = SNAP.includes(o.col);
+      // Snapshot collections get a server "last changed" stamp, and deletes become a `deleted` flag, so
+      // visitors only have to read what changed since the last season.json snapshot.
+      if (o.op === 'del') { if (snap) b.set(ref, { deleted: true, upd: fs.serverTimestamp() }, { merge: true }); else b.delete(ref); }
+      else {
+        const merge = o.merge !== false, data = strip(o.data);
+        // Saving a doc again clears any old `deleted` flag (merge saves only; a full overwrite replaces it anyway).
+        b.set(ref, snap ? { ...data, upd: fs.serverTimestamp(), ...(merge && !data.deleted ? { deleted: fs.deleteField() } : {}) } : data, { merge });
+      }
     });
     await b.commit();
   }

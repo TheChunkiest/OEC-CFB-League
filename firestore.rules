@@ -20,11 +20,11 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if true;
       allow create: if signedIn() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['name', 'teamId', 'role'])
+        && request.resource.data.keys().hasOnly(['name', 'teamId', 'role', 'upd'])
         && request.resource.data.role == 'coach' && request.resource.data.teamId == ''
         && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 40;
       allow update: if isCommish() || (signedIn() && request.auth.uid == uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']));
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'upd']));
       allow delete: if isCommish();
     }
 
@@ -98,15 +98,26 @@ service cloud.firestore {
       let pending = openN(ls, 0) + openN(ls, 1) + openN(ls, 2) + openN(ls, 3) + openN(ls, 4) + openN(ls, 5);
       let dec = wonD(ls, 0) * wonD(ls, 1) * wonD(ls, 2) * wonD(ls, 3) * wonD(ls, 4) * wonD(ls, 5);
       return signedIn() && o.uid == request.auth.uid && o.market == 'parlay' && o.status == 'open' && ls.size() <= 6
-        && n.diff(o).affectedKeys().hasOnly(['status', 'payout', 'cashedAt', 'settledAt'])
+        && n.diff(o).affectedKeys().hasOnly(['status', 'payout', 'cashedAt', 'settledAt', 'upd'])
         && n.status == 'cashed' && n.payout is number && n.payout >= 0
         && won * 2 > ls.size() && lost == 0 && pending > 0
         && n.payout <= o.stake * (dec - 1.0) * 0.75 + 0.01;
     }
+    // Cancelling an open bet: the site marks it deleted (instead of erasing it) so other visitors' snapshots
+    // pick up the change. Same conditions as deleting it.
+    function validCancel() {
+      let o = resource.data;
+      let n = request.resource.data;
+      return signedIn() && o.uid == request.auth.uid && o.status == 'open'
+        && n.diff(o).affectedKeys().hasOnly(['deleted', 'upd']) && n.deleted == true
+        && league().bettingOpen == true
+        && (((o.market == 'future' || o.market == 'wins') && league().phase == 'Regular Season')
+          || (o.market != 'future' && o.market != 'wins' && o.market != 'parlay' && gameOf(o.gameId).homeScore == null));
+    }
     match /wagers/{id} {
       allow read: if true;
       allow create: if isCoach() && validWager(request.resource.data);
-      allow update: if isCommish() || validCashOut();
+      allow update: if isCommish() || validCashOut() || validCancel();
       allow delete: if isCommish() || (signedIn() && resource.data.uid == request.auth.uid && resource.data.status == 'open'
         && league().bettingOpen == true
         && (((resource.data.market == 'future' || resource.data.market == 'wins') && league().phase == 'Regular Season')
@@ -123,7 +134,7 @@ service cloud.firestore {
       let oppTeam = me.teamId == g.home ? g.away : g.home;
       let now = request.time.toMillis();
       return isCoach() && d.from == request.auth.uid && d.status == 'pending'
-        && d.keys().hasOnly(['gameId', 'season', 'week', 'from', 'to', 'fromName', 'toName', 'times', 'status', 'ts'])
+        && d.keys().hasOnly(['gameId', 'season', 'week', 'from', 'to', 'fromName', 'toName', 'times', 'status', 'ts', 'upd'])
         && d.times is list && d.times.size() >= 1 && d.times.size() <= 3
         && d.times[0] is number && d.times[0] > now
         && (d.times.size() < 2 || (d.times[1] is number && d.times[1] > now))
@@ -138,10 +149,10 @@ service cloud.firestore {
       let n = request.resource.data;
       let ch = n.diff(o).affectedKeys();
       return signedIn() && (
-        (o.status == 'pending' && request.auth.uid == o.to && ch.hasOnly(['status', 'time', 'respondedAt'])
+        (o.status == 'pending' && request.auth.uid == o.to && ch.hasOnly(['status', 'time', 'respondedAt', 'upd'])
           && ((n.status == 'accepted' && n.time in o.times) || n.status == 'declined'))
-        || (o.status == 'pending' && request.auth.uid == o.from && ch.hasOnly(['status', 'respondedAt']) && n.status == 'cancelled')
-        || (o.status == 'accepted' && (request.auth.uid == o.to || request.auth.uid == o.from) && ch.hasOnly(['status', 'respondedAt']) && n.status == 'cancelled'));
+        || (o.status == 'pending' && request.auth.uid == o.from && ch.hasOnly(['status', 'respondedAt', 'upd']) && n.status == 'cancelled')
+        || (o.status == 'accepted' && (request.auth.uid == o.to || request.auth.uid == o.from) && ch.hasOnly(['status', 'respondedAt', 'upd']) && n.status == 'cancelled'));
     }
     match /invites/{id} {
       allow read: if true;

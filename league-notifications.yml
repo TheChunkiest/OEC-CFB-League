@@ -3,7 +3,8 @@ name: League notifications
 #   - Sends free phone notifications through Firebase Cloud Messaging when the FIREBASE_SERVICE_ACCOUNT secret is
 #     set: league advances, commissioner news, kickoff reminders and kickoff invites. Device tokens are only read
 #     when there's something to send; what has been sent is remembered in push-state.json.
-#   - Rebuilds archive.json (past seasons' games and bets) about once a day so the site doesn't read them from the database.
+#   - Keeps season.json (a copy of the current season) and archive.json (past seasons) up to date, so visitors
+#     load those files for free and only read what changed from the database.
 # Each run reads about 5 small documents/queries plus the games with an agreed kickoff time.
 on:
   schedule:
@@ -68,6 +69,7 @@ jobs:
                   return {}
 
           now = time.time() * 1000
+          LG = one('meta/league')   # read once per run and shared below
           # Only invites for upcoming kickoffs (one indexed range filter), so each run reads a handful of
           # documents instead of whole collections. Team names are fetched just for the games involved.
           body = {'structuredQuery': {'from': [{'collectionId': 'invites'}], 'where': {'fieldFilter': {'field': {'fieldPath': 'time'}, 'op': 'GREATER_THAN', 'value': {'integerValue': str(int(now - 6 * 3600e3))}}}}}
@@ -106,8 +108,10 @@ jobs:
           # archive.json instead of the database. Rebuilt at most once a day, so most runs read nothing here.
           try: arch_age = now - (json.load(open('archive.json')).get('generatedAt') or 0)
           except Exception: arch_age = 1e18
-          if arch_age > 20 * 3600e3:
-              lg = one('meta/league'); cur = int(lg.get('season') or 0); fs0 = int(lg.get('firstSeason') or 2026)
+          try: arch_season = json.load(open('archive.json')).get('season')
+          except Exception: arch_season = None
+          if arch_age > 7 * 24 * 3600e3 or arch_season != int(LG.get('season') or 0):   # past seasons don't change
+              lg = LG; cur = int(lg.get('season') or 0); fs0 = int(lg.get('firstSeason') or 2026)
               def past(col):
                   q = {'structuredQuery': {'from': [{'collectionId': col}], 'where': {'fieldFilter': {'field': {'fieldPath': 'season'}, 'op': 'LESS_THAN', 'value': {'integerValue': str(cur)}}}}}
                   rq = urllib.request.Request(f'{base}:runQuery?key={key}', data=json.dumps(q).encode(), headers={'Content-Type': 'application/json'})
@@ -117,7 +121,7 @@ jobs:
                       x = row.get('document')
                       if not x: continue
                       f = {k: val(v) for k, v in x.get('fields', {}).items()}; f['id'] = x['name'].rsplit('/', 1)[1]; out.append(f)
-                  return sorted(out, key=lambda d: d['id'])
+                  return sorted((d for d in out if not d.get('deleted')), key=lambda d: d['id'])
               if cur:
                   arch = {'generatedAt': int(now), 'season': cur, 'seasons': list(range(fs0, cur)), 'games': past('games'), 'wagers': past('wagers')}
                   old_arch = {}
@@ -127,6 +131,51 @@ jobs:
                   if same and old_arch: arch['generatedAt'] = int(now)
                   json.dump(arch, open('archive.json', 'w'), separators=(',', ':'))
                   print(f"archive: {len(arch['games'])} games, {len(arch['wagers'])} bets from seasons {arch['seasons']}")
+
+          # ---------------- Current-season snapshot (season.json) ----------------
+          # Visitors load this file (free, from GitHub) and only read documents changed since it was made.
+          # Each run asks the database how many documents changed since (1 read per collection); the file is
+          # rebuilt once 25+ changed, or any changed and it's 6+ hours old, or the season rolled over.
+          SNAPC = ['games', 'wagers', 'gotw', 'invites', 'teams', 'users', 'history']
+          SEASONALC = {'games', 'wagers', 'gotw', 'invites'}
+          def iso(ms): return time.strftime('%Y-%m-%dT%H:%M:%S', time.gmtime(ms / 1000)) + 'Z'
+          def post(url, body):
+              rq = urllib.request.Request(f'{url}?key={key}', data=json.dumps(body).encode(), headers={'Content-Type': 'application/json'})
+              with urllib.request.urlopen(rq, timeout=60) as r: return json.load(r)
+          def changed_since(col, T):
+              res = post(f'{base}:runAggregationQuery', {'structuredAggregationQuery': {'aggregations': [{'alias': 'n', 'count': {}}],
+                  'structuredQuery': {'from': [{'collectionId': col}], 'where': {'fieldFilter': {'field': {'fieldPath': 'upd'}, 'op': 'GREATER_THAN', 'value': {'timestampValue': iso(T)}}}}}})
+              for row in res:
+                  f = (row.get('result') or {}).get('aggregateFields', {}).get('n')
+                  if f: return int(f.get('integerValue', 0))
+              return 0
+          def season_docs(col, cur):
+              res = post(f'{base}:runQuery', {'structuredQuery': {'from': [{'collectionId': col}], 'where': {'fieldFilter': {'field': {'fieldPath': 'season'}, 'op': 'EQUAL', 'value': {'integerValue': str(cur)}}}}})
+              out = []
+              for row in res:
+                  x = row.get('document')
+                  if not x: continue
+                  f = {k: val(v) for k, v in x.get('fields', {}).items()}; f['id'] = x['name'].rsplit('/', 1)[1]; out.append(f)
+              return out
+          try:
+              cur = int(LG.get('season') or 0)
+              try: snapf = json.load(open('season.json'))
+              except Exception: snapf = {}
+              rebuild = not snapf or snapf.get('season') != cur or not snapf.get('T')
+              if not rebuild:
+                  n = sum(changed_since(c, snapf['T']) for c in SNAPC)
+                  rebuild = n >= 25 or (n > 0 and now - snapf.get('generatedAt', 0) > 6 * 3600e3)
+                  print(f'season.json: {n} documents changed since it was built')
+              if rebuild and cur:
+                  T = int(now - 5 * 60e3)   # small overlap so nothing written during the build is missed
+                  out = {'season': cur, 'T': T, 'generatedAt': int(now)}
+                  for c in SNAPC:
+                      rows = season_docs(c, cur) if c in SEASONALC else docs(c)
+                      out[c] = sorted(({k: v for k, v in d.items() if k != 'upd'} for d in rows if not d.get('deleted')), key=lambda d: d['id'])
+                  json.dump(out, open('season.json', 'w'), separators=(',', ':'))
+                  print('season.json rebuilt: ' + ', '.join(f'{c} {len(out[c])}' for c in SNAPC))
+          except Exception as e:
+              print('season.json skipped:', repr(e)[:300])
 
           # ---------------- Phone notifications ----------------
           def notify():
@@ -152,7 +201,7 @@ jobs:
               try: st = json.load(open('push-state.json'))
               except Exception: st = {}
               fresh = not st
-              lg = one('meta/league')
+              lg = LG
               advkey = f"{lg.get('season')}|{lg.get('week')}|{lg.get('phase')}"
               ann = (lg.get('announce') or {})
               link = site or './index.html'
