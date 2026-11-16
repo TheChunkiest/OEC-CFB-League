@@ -999,7 +999,7 @@ async function drawCheat(C) {
       if (!q) return;
       const head = `${shortName(q.name)}${q.pos ? ' · ' + q.pos : ''}${q.grade ? ' · ' + q.grade.toFixed(1) : ''}`;
       fit(head, 27, half, B, '800'); text(head, X, Y, TXT, al);
-      const ln = q.lines[0]?.l || ''; if (ln) { fit(ln, 21, half, B, '600'); text(ln, X, Y + 30, MUT, al); }
+      const ln = q.lines[0]?.l ? `Wk ${q.lines[0].w}: ${q.lines[0].l}` : ''; if (ln) { fit(ln, 21, half, B, '600'); text(ln, X, Y + 30, MUT, al); }
     };
     for (let i = 0; i < n; i++) { const Y = top + 46 + i * rH; if (i) { x.fillStyle = LINE; x.fillRect(P, Y - 38, IW, 1); } cell(pa[i], P + 18, Y, 'left'); cell(ph[i], W - P - 18, Y, 'right'); }
     y = top + n * rH + 22;
@@ -1768,7 +1768,7 @@ PAGES.game = function (id) {
     ${coachA !== 'CPU' && coachH !== 'CPU' ? `<div class="card"><h3 style="margin-top:0">Past meetings: ${esc(coachA)} vs. ${esc(coachH)}</h3>${meets.length ? `<p class="muted small" style="margin-top:0">${mw[coachA] || 0}-${mw[coachH] || 0} all-time${done ? ' before this game' : ''}. Coaches' records follow them from team to team.</p><div class="tablewrap"><table>
       <tr><th>When</th><th>Result</th></tr>${meets.map(m => { const w = meetingWinner(m); return `<tr class="clickable" data-game="${esc(m.id)}"><td class="muted">S${seasonNum(m.season)} · ${m.type === 'ccg' ? '<b class="win">Title game</b>' : 'Wk ' + m.week}</td><td class="wrap"><b>${esc(w.coach)}</b> (${esc(team(w.team).name)}) ${m.forfeit ? 'by forfeit over' : `${w.ws}-${w.ls} over`} ${esc(w.lcoach)} (${esc(team(w.lteam).name)})</td></tr>`; }).join('')}</table></div>` : `<p class="muted">${done ? 'This was the first meeting between these two coaches.' : 'First meeting ever between these two coaches.'}</p>`}</div>` : ''}
     ${gameBets(g)}
-    <p class="cheatlink"><a href="javascript:void 0" data-act="cheat">📺 Broadcast cheat sheet ›</a></p>`;
+    ${done ? '' : `<p class="cheatlink"><a href="javascript:void 0" data-act="cheat">📺 Broadcast cheat sheet ›</a></p>`}`;
 };
 
 /* ---------- shell ---------- */
