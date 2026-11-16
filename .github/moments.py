@@ -74,8 +74,9 @@ Use the on-screen scoreboard to tell which team scored and what the score became
 Reply with JSON only, shaped like:
 {{"moments": [{{"t": <seconds from the very start of the stream>, "kind": "td|fg|safety|turnover|big|stop|twopt|final|other",
 "team": "home|away|null", "q": <quarter 1-4, 5 for OT, or null>, "score": "<away>-<home> after the play, or null",
-"text": "<one short sentence, under 14 words, e.g. 'Smith 45-yard TD pass to Jones'>"}}]}}
-If nothing from this game happens in this part, reply {{"moments": []}}."""
+"text": "<one short sentence, under 14 words, e.g. 'Smith 45-yard TD pass to Jones'>"}}],
+"notes": "<2-4 sentences on how this part of the game went: momentum, standout players, anything the streamers made a big deal of>"}}
+If nothing from this game happens in this part, reply {{"moments": [], "notes": ""}}."""
     body = {'contents': [{'parts': [
         {'file_data': {'file_uri': url, 'mime_type': 'video/*'},
          'video_metadata': {'start_offset': f'{start}s', 'end_offset': f'{end}s', 'fps': 0.5}},
@@ -85,7 +86,49 @@ If nothing from this game happens in this part, reply {{"moments": []}}."""
     txt = ''.join(p.get('text', '') for c in r.get('candidates', []) for p in (c.get('content') or {}).get('parts', []))
     m = re.search(r'\{.*\}', txt, re.S)
     out = json.loads(m.group(0)) if m else {}
-    return out.get('moments') or []
+    return out.get('moments') or [], str(out.get('notes') or '').strip()
+
+
+def text_call(prompt):
+    """A text-only request (no video): cheap, and doesn't count toward the daily video budget."""
+    err = None
+    for model in list(MODELS):
+        try:
+            r = http(f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
+                     {'contents': [{'parts': [{'text': prompt}]}], 'generationConfig': {'responseMimeType': 'application/json', 'temperature': 0.6}},
+                     {'x-goog-api-key': KEY}, timeout=180)
+            txt = ''.join(p.get('text', '') for c in r.get('candidates', []) for p in (c.get('content') or {}).get('parts', []))
+            m = re.search(r'\{.*\}', txt, re.S)
+            return json.loads(m.group(0)) if m else {}
+        except urllib.error.HTTPError as x:
+            err = f'{x.code} {x.read().decode()[:200]}'
+            if x.code == 404: MODELS.remove(model); continue
+            raise RuntimeError(err)
+    raise RuntimeError(err or 'no model available')
+
+
+def write_recap(ctx, moments, notes):
+    """Turns the moments (and the notes from watching each part) into the game story the site shows on a final."""
+    plays = '\n'.join(f"- {m['x']} ({m['k']}{', Q' + str(m['q']) if m.get('q') else ''}{', score away-home ' + m['sc'] if m.get('sc') else ''})" for m in moments)
+    prompt = f"""You write game recaps for an online College Football 27 video game dynasty league's website.
+{ctx}
+Key plays, in order:
+{plays or '(none found)'}
+Notes from watching the broadcast:
+{chr(10).join('- ' + n for n in notes if n) or '(none)'}
+Write it like a sports site recap: confident and fun, no made-up stats or player names beyond what's above, never
+mention AI, streams or video. Use the coaches' names and the schools. Reply with JSON only:
+{{"headline": "<under 70 characters, names the winner>",
+"recap": ["<paragraph 1: the result and the story of the game>", "<paragraph 2: the turning point and key plays>", "<optional short paragraph 3: what it means>"],
+"oneliner": "<one sentence recap of the game, under 30 words>",
+"potg_title": "<the single best play, under 45 characters, e.g. 'Smith's 99-yard pick-six'>",
+"potg": "<one sentence describing the play of the game and why it mattered, under 35 words>"}}"""
+    out = text_call(prompt)
+    clip = lambda v, n: re.sub(r'\s+', ' ', str(v or '')).strip()[:n]
+    paras = [clip(x, 900) for x in (out.get('recap') or []) if clip(x, 900)][:3]
+    if not out.get('headline') or not paras: raise RuntimeError('recap came back empty')
+    return {'h': clip(out.get('headline'), 90), 'p': paras, 'o': clip(out.get('oneliner'), 260),
+            'pt': clip(out.get('potg_title'), 60), 'pp': clip(out.get('potg'), 300)}
 
 
 def clean(raw, vid, start, end, part_len):
@@ -145,6 +188,28 @@ def run():
         when = {x['id']: x.get('d', 0) for x in vids.get('videos', [])}
         return sorted([x for x in raw if x], key=lambda x: when.get(x, 0))
 
+    nm = lambda t, tid: t.get('name') or tid.replace('-', ' ').title()
+
+    def make_ctx(g):
+        A, H = teams.get(g['away'], {}), teams.get(g['home'], {})
+        coach = lambda side, t: g.get(side + 'Coach') or t.get('coach') or 'CPU'
+        kind = {'ccg': ' This was the league championship game.', 'bowl': ' This was a postseason bowl game.'}.get(g.get('type'), '')
+        return (f"The game: Season {g['season'] - int(season.get('firstSeason') or g['season']) + 1}, Week {g.get('week')}. "
+                f"{nm(A, g['away'])} ({A.get('abbr', '')}, coached by {coach('away', A)}) is the AWAY team; "
+                f"{nm(H, g['home'])} ({H.get('abbr', '')}, coached by {coach('home', H)}) is the HOME team"
+                f"{' (neutral site)' if g.get('neutral') else ''}. Final score: away {g['awayScore']}, home {g['homeScore']}.{kind}")
+
+    # Games that have moments but no written recap yet (text only, so no video budget): up to 3 a run.
+    wrote = 0
+    for gid, rec in sorted(done.items(), key=lambda kv: -kv[1].get('at', 0)):
+        if wrote >= 3 or rec.get('r') or gid not in games or rec.get('rfail', 0) >= 3: continue
+        try:
+            rec['r'] = write_recap(make_ctx(games[gid]), rec.get('m') or [], rec.get('n') or []); wrote += 1
+            print(f'moments: wrote the recap for {gid}')
+        except Exception as x:
+            rec['rfail'] = rec.get('rfail', 0) + 1; print('moments: recap failed:', str(x)[:200])
+            if '429' in str(x): break
+
     todo = []
     for gid, g in games.items():
         if g.get('homeScore') is None or g.get('awayScore') is None or g.get('forfeit'): continue
@@ -167,31 +232,30 @@ def run():
     lens = durations(vl)
     total = sum(lens.get(v) or 3 * 3600 for v in vl)
     if q['sec'] + total > DAILY_HOURS * 3600:
-        print(f'moments: daily video budget used ({q["sec"] / 3600:.1f}h); {len(todo)} game(s) waiting'); return
+        print(f'moments: daily video budget used ({q["sec"] / 3600:.1f}h); {len(todo)} game(s) waiting')
+        json.dump(state, open('moments.json', 'w'), separators=(',', ':')); return
     A, H = teams.get(g['away'], {}), teams.get(g['home'], {})
-    nm = lambda t, tid: t.get('name') or tid.replace('-', ' ').title()
-    coach = lambda side, t: g.get(side + 'Coach') or t.get('coach') or 'CPU'
-    ctx = (f"The game: {nm(A, g['away'])} ({A.get('abbr', '')}, coached by {coach('away', A)}) is the AWAY team; "
-           f"{nm(H, g['home'])} ({H.get('abbr', '')}, coached by {coach('home', H)}) is the HOME team"
-           f"{' (neutral site)' if g.get('neutral') else ''}. Final score: away {g['awayScore']}, home {g['homeScore']}.")
+    ctx = make_ctx(g)
     print(f"moments: {gid} — {nm(A, g['away'])} @ {nm(H, g['home'])}, {len(vl)} part(s), {total / 60:.0f} min")
-    found, used, used_model = [], 0, MODELS[0]
+    found, used, used_model, notes = [], 0, MODELS[0], []
     try:
         for i, v in enumerate(vl):
             L = lens.get(v) or 3 * 3600
             url = f'https://www.youtube.com/watch?v={v}'
             for s in range(0, L, CHUNK):
                 e = min(L, s + CHUNK + 60)   # a minute of overlap so a play on the seam isn't lost
-                raw, err = None, None
+                raw, err, note = None, None, ''
+
                 for model in list(MODELS):
                     try:
-                        raw = ask(model, url, s, e, ctx); used_model = model; break
+                        raw, note = ask(model, url, s, e, ctx); used_model = model; break
                     except urllib.error.HTTPError as x:
                         err = f'{x.code} {x.read().decode()[:200]}'
                         if x.code == 404: MODELS.remove(model); continue   # model name not available: try the next one
                         raise RuntimeError(err)
                 if raw is None: raise RuntimeError(err or 'no model available')
                 found += [dict(m, v_i=i) for m in clean(raw, v, s, e, L)]
+                if note: notes.append(note[:600])
                 used += e - s
                 print(f'  part {i + 1} {s // 60}-{e // 60} min: {len(raw)} moment(s)')
                 time.sleep(20)   # stay under the free tier's per-minute limit
@@ -204,7 +268,11 @@ def run():
         return
     q['sec'] += used
     fails.pop(gid, None)
-    done[gid] = {'vids': vl, 'at': int(NOW), 'model': used_model, 'm': pick(found)}
+    done[gid] = {'vids': vl, 'at': int(NOW), 'model': used_model, 'm': pick(found), 'n': notes}
+    try:
+        done[gid]['r'] = write_recap(ctx, done[gid]['m'], notes)
+    except Exception as x:
+        print('moments: recap not written yet:', str(x)[:200])
     json.dump(state, open('moments.json', 'w'), separators=(',', ':'))
     print(f'moments: saved {len(done[gid]["m"])} moment(s) for {gid}; {len(todo) - 1} game(s) left')
 
