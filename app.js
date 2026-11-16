@@ -85,13 +85,15 @@ function playersToWatch(A, H, s) {
   if (out[0]) out[0] = out[0].replace(/^On the other side, /, '');
   return out.length ? 'Players to watch: ' + out.join(' ') : '';
 }
+// "Taylor Coleman" -> "T. Coleman"; a last name alone stays as is. (Recaps and previews keep full names.)
+const shortName = n => { const w = String(n).trim().split(/\s+/); return w.length < 2 ? w[0] : `${w[0][0].toUpperCase()}. ${w.slice(1).join(' ')}`; };
 // Team page: the players the AI has seen this season, and what's been working / where the team struggles.
 function scoutCard(t, s = D.league.season) {
   if (!AI.moms) { loadMoments(); return ''; }
   const ps = teamPlayers(t.id, s).slice(0, 6), sc = teamScouting(t.id, s);
   if (!ps.length && !sc.length) return '';
   return `<div class="card"><h3 style="margin-top:0">Players to know</h3>
-    ${ps.length ? `<div class="tablewrap"><table><tr><th>Player</th><th class="num">Games</th><th class="num">Grade</th></tr>${ps.map(p => `<tr><td class="wrap"><b>${esc(p.name)}</b>${p.pos ? ` <span class="muted small">${esc(p.pos)}</span>` : ''}${p.lines[0] ? `<div class="muted small">Wk ${p.lines[0].w}: ${esc(p.lines[0].l)}</div>` : ''}</td><td class="num">${p.games}</td><td class="num">${p.grade ? p.grade.toFixed(1) : '–'}</td></tr>`).join('')}</table></div>` : ''}
+    ${ps.length ? `<div class="tablewrap"><table><tr><th>Player</th><th class="num">Games</th><th class="num">Grade</th></tr>${ps.map(p => `<tr><td class="wrap"><b>${esc(shortName(p.name))}</b>${p.pos ? ` <span class="muted small">${esc(p.pos)}</span>` : ''}${p.lines[0] ? `<div class="muted small">Wk ${p.lines[0].w}: ${esc(p.lines[0].l)}</div>` : ''}</td><td class="num">${p.games}</td><td class="num">${p.grade ? p.grade.toFixed(1) : '–'}</td></tr>`).join('')}</table></div>` : ''}
     ${sc.length ? `<h4 style="margin:14px 0 6px">Scouting report</h4><ul class="clean small">${sc.map(x => `<li><span class="muted">Wk ${x.g.week}:</span> ${x.good ? `<span class="win">+</span> ${esc(x.good)}` : ''}${x.good && x.bad ? ' ' : ''}${x.bad ? `<span class="loss">−</span> ${esc(x.bad)}` : ''}</li>`).join('')}</ul>` : ''}
     <p class="muted small" style="margin:10px 0 0">From the AI's read of this season's broadcasts. Grades are 1-10 per game, averaged.</p></div>`;
 }
