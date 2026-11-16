@@ -187,25 +187,27 @@ function wizard() {
    unlinks mistakes. Choices are saved on the game (video id, or 'none'); "not a game" goes in league.vidIgnore. */
 let VIDS = null, vidsLoading = false;
 function loadVids() { if (VIDS || vidsLoading) return; vidsLoading = true; fetch('videos.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(j => { VIDS = j || { videos: [], links: {} }; if (ST.tab === 'games') render(); }).catch(() => { VIDS = { videos: [], links: {} }; }); }
+const autoVids = g => { const r = VIDS?.links?.[g.id]; return !r ? [] : Array.isArray(r) ? r : [r]; };
+// The videos on a game: the commissioner's list (or 'none') wins over the automatic match.
+const vidsOfGame = g => g.video === 'none' ? [] : g.video ? (Array.isArray(g.video) ? g.video : [g.video]) : autoVids(g);
 function broadcastCard() {
   loadVids();
   const head = '<details class="card"><summary><b>▶ YouTube broadcasts</b> ';
   if (!VIDS) return head + '<span class="muted small">loading…</span></summary></details>';
   const vids = VIDS.videos || [], byId = Object.fromEntries(vids.map(v => [v.id, v]));
-  const linkOf = g => g.video === 'none' ? null : g.video || VIDS.links?.[g.id] || null;
   const playedGames = D.games.filter(g => played(g)).sort((a, b) => b.season - a.season || b.week - a.week);
-  const usedVid = new Set(playedGames.map(linkOf).filter(Boolean)), ignore = new Set(L().vidIgnore || []);
+  const usedVid = new Set(playedGames.flatMap(vidsOfGame)), ignore = new Set(L().vidIgnore || []);
   const glabel = g => `S${seasonNum(g.season)} ${g.type === 'ccg' ? 'Title' : 'Wk ' + g.week}: ${team(g.away).abbr || team(g.away).name} @ ${team(g.home).abbr || team(g.home).name}`;
   const gopts = playedGames.filter(g => g.season >= L().season - 1).map(g => `<option value="${esc(g.id)}">${esc(glabel(g))}</option>`).join('');
-  const guessed = (VIDS.guessed || []).map(id => [id, playedGames.find(g => !g.video && VIDS.links?.[g.id] === id)]).filter(([, g]) => g);
+  const guessed = (VIDS.guessed || []).map(id => [id, playedGames.find(g => !g.video && autoVids(g).includes(id))]).filter(([, g]) => g);
   const loose = vids.filter(v => !usedVid.has(v.id) && !ignore.has(v.id)).slice(0, 15);
-  const linked = playedGames.filter(linkOf).slice(0, 30);
+  const linked = playedGames.filter(g => vidsOfGame(g).length).slice(0, 30);
   const vt = id => esc(byId[id]?.t || id);
   if (!vids.length) return head + `<span class="muted small">none yet</span></summary><p class="muted small">The workflow pulls the channel's videos every few hours once the <code>YT_API_KEY</code> secret is set, and links each one to its game from the title.</p></details>`;
   return head + `<span class="muted small">${linked.length} linked${guessed.length ? ` · ${guessed.length} to check` : ''}${loose.length ? ` · ${loose.length} unmatched` : ''}</span></summary>
-    ${guessed.length ? `<h3>Check these</h3><p class="muted small" style="margin-top:0">The title didn't say which season, so these are best guesses.</p>${guessed.map(([vid, g]) => `<div class="vrow"><div><b>${vt(vid)}</b><span class="muted small">→ ${esc(glabel(g))}</span></div><div class="row"><button class="sm" data-act="vidLink" data-vid="${esc(vid)}" data-gid="${esc(g.id)}">✓ Right</button><button class="sm ghost" data-act="vidUnlink" data-gid="${esc(g.id)}">✕ Wrong</button></div></div>`).join('')}` : ''}
+    ${guessed.length ? `<h3>Check these</h3><p class="muted small" style="margin-top:0">The title didn't say which season, so these are best guesses.</p>${guessed.map(([vid, g]) => `<div class="vrow"><div><b>${vt(vid)}</b><span class="muted small">→ ${esc(glabel(g))}</span></div><div class="row"><button class="sm" data-act="vidLink" data-vid="${esc(vid)}" data-gid="${esc(g.id)}">✓ Right</button><button class="sm ghost" data-act="vidUnlink" data-gid="${esc(g.id)}" data-vid="${esc(vid)}">✕ Wrong</button></div></div>`).join('')}` : ''}
     ${loose.length ? `<h3>Not linked</h3><p class="muted small" style="margin-top:0">Pick the game, or mark it as not a league game.</p>${loose.map(v => `<div class="vrow"><div><b>${esc(v.t)}</b><span class="muted small">${new Date(v.d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span></div><div class="row"><select data-vidpick="${esc(v.id)}" style="max-width:220px"><option value="">Pick a game…</option>${gopts}</select><button class="sm" data-act="vidLink" data-vid="${esc(v.id)}">Link</button><button class="sm ghost" data-act="vidIgnore" data-vid="${esc(v.id)}">Not a game</button></div></div>`).join('')}` : ''}
-    ${linked.length ? `<h3>Linked</h3>${linked.map(g => `<div class="vrow"><div><b>${esc(glabel(g))}</b><span class="muted small">${vt(linkOf(g))}</span></div><button class="sm ghost" data-act="vidUnlink" data-gid="${esc(g.id)}">Unlink</button></div>`).join('')}` : ''}
+    ${linked.length ? `<h3>Linked</h3><p class="muted small" style="margin-top:0">A game can have several parts if a stream restarted. Link another video to the same game to add a part.</p>${linked.map(g => `<div class="vrow"><div><b>${esc(glabel(g))}</b>${vidsOfGame(g).map((id, i, a) => `<span class="muted small vpart">${a.length > 1 ? `Part ${i + 1}: ` : ''}${vt(id)} <a href="#" data-act="vidUnlink" data-gid="${esc(g.id)}" data-vid="${esc(id)}" title="Unlink">✕</a></span>`).join('')}</div></div>`).join('')}` : ''}
   </details>`;
 }
 const views = {
@@ -646,11 +648,15 @@ const ACT = {
   async vidLink(t) {
     const vid = t.dataset.vid, gid = t.dataset.gid || $(`[data-vidpick="${vid}"]`)?.value;
     if (!gid) return alert('Pick the game first.');
-    const ops = [{ op: 'set', col: 'games', id: gid, data: { video: vid } }];
-    D.games.filter(g => g.id !== gid && g.video === vid).forEach(g => ops.push({ op: 'set', col: 'games', id: g.id, data: { video: 'none' } }));
+    const g = D.games.find(x => x.id === gid), list = [...new Set([...vidsOfGame(g), vid])];   // adds a part
+    const ops = [{ op: 'set', col: 'games', id: gid, data: { video: list } }];
+    D.games.filter(x => x.id !== gid && vidsOfGame(x).includes(vid)).forEach(x => { const rest = vidsOfGame(x).filter(v => v !== vid); ops.push({ op: 'set', col: 'games', id: x.id, data: { video: rest.length ? rest : 'none' } }); });
     await batch(ops); flash('Broadcast linked.');
   },
-  async vidUnlink(t) { await put('games', t.dataset.gid, { video: 'none' }); flash('Unlinked.'); },
+  async vidUnlink(t) {
+    const g = D.games.find(x => x.id === t.dataset.gid), rest = t.dataset.vid ? vidsOfGame(g).filter(v => v !== t.dataset.vid) : [];
+    await put('games', g.id, { video: rest.length ? rest : 'none' }); flash('Unlinked.');
+  },
   async vidIgnore(t) { await put('meta', 'league', { vidIgnore: [...(L().vidIgnore || []), t.dataset.vid].slice(-300) }); flash('Hidden from this list.'); },
   async savePush() {
     await put('meta', 'league', { pushKey: $('#stPush').value.trim() }); flash('Notification key saved.');

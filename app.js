@@ -39,8 +39,29 @@ function weekOrder(games, gotwId) {
 // YouTube broadcasts linked to games (videos.json from the workflow; commissioner overrides on the game win).
 let VIDS = null;
 async function loadVideos() { try { const r = await fetch('videos.json?t=' + Math.floor(Date.now() / 600000), { cache: 'no-cache' }); if (r.ok) VIDS = await r.json(); } catch (e) { } }
-const videoOf = g => !g || g.video === 'none' ? null : g.video || VIDS?.links?.[g.id] || null;
-const videoTitle = id => (VIDS?.videos || []).find(v => v.id === id)?.t || '';
+const vidInfo = id => (VIDS?.videos || []).find(v => v.id === id) || { id, t: '', d: 0 };
+// Every broadcast for a game, oldest first (several when a stream had to restart). The commissioner's
+// choice on the game (a list, or 'none') wins over the automatic match.
+const videosOf = g => {
+  if (!g || g.video === 'none') return [];
+  const raw = g.video || VIDS?.links?.[g.id] || [];
+  return (Array.isArray(raw) ? raw : [raw]).filter(Boolean).map(vidInfo).sort((a, b) => a.d - b.d);
+};
+const videoOf = g => videosOf(g)[0]?.id || null;
+function broadcastCard(g) {
+  const vs = videosOf(g); if (!vs.length) return '';
+  const one = vs.length === 1, v = vs[0];
+  const inner = `<img src="https://i.ytimg.com/vi/${esc(v.id)}/mqdefault.jpg" alt="" loading="lazy"><span><b>▶ Watch the broadcast</b><span class="muted small">${one ? esc(v.t || 'OEC on YouTube') : `${vs.length} parts · the stream restarted`}</span></span>`;
+  return one ? `<a class="card vidcard" href="https://youtu.be/${esc(v.id)}" target="_blank" rel="noopener">${inner}</a>`
+    : `<a class="card vidcard" href="#" data-vidlist="${esc(g.id)}">${inner}</a>`;
+}
+function showVideoList(gid) {
+  const g = D.games.find(x => x.id === gid), vs = videosOf(g); if (!vs.length) return;
+  $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card"><h2>Watch the broadcast</h2>
+    <p class="muted small" style="margin-top:0">${esc(team(g.away).name)} ${g.neutral ? 'vs' : '@'} ${esc(team(g.home).name)} was streamed in ${vs.length} parts.</p>
+    ${vs.map((v, i) => `<a class="vidpart" href="https://youtu.be/${esc(v.id)}" target="_blank" rel="noopener"><img src="https://i.ytimg.com/vi/${esc(v.id)}/mqdefault.jpg" alt="" loading="lazy"><span><b>Part ${i + 1}</b><span class="muted small">${esc(v.t || 'OEC on YouTube')}</span></span></a>`).join('')}
+    <div class="row" style="margin-top:12px"><button class="ghost" data-close="1">Close</button></div></div></div>`;
+}
 function gameCard(g, opts = {}) {
   const h = team(g.home), a = team(g.away), done = played(g);
   const hw = done && +g.homeScore > +g.awayScore, aw = done && !hw;
@@ -1595,7 +1616,7 @@ PAGES.game = function (id) {
       ${l && !g.forfeit ? (done ? finalLines(g, l, A, H) : `<div class="gp-odds"><div><span>Spread</span><b>${l.spread === 0 ? 'PK' : esc(fav.abbr || fav.name) + ' ' + fmtLine(-Math.abs(l.spread))}</b></div><div><span>Total</span><b>O/U ${l.total}</b></div>
         <div><span>Moneyline</span><b>${esc(A.abbr)} ${fmtOdds(l.mlAway)}</b><b>${esc(H.abbr)} ${fmtOdds(l.mlHome)}</b></div></div>`) + probBar(g, l, done) : ''}
       ${canBet ? `<button class="gold" data-betgame="${g.week}" style="margin-top:12px">Bet this game${isGotw ? ' · +10% boost' : ''} →</button>` : ''}${ko.ctl}</div>
-    ${done && videoOf(g) ? `<a class="card vidcard" href="https://youtu.be/${esc(videoOf(g))}" target="_blank" rel="noopener"><img src="https://i.ytimg.com/vi/${esc(videoOf(g))}/mqdefault.jpg" alt="" loading="lazy"><span><b>▶ Watch the broadcast</b><span class="muted small">${esc(videoTitle(videoOf(g)) || 'OEC on YouTube')}</span></span></a>` : ''}
+    ${done ? broadcastCard(g) : ''}
     ${l && !g.forfeit ? winChart(g, A, H) : ''}
     <div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(title)}</h2>${(() => { const vs = {}; return paras.map(t => `<p>${esc(vary(t, vs))}</p>`).join(''); })()}</div>
     ${trends.length ? `<div class="card"><h3 style="margin-top:0">Trends to watch</h3><ul class="clean gp-trends">${trends.slice(0, 6).map(t => `<li>${t}</li>`).join('')}</ul></div>` : ''}
@@ -1669,6 +1690,7 @@ function route() {
 async function reload() { await loadAll(); refreshProfile(); if (D.league.awards?.open && auth.user) await loadBallots(false); route(); }
 
 document.addEventListener('click', async e => {
+  const vl = e.target.closest('[data-vidlist]'); if (vl) { e.preventDefault(); showVideoList(vl.dataset.vidlist); return; }
   const rp = e.target.closest('[data-rpick]'), rr = e.target.closest('[data-rreset]');
   if (rp || rr) {
     if (rp) { const [gid, side] = rp.dataset.rpick.split('|'); if (racePicks[gid] === side) delete racePicks[gid]; else racePicks[gid] = side; }
