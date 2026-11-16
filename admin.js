@@ -1,8 +1,8 @@
 import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
-  orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf
-} from './core.js?v=55';
+  orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum
+} from './core.js?v=56';
 import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
 
 // Tabs: the weekly job lives on "This Week"; everything else is occasional. Awards only shows when it matters.
@@ -85,11 +85,11 @@ function readScores(games) {
   const ops = [], missing = [];
   games.forEach(g => {
     const ff = $(`[data-ff="${g.id}"]`)?.value;
-    if (ff) { ops.push({ op: 'set', col: 'games', id: g.id, data: { forfeit: true, awayScore: ff === 'away' ? 1 : 0, homeScore: ff === 'home' ? 1 : 0, homeCoach: team(g.home).coach || 'CPU', awayCoach: team(g.away).coach || 'CPU' } }); return; }
+    if (ff) { ops.push({ op: 'set', col: 'games', id: g.id, data: { forfeit: true, awayScore: ff === 'away' ? 1 : 0, homeScore: ff === 'home' ? 1 : 0, homeCoach: team(g.home).coach || 'CPU', awayCoach: team(g.away).coach || 'CPU', playedAt: g.playedAt || Date.now() } }); return; }
     const a = $(`[data-sc="${g.id}"][data-side=away]`)?.value, h = $(`[data-sc="${g.id}"][data-side=home]`)?.value;
     if (a === '' || h === '' || a == null || h == null) { missing.push(g); return; }
     if (+a === +h) throw new Error(`${team(g.away).name} @ ${team(g.home).name} is tied — college games can't end tied.`);
-    ops.push({ op: 'set', col: 'games', id: g.id, data: { forfeit: false, awayScore: +a, homeScore: +h, homeCoach: team(g.home).coach || 'CPU', awayCoach: team(g.away).coach || 'CPU' } });
+    ops.push({ op: 'set', col: 'games', id: g.id, data: { forfeit: false, awayScore: +a, homeScore: +h, homeCoach: team(g.home).coach || 'CPU', awayCoach: team(g.away).coach || 'CPU', playedAt: g.playedAt || Date.now() } });
   });
   return { ops, missing };
 }
@@ -125,7 +125,7 @@ function draftScoreOps() {
   const ops = [];
   Object.entries(draft().scores).forEach(([id, v]) => {
     const g = D.games.find(x => x.id === id); if (!g) return;
-    const base = { homeCoach: team(g.home).coach || 'CPU', awayCoach: team(g.away).coach || 'CPU' };
+    const base = { homeCoach: team(g.home).coach || 'CPU', awayCoach: team(g.away).coach || 'CPU', playedAt: g.playedAt || Date.now() };
     if (v.ff) ops.push({ op: 'set', col: 'games', id, data: { ...base, forfeit: true, awayScore: v.ff === 'away' ? 1 : 0, homeScore: v.ff === 'home' ? 1 : 0 } });
     else if (v.a !== '' && v.h !== '') ops.push({ op: 'set', col: 'games', id, data: { ...base, forfeit: false, awayScore: +v.a, homeScore: +v.h } });
   });
@@ -181,6 +181,33 @@ function wizard() {
 }
 
 /* ---------- views ---------- */
+
+/* ---------- YouTube broadcasts (Scores & Schedule tab) ----------
+   videos.json is built by the workflow. Here the commissioner confirms guesses, links anything it missed and
+   unlinks mistakes. Choices are saved on the game (video id, or 'none'); "not a game" goes in league.vidIgnore. */
+let VIDS = null, vidsLoading = false;
+function loadVids() { if (VIDS || vidsLoading) return; vidsLoading = true; fetch('videos.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(j => { VIDS = j || { videos: [], links: {} }; if (ST.tab === 'games') render(); }).catch(() => { VIDS = { videos: [], links: {} }; }); }
+function broadcastCard() {
+  loadVids();
+  const head = '<details class="card"><summary><b>▶ YouTube broadcasts</b> ';
+  if (!VIDS) return head + '<span class="muted small">loading…</span></summary></details>';
+  const vids = VIDS.videos || [], byId = Object.fromEntries(vids.map(v => [v.id, v]));
+  const linkOf = g => g.video === 'none' ? null : g.video || VIDS.links?.[g.id] || null;
+  const playedGames = D.games.filter(g => played(g)).sort((a, b) => b.season - a.season || b.week - a.week);
+  const usedVid = new Set(playedGames.map(linkOf).filter(Boolean)), ignore = new Set(L().vidIgnore || []);
+  const glabel = g => `S${seasonNum(g.season)} ${g.type === 'ccg' ? 'Title' : 'Wk ' + g.week}: ${team(g.away).abbr || team(g.away).name} @ ${team(g.home).abbr || team(g.home).name}`;
+  const gopts = playedGames.filter(g => g.season >= L().season - 1).map(g => `<option value="${esc(g.id)}">${esc(glabel(g))}</option>`).join('');
+  const guessed = (VIDS.guessed || []).map(id => [id, playedGames.find(g => !g.video && VIDS.links?.[g.id] === id)]).filter(([, g]) => g);
+  const loose = vids.filter(v => !usedVid.has(v.id) && !ignore.has(v.id)).slice(0, 15);
+  const linked = playedGames.filter(linkOf).slice(0, 30);
+  const vt = id => esc(byId[id]?.t || id);
+  if (!vids.length) return head + `<span class="muted small">none yet</span></summary><p class="muted small">The workflow pulls the channel's videos every few hours once the <code>YT_API_KEY</code> secret is set, and links each one to its game from the title.</p></details>`;
+  return head + `<span class="muted small">${linked.length} linked${guessed.length ? ` · ${guessed.length} to check` : ''}${loose.length ? ` · ${loose.length} unmatched` : ''}</span></summary>
+    ${guessed.length ? `<h3>Check these</h3><p class="muted small" style="margin-top:0">The title didn't say which season, so these are best guesses.</p>${guessed.map(([vid, g]) => `<div class="vrow"><div><b>${vt(vid)}</b><span class="muted small">→ ${esc(glabel(g))}</span></div><div class="row"><button class="sm" data-act="vidLink" data-vid="${esc(vid)}" data-gid="${esc(g.id)}">✓ Right</button><button class="sm ghost" data-act="vidUnlink" data-gid="${esc(g.id)}">✕ Wrong</button></div></div>`).join('')}` : ''}
+    ${loose.length ? `<h3>Not linked</h3><p class="muted small" style="margin-top:0">Pick the game, or mark it as not a league game.</p>${loose.map(v => `<div class="vrow"><div><b>${esc(v.t)}</b><span class="muted small">${new Date(v.d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span></div><div class="row"><select data-vidpick="${esc(v.id)}" style="max-width:220px"><option value="">Pick a game…</option>${gopts}</select><button class="sm" data-act="vidLink" data-vid="${esc(v.id)}">Link</button><button class="sm ghost" data-act="vidIgnore" data-vid="${esc(v.id)}">Not a game</button></div></div>`).join('')}` : ''}
+    ${linked.length ? `<h3>Linked</h3>${linked.map(g => `<div class="vrow"><div><b>${esc(glabel(g))}</b><span class="muted small">${vt(linkOf(g))}</span></div><button class="sm ghost" data-act="vidUnlink" data-gid="${esc(g.id)}">Unlink</button></div>`).join('')}` : ''}
+  </details>`;
+}
 const views = {
   advance() {
     const lg = L(), body = views.advanceBody();
@@ -249,7 +276,8 @@ const views = {
     return `<div class="card"><div class="row"><b>Week</b><select id="gwSel">${[...new Set([...weeks, wk])].sort((a, b) => a - b).map(w => `<option ${w === wk ? 'selected' : ''}>${w}</option>`).join('')}</select><input id="gwNew" type="number" placeholder="Other week" style="width:110px"><span class="muted small">Fix any score here; bets on it are re-graded automatically.</span></div></div>
       ${scoreRows(games)}${games.length ? `<div class="card row"><button data-act="saveGames">Save scores</button> ${games.map(g => `<button class="sm danger" data-delgame="${esc(g.id)}">✕ ${esc(team(g.away).abbr)} @ ${esc(team(g.home).abbr)}</button>`).join('')}</div>` : ''}
       <div class="card"><h3 style="margin-top:0">Add a game to week ${wk}</h3><div class="row"><select id="gA">${teamOpts('', 'Away')}</select> @ <select id="gH">${teamOpts('', 'Home')}</select>
-        <select id="gT"><option value="reg">Regular season</option><option value="ccg">League Championship</option><option value="bowl">Postseason</option></select><label class="row" style="margin:0"><input type="checkbox" id="gN" style="width:auto"> Neutral</label><button data-act="addGame">Add</button></div></div>`;
+        <select id="gT"><option value="reg">Regular season</option><option value="ccg">League Championship</option><option value="bowl">Postseason</option></select><label class="row" style="margin:0"><input type="checkbox" id="gN" style="width:auto"> Neutral</label><button data-act="addGame">Add</button></div></div>
+      ${broadcastCard()}`;
   },
 
   teams() {
@@ -615,6 +643,15 @@ const ACT = {
 
   async liveOn() { try { localStorage.removeItem('oecLiveDismissed'); } catch (e) { /* ignore */ } await put('meta', 'league', { live: { on: true, url: $('#liveUrl').value.trim(), title: $('#liveTitle').value.trim(), since: Date.now() } }); flash('Live pop-up is ON for everyone on the site.'); },
   async liveOff() { await put('meta', 'league', { live: { on: false, url: '', title: '', since: 0 } }); flash('Live pop-up is OFF. (It still appears automatically if the channel is detected live.)'); },
+  async vidLink(t) {
+    const vid = t.dataset.vid, gid = t.dataset.gid || $(`[data-vidpick="${vid}"]`)?.value;
+    if (!gid) return alert('Pick the game first.');
+    const ops = [{ op: 'set', col: 'games', id: gid, data: { video: vid } }];
+    D.games.filter(g => g.id !== gid && g.video === vid).forEach(g => ops.push({ op: 'set', col: 'games', id: g.id, data: { video: 'none' } }));
+    await batch(ops); flash('Broadcast linked.');
+  },
+  async vidUnlink(t) { await put('games', t.dataset.gid, { video: 'none' }); flash('Unlinked.'); },
+  async vidIgnore(t) { await put('meta', 'league', { vidIgnore: [...(L().vidIgnore || []), t.dataset.vid].slice(-300) }); flash('Hidden from this list.'); },
   async savePush() {
     await put('meta', 'league', { pushKey: $('#stPush').value.trim() }); flash('Notification key saved.');
   },

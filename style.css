@@ -692,4 +692,14 @@ h3{margin-bottom:10px}
 .cheatlink{text-align:center;margin:18px 0 6px}
 .cheatlink a{color:var(--gold);font-weight:700;text-decoration:none}
 .betgrid .hdr+.hdr+.hdr+.betgame.gotw{margin-top:24px}
-.betgame.gotw .tm.matchup{padding-top:6px}
+.betgame.gotw{padding-top:14px}
+.betgame.gotw .tm.matchup{padding-top:0}
+.vidcard{display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--text);padding:10px}
+.vidcard img{width:132px;aspect-ratio:16/9;object-fit:cover;border-radius:8px;flex:none;background:#000}
+.vidcard>span{display:flex;flex-direction:column;gap:4px;min-width:0}
+.vidcard b{color:var(--gold)}
+.vidcard .small{overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.vidtag{color:#ff6b6b;font-weight:700}
+.vrow{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line)}
+.vrow>div:first-child{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 220px}
+.vrow b{font-size:.9rem;overflow-wrap:anywhere}

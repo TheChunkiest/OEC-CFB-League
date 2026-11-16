@@ -3,7 +3,7 @@ import {
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, raceSim, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
   gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
-} from './core.js?v=55';
+} from './core.js?v=56';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -36,6 +36,11 @@ function weekOrder(games, gotwId) {
   return games.map((g, i) => ({ g, i })).sort((x, y) => rank(x.g) - rank(y.g)
     || (rank(x.g) === 1 ? (kick(x.g) - kick(y.g)) || (spr(x.g) - spr(y.g)) : 0) || x.i - y.i).map(x => x.g);
 }
+// YouTube broadcasts linked to games (videos.json from the workflow; commissioner overrides on the game win).
+let VIDS = null;
+async function loadVideos() { try { const r = await fetch('videos.json?t=' + Math.floor(Date.now() / 600000), { cache: 'no-cache' }); if (r.ok) VIDS = await r.json(); } catch (e) { } }
+const videoOf = g => !g || g.video === 'none' ? null : g.video || VIDS?.links?.[g.id] || null;
+const videoTitle = id => (VIDS?.videos || []).find(v => v.id === id)?.t || '';
 function gameCard(g, opts = {}) {
   const h = team(g.home), a = team(g.away), done = played(g);
   const hw = done && +g.homeScore > +g.awayScore, aw = done && !hw;
@@ -53,7 +58,7 @@ function gameCard(g, opts = {}) {
     odds = `${l.spread === 0 ? 'PK' : esc(team(fav).abbr) + ' ' + fmtLine(-Math.abs(l.spread))} · ${esc(cov)} · ${tot > l.total ? 'Over' : tot < l.total ? 'Under' : 'Push'} ${l.total}`;
   }
   const sc = (side, won) => done ? `<b class="msc ${won ? 'w' : 'l'}">${g.forfeit ? (won ? 'FW' : 'FL') : g[side + 'Score']}</b>` : '';
-  const status = `<b class="gstat">${done ? 'Final' : 'Week ' + g.week}</b>`;
+  const status = `<b class="gstat">${done ? 'Final' : 'Week ' + g.week}</b>${done && videoOf(g) ? ' · <span class="vidtag">▶ Broadcast</span>' : ''}`;
   const who = [a, h].filter(isUserTeam).length ? ` · ${isUserTeam(a) ? esc(a.coach) : 'CPU'} ${g.neutral ? 'vs' : '@'} ${isUserTeam(h) ? esc(h.coach) : 'CPU'}` : '';
   return `<div class="card game clickable${opts.gotw ? ' gotw' : ''}" data-game="${esc(g.id)}">${opts.gotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}<span class="go" aria-hidden="true">›</span><div class="teams">
       <div class="matchup"><span class="mt ${done ? (aw ? 'w' : 'l') : ''}">${chip(a.id, { season: g.season, week: g.week, href: '#game/' + g.id })}${sc('away', aw)}</span><span class="at">${g.neutral ? 'vs' : '@'}</span><span class="mt ${done ? (hw ? 'w' : 'l') : ''}">${chip(h.id, { season: g.season, week: g.week, href: '#game/' + g.id })}${sc('home', hw)}</span>${tags.join('')}</div>
@@ -1590,6 +1595,7 @@ PAGES.game = function (id) {
       ${l && !g.forfeit ? (done ? finalLines(g, l, A, H) : `<div class="gp-odds"><div><span>Spread</span><b>${l.spread === 0 ? 'PK' : esc(fav.abbr || fav.name) + ' ' + fmtLine(-Math.abs(l.spread))}</b></div><div><span>Total</span><b>O/U ${l.total}</b></div>
         <div><span>Moneyline</span><b>${esc(A.abbr)} ${fmtOdds(l.mlAway)}</b><b>${esc(H.abbr)} ${fmtOdds(l.mlHome)}</b></div></div>`) + probBar(g, l, done) : ''}
       ${canBet ? `<button class="gold" data-betgame="${g.week}" style="margin-top:12px">Bet this game${isGotw ? ' · +10% boost' : ''} →</button>` : ''}${ko.ctl}</div>
+    ${done && videoOf(g) ? `<a class="card vidcard" href="https://youtu.be/${esc(videoOf(g))}" target="_blank" rel="noopener"><img src="https://i.ytimg.com/vi/${esc(videoOf(g))}/mqdefault.jpg" alt="" loading="lazy"><span><b>▶ Watch the broadcast</b><span class="muted small">${esc(videoTitle(videoOf(g)) || 'OEC on YouTube')}</span></span></a>` : ''}
     ${l && !g.forfeit ? winChart(g, A, H) : ''}
     <div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(title)}</h2>${(() => { const vs = {}; return paras.map(t => `<p>${esc(vary(t, vs))}</p>`).join(''); })()}</div>
     ${trends.length ? `<div class="card"><h3 style="margin-top:0">Trends to watch</h3><ul class="clean gp-trends">${trends.slice(0, 6).map(t => `<li>${t}</li>`).join('')}</ul></div>` : ''}
@@ -1766,6 +1772,7 @@ document.addEventListener('submit', async e => {
     await loadAll();
     window.addEventListener('hashchange', route);
     route();
+    loadVideos().then(() => { if (VIDS && /^#(game|schedule|home|team)/.test(location.hash || '#home')) route(); });
     checkLive();
     await watchAuth(async () => { if (D.league.awards?.open && auth.user) await loadBallots(false); try { await ensureFutures(); } catch (e) { console.warn('futures post failed', e); } route(); showResultsPopup(); });
   } catch (e) {

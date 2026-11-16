@@ -3,6 +3,7 @@ name: League notifications
 #   - Sends free phone notifications through Firebase Cloud Messaging when the FIREBASE_SERVICE_ACCOUNT secret is
 #     set: league advances, commissioner news, kickoff reminders and kickoff invites. Device tokens are only read
 #     when there's something to send; what has been sent is remembered in push-state.json.
+#   - Links YouTube broadcasts to games in videos.json (.github/broadcasts.py; checks YouTube every 3 hours).
 #   - Keeps season.json (a copy of the current season) and archive.json (past seasons) up to date, so visitors
 #     load those files for free and only read what changed from the database.
 # A typical run reads about 4 documents; more only when something actually happened.
@@ -171,7 +172,7 @@ jobs:
                   print(f'season.json: {n} documents changed since it was built')
               if rebuild and cur:
                   T = int(now - 5 * 60e3)   # small overlap so nothing written during the build is missed
-                  out = {'season': cur, 'T': T, 'generatedAt': int(now)}
+                  out = {'season': cur, 'firstSeason': int(LG.get('firstSeason') or 0) or None, 'T': T, 'generatedAt': int(now)}
                   for c in SNAPC:
                       rows = season_docs(c, cur) if c in SEASONALC else docs(c)
                       out[c] = sorted(({k: v for k, v in d.items() if k != 'upd'} for d in rows if not d.get('deleted')), key=lambda d: d['id'])
@@ -328,6 +329,10 @@ jobs:
                   print('notifications skipped:', e.code, e.url.split('?')[0][-60:], e.read().decode(errors='ignore')[:400])
               except Exception as e: print('notifications skipped:', repr(e)[:300])
           PY
+      - name: Link YouTube broadcasts to games
+        env:
+          YT_API_KEY: ${{ secrets.YT_API_KEY }}
+        run: python3 .github/broadcasts.py
       - name: Save
         run: |
           git config user.name "oec-hub-bot"
