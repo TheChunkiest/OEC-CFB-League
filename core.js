@@ -68,12 +68,27 @@ const SEASONAL = ['games', 'wagers', 'gotw', 'invites'], PAST = ['games', 'wager
 // refreshes whenever enough has changed. Visitors load that file for free and only read documents changed since.
 const SNAP = ['games', 'wagers', 'gotw', 'invites', 'teams', 'users', 'history'];
 const live1 = d => !d.deleted;
+// This visitor's own recent saves, laid over whatever the live listeners report until the server catches up
+// (a just-saved doc briefly drops out of "changed since" listeners while its server timestamp is pending).
+const mine = {};   // col -> Map(id -> { doc, exp })
+const withMine = (c, list) => {
+  const m = mine[c]; if (!m || !m.size) return list;
+  const now = Date.now(), byId = new Map(list.map(d => [d.id, d]));
+  m.forEach((v, id) => { if (v.exp < now) m.delete(id); else byId.set(id, v.doc); });
+  return [...byId.values()].filter(live1);
+};
 let unsubs = [], liveSeason = null;
 async function startListeners() {
   const { fs, db } = await fbInit();
   unsubs.forEach(u => u()); unsubs = [];
-  const past = { games: [], wagers: [] }, cur = {};
-  const merge = c => { D[c] = PAST.includes(c) ? [...past[c], ...(cur[c] || [])] : (cur[c] || []); };
+  const past = { games: [], wagers: [] }, cur = {}, pastLive = { games: new Map(), wagers: new Map() };
+  // Past seasons come from archive.json (rebuilt weekly); edits to them made since arrive through the
+  // "changed since" listeners and are laid on top, so a fix to an old game doesn't snap back.
+  const merge = c => {
+    if (!PAST.includes(c)) { D[c] = withMine(c, cur[c] || []); return; }
+    const pl = pastLive[c], old = pl.size ? past[c].filter(d => !pl.has(d.id)).concat([...pl.values()].filter(live1)) : past[c];
+    D[c] = withMine(c, [...old, ...(cur[c] || [])]);
+  };
   const first = [];
   const watch = (ref, apply, name) => first.push(new Promise((res, rej) => {
     let initial = true;
@@ -99,7 +114,8 @@ async function startListeners() {
       watch(fs.query(fs.collection(db, c), fs.where('upd', '>', since)), s => {
         const m = new Map(base); s.docs.forEach(d => m.set(d.id, { ...d.data(), id: d.id }));
         const all = [...m.values()].filter(live1);
-        if (SEASONAL.includes(c)) { cur[c] = all.filter(d => d.season === season); merge(c); } else D[c] = all;
+        if (PAST.includes(c)) s.docs.forEach(d => { const x = { ...d.data(), id: d.id }; if (x.season < season) pastLive[c].set(d.id, x); });
+        if (SEASONAL.includes(c)) { cur[c] = all.filter(d => d.season === season); merge(c); } else D[c] = withMine(c, all);
       }, c);
     });
   } else {   // no usable snapshot yet: read the current season directly
@@ -169,6 +185,11 @@ export async function batch(ops) {
     await b.commit();
   }
   ops.forEach(demoApply); clearCache();
+  ops.forEach(o => {   // remember our own saves for a couple of minutes (see withMine)
+    if (!SNAP.includes(o.col)) return;
+    const doc = o.op === 'del' ? { id: o.id, deleted: true } : (D[o.col] || []).find(d => d.id === o.id);
+    if (doc) (mine[o.col] = mine[o.col] || new Map()).set(o.id, { doc: { ...doc }, exp: Date.now() + 120000 });
+  });
 }
 
 export async function refreshLive() {
