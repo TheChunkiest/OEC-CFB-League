@@ -803,6 +803,138 @@ async function saveSlip() {
   } catch (e) { if (e && e.name === 'AbortError') return; }
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
 }
+/* ---------- Broadcast cheat sheet (game preview) ----------
+   One tall image a commentator can save and keep open on a second screen: matchup, line, tale of the tape,
+   recent form, series history, what's at stake and talking points. */
+function lastResults(tid, s, n = 3) {
+  return D.games.filter(g => g.season === s && played(g) && (g.home === tid || g.away === tid)).sort((a, b) => b.week - a.week).slice(0, n).map(g => {
+    const home = g.home === tid, my = home ? +g.homeScore : +g.awayScore, th = home ? +g.awayScore : +g.homeScore, o = team(home ? g.away : g.home);
+    return { w: my > th, t: `${g.forfeit ? (my > th ? 'FW' : 'FL') : `${my > th ? 'W' : 'L'} ${my}-${th}`} ${g.neutral ? 'vs' : home ? 'vs' : 'at'} ${o.abbr || o.name}`, wk: g.week };
+  });
+}
+function betAction(g) {
+  const legs = D.wagers.filter(w => w.status !== 'void' && !w.deleted).flatMap(w => (w.market === 'parlay' ? (w.legs || []) : [w]).map(l => ({ ...l, coach: w.coach })))
+    .filter(l => l.gameId === g.id && ['ml', 'spread', 'total'].includes(l.market));
+  if (!legs.length) return null;
+  const by = {}; legs.forEach(l => { const k = l.market + '|' + l.pick; (by[k] = by[k] || []).push(l); });
+  const top = Object.values(by).sort((a, b) => b.length - a.length)[0];
+  return { n: legs.length, top: wagerLabel({ ...top[0], odds: undefined }).replace(/\s*\(.*\)$/, ''), topN: top.length };
+}
+async function drawCheat(C) {
+  const { g, A, H, l, p, fav, done } = C, s = g.season, W = 1080, P = 56, IW = W - 2 * P;
+  const F = '"Arial Black","Segoe UI Black",Impact,system-ui,sans-serif', B = 'system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
+  const BG = '#0b0b0d', CARD = '#17141a', LINE = '#2c262b', TXT = '#f4f1f2', MUT = '#a9a1a6', GOLD = '#f5b82e', RED = '#c8102e', GRN = '#3ecf6e';
+  const c = document.createElement('canvas'); c.width = W; c.height = 5200;
+  const x = c.getContext('2d'); x.textBaseline = 'alphabetic';
+  x.fillStyle = BG; x.fillRect(0, 0, W, c.height);
+  const font = (sz, f = B, w = '600') => { x.font = `${w} ${sz}px ${f}`; };
+  const text = (t, X, Y, col = TXT, align = 'left') => { x.fillStyle = col; x.textAlign = align; x.fillText(t, X, Y); };
+  const fit = (t, sz, maxW, f = F, w = '900') => { let z = sz; font(z, f, w); while (x.measureText(t).width > maxW && z > 18) { z -= 2; font(z, f, w); } return z; };
+  const para = (t, X, Y, maxW, lh, col = TXT) => { wrapText(x, t, maxW).forEach((ln, i) => text(ln, X, Y + i * lh, col)); return wrapText(x, t, maxW).length * lh; };
+  const card = (Y, h) => { x.fillStyle = CARD; x.beginPath(); x.roundRect(P - 16, Y, IW + 32, h, 22); x.fill(); };
+  const section = (Y, label) => { font(22, B, '800'); x.save(); x.letterSpacing = '3px'; text(label.toUpperCase(), P, Y, GOLD); x.restore(); return Y + 18; };
+  let y = 0;
+  // Header
+  x.fillStyle = RED; x.fillRect(0, 0, W, 10);
+  const logo = await loadImg('logo.png');
+  if (logo) { const h = 92, w = logo.width * h / logo.height; x.drawImage(logo, P, 40, w, h); }
+  font(24, B, '800'); x.save(); x.letterSpacing = '4px'; text('BROADCAST CHEAT SHEET', W - P, 74, GOLD, 'right'); x.restore();
+  font(26, B, '600'); text(`Season ${seasonNum(s)} · ${g.type === 'ccg' ? 'League Championship' : g.type === 'bowl' ? 'Postseason' : 'Week ' + g.week}${C.isGotw ? ' · ★ Game of the Week' : ''}`, W - P, 112, MUT, 'right');
+  y = 176; fit(C.title, 46, IW); text(C.title, P, y, TXT); y += 34;
+  // Teams
+  y += 24; const cardTop = y, colW = (IW - 80) / 2;
+  const teamCol = (t, coach, rkN, recLine, X, align) => {
+    const col = liftColor(teamColor(t)); let Y = cardTop + 44;
+    x.fillStyle = col; x.beginPath(); x.roundRect(align === 'left' ? X : X - 140, Y - 26, 140, 14, 7); x.fill();
+    Y += 50; const nm = (rkN ? '#' + rkN + ' ' : '') + t.name; fit(nm, 52, colW); text(nm, X, Y, TXT, align);
+    const m = mascotOf(t); Y += 36; font(26, B, '600'); text(m ? m : '', X, Y, MUT, align);
+    Y += 40; font(28, B, '700'); text(recLine, X, Y, TXT, align);
+    Y += 38; font(26, B, '600'); text(coach && coach !== 'CPU' ? 'Coach ' + coach : 'CPU', X, Y, GOLD, align);
+    if (done) { Y += 78; font(84, F, '900'); text(String(t === A ? (g.forfeit ? '' : g.awayScore) : (g.forfeit ? '' : g.homeScore)), X, Y, TXT, align); }
+    return Y;
+  };
+  card(cardTop, done ? 340 : 250);
+  teamCol(A, C.coachA, C.rk.a, `${rec(records(s)[A.id])} (${C.rec.a})`, P + 8, 'left');
+  teamCol(H, C.coachH, C.rk.h, `${rec(records(s)[H.id])} (${C.rec.h})`, W - P - 8, 'right');
+  font(44, F, '900'); text(g.neutral ? 'VS' : '@', W / 2, cardTop + 140, MUT, 'center');
+  y = cardTop + (done ? 340 : 250) + 22;
+  // Venue + kickoff
+  const v = venueOf(g), ko = kickoffOf(g);
+  font(28, B, '600');
+  const info = [v ? `📍 ${v.name}${v.city ? ' · ' + v.city : ''}` : '', !done && ko ? `🕗 ${fmtKick(ko)}` : ''].filter(Boolean);
+  info.forEach(t => { y += 40; text(t, W / 2, y, TXT, 'center'); });
+  // Line
+  if (l && !g.forfeit) {
+    y += 34; card(y, 190); const top = y; y += 50;
+    const cols = [['SPREAD', l.spread === 0 ? 'PK' : `${fav.abbr || fav.name} ${fmtLine(-Math.abs(l.spread))}`], ['TOTAL', `O/U ${l.total}`], ['MONEYLINE', `${A.abbr} ${fmtOdds(l.mlAway)} / ${H.abbr} ${fmtOdds(l.mlHome)}`]];
+    const cw = IW / 3;
+    cols.forEach(([k, val], i) => { const cx = P + cw * i + cw / 2; font(20, B, '800'); text(k, cx, y, MUT, 'center'); const z = fit(val, 34, cw - 16, B, '800'); text(val, cx, y + 44, TXT, 'center'); });
+    if (p) {
+      const by = top + 130, bw = IW - 320, bx = P + 160, pa = p.a / 100;
+      font(26, B, '800'); text(`${A.abbr} ${p.a}%`, bx - 14, by + 13, TXT, 'right'); text(`${p.h}% ${H.abbr}`, bx + bw + 14, by + 13, TXT, 'left');
+      x.fillStyle = liftColor(teamColor(A)); x.beginPath(); x.roundRect(bx, by - 6, bw * pa, 22, 11); x.fill();
+      x.fillStyle = liftColor(teamColor(H)); x.beginPath(); x.roundRect(bx + bw * pa + 4, by - 6, Math.max(0, bw * (1 - pa) - 4), 22, 11); x.fill();
+    }
+    y = top + 190;
+  }
+  // Tale of the tape
+  y += 56; y = section(y, 'Tale of the tape');
+  const rows = C.tape, rh = 50; card(y + 8, rows.length * rh + 70); let ty = y + 58;
+  font(30, B, '900'); text(A.abbr || A.name, P + 24, ty, TXT); text(H.abbr || H.name, W - P - 24, ty, TXT, 'right');
+  rows.forEach(r => {
+    ty += rh; x.fillStyle = LINE; x.fillRect(P, ty - 36, IW, 1);
+    font(24, B, '600'); text(r.label, W / 2, ty, MUT, 'center');
+    font(30, B, '800'); text((r.edge === 'a' ? '✓ ' : '') + r.a, P + 24, ty, r.edge === 'a' ? GRN : r.edge === 'h' ? '#ff8a8f' : TXT);
+    text(r.h + (r.edge === 'h' ? ' ✓' : ''), W - P - 24, ty, r.edge === 'h' ? GRN : r.edge === 'a' ? '#ff8a8f' : TXT, 'right');
+  });
+  y = ty + 40;
+  // Recent form
+  const la = lastResults(A.id, s, 4), lh = lastResults(H.id, s, 4);
+  if (la.length || lh.length) {
+    y += 40; y = section(y, 'Last games'); const n = Math.max(la.length, lh.length); card(y + 8, n * 44 + 36); let fy = y + 50;
+    for (let i = 0; i < n; i++) {
+      font(28, B, '700');
+      if (la[i]) text(la[i].t, P + 24, fy, la[i].w ? GRN : '#ff8a8f');
+      if (lh[i]) text(lh[i].t, W - P - 24, fy, lh[i].w ? GRN : '#ff8a8f', 'right');
+      fy += 44;
+    }
+    y = fy;
+  }
+  // Coaches' series
+  if (C.series) { y += 40; y = section(y, 'Coaches\' series'); font(30, B, '600'); y += 30; y += para(C.series, P, y, IW, 40); }
+  // Storylines
+  if (C.paras.length) { y += 30; y = section(y, done ? 'Recap' : 'Storylines'); font(29, B, '500'); y += 30; C.paras.forEach(t => { y += para(t, P, y, IW, 40) + 14; }); }
+  // Talking points
+  if (C.trends.length) { y += 20; y = section(y, 'Talking points'); font(29, B, '600'); y += 30; C.trends.forEach(t => { text('•', P, y, GOLD); y += para(t, P + 30, y, IW - 30, 40) + 6; }); }
+  // Betting action
+  const ba = betAction(g);
+  if (ba) { y += 20; y = section(y, 'League betting action'); font(29, B, '600'); y += 30; y += para(`${ba.n} bet${ba.n === 1 ? '' : 's'} on this game. Most popular: ${ba.top} (${ba.topN}).`, P, y, IW, 40); }
+  // Footer
+  y += 40; x.fillStyle = LINE; x.fillRect(P, y, IW, 2); y += 44;
+  font(22, B, '600'); text(`OEC CFB League Hub · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`, W / 2, y, MUT, 'center');
+  y += 36;
+  const out = document.createElement('canvas'); out.width = W; out.height = Math.ceil(y);
+  out.getContext('2d').drawImage(c, 0, 0);
+  return out;
+}
+async function showCheat() {
+  const C = UI.cheat; if (!C) return;
+  $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card"><h2>Broadcast cheat sheet</h2><p class="muted">Building…</p></div></div>`;
+  const c = await drawCheat(C); UI.cheatCanvas = c;
+  $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card"><h2>Broadcast cheat sheet</h2>
+    <p class="muted small" style="margin-top:0">Save it to your phone or share it with whoever's on the call.</p>
+    <img src="${c.toDataURL('image/png')}" alt="Broadcast cheat sheet" style="width:100%;border-radius:10px;display:block">
+    <div class="row" style="margin-top:12px"><button class="gold" data-act="saveCheat">⬇ Save / share</button><button class="ghost" data-close="1">Done</button></div></div></div>`;
+}
+async function saveCanvas(c, name, title) {
+  if (!c) return;
+  const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+  try {
+    const file = new File([blob], name, { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title }); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+}
 function showWinsSlip(tid, pick) {
   const me = auth.profile;
   if (!me) { location.hash = '#account'; return; }
@@ -1426,9 +1558,11 @@ PAGES.game = function (id) {
   const pr = currentPower(s), prOf = t => pr.find(x => x.id === t.id)?.rank;
   const sim = L.phase === PHASES.REG && s === L.season ? simulate(s, nowUpto()) : null;
   // dir: +1 higher is better, -1 lower is better, 0 no comparison. Green = edge, red = behind.
+  const tape = [];
   const row = (label, fa, fh, va, vh, dir = 0) => {
     let ca = '', ch = '';
     if (dir && va != null && vh != null && isFinite(va) && isFinite(vh) && va !== vh) { const aBetter = (va - vh) * dir > 0; ca = aBetter ? 'tb' : 'tw'; ch = aBetter ? 'tw' : 'tb'; }
+    tape.push({ label, a: String(fa), h: String(fh), edge: ca === 'tb' ? 'a' : ch === 'tb' ? 'h' : '' });
     const ck = '<span class="ck" aria-label="edge">✓</span>';
     return `<tr><td class="num ${ca}">${ca === 'tb' ? ck : ''}${fa}</td><th style="text-align:center">${label}</th><td class="${ch}">${fh}${ch === 'tb' ? ck : ''}</td></tr>`;
   };
@@ -1441,6 +1575,11 @@ PAGES.game = function (id) {
   const hw = +g.homeScore > +g.awayScore;
   const ko = kickoffCard(g);
   const canBet = !done && s === L.season && g.week >= L.week && L.bettingOpen && L.phase !== PHASES.POST && !ownGame(g);
+  // Everything the broadcast cheat sheet needs, gathered from what this page already worked out.
+  UI.cheat = { g, A, H, coachA, coachH, done, l, p, fav, isGotw, title, tape, rk: { a: rk(A), h: rk(H) },
+    rec: { a: recTxt(A), h: recTxt(H) }, paras: (() => { const vs = {}; return paras.map(t => vary(t, vs)); })(),
+    trends: trends.slice(0, 6).map(t => t.replace(/<[^>]+>/g, '')),
+    series: coachA !== 'CPU' && coachH !== 'CPU' && meets.length ? `${coachA} vs. ${coachH}: ${mw[coachA] || 0}-${mw[coachH] || 0} all-time` + (() => { const w = meetingWinner(meets[0]); return `. Last: S${seasonNum(meets[0].season)} ${meets[0].type === 'ccg' ? 'title game' : 'Wk ' + meets[0].week}, ${w.coach} won ${w.ws}-${w.ls}.`; })() : (coachA !== 'CPU' && coachH !== 'CPU' ? `First-ever meeting between ${coachA} and ${coachH}.` : '') };
   return `<p><a href="#schedule/${g.week}">← Week ${g.week} schedule</a></p>
     <div class="card gp-head${isGotw ? ' gotw' : ''}">${isGotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}
       <div class="muted small" style="text-transform:uppercase;letter-spacing:.8px;font-weight:800">Season ${seasonNum(s)} · ${g.type === 'ccg' ? 'League Championship' : g.type === 'bowl' ? 'Postseason' : 'Week ' + g.week}${done ? ' · Final' : ''}${gameTags(g) ? ' · ' + gameTags(g) : ''}</div>
@@ -1449,6 +1588,7 @@ PAGES.game = function (id) {
       ${l && !g.forfeit ? (done ? finalLines(g, l, A, H) : `<div class="gp-odds"><div><span>Spread</span><b>${l.spread === 0 ? 'PK' : esc(fav.abbr || fav.name) + ' ' + fmtLine(-Math.abs(l.spread))}</b></div><div><span>Total</span><b>O/U ${l.total}</b></div>
         <div><span>Moneyline</span><b>${esc(A.abbr)} ${fmtOdds(l.mlAway)}</b><b>${esc(H.abbr)} ${fmtOdds(l.mlHome)}</b></div></div>`) + probBar(g, l, done) : ''}
       ${canBet ? `<button class="gold" data-betgame="${g.week}" style="margin-top:12px">Bet this game${isGotw ? ' · +10% boost' : ''} →</button>` : ''}${ko.ctl}</div>
+    <button class="ghost cheatbtn" data-act="cheat">📺 Broadcast cheat sheet</button>
     ${l && !g.forfeit ? winChart(g, A, H) : ''}
     <div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(title)}</h2>${(() => { const vs = {}; return paras.map(t => `<p>${esc(vary(t, vs))}</p>`).join(''); })()}</div>
     ${trends.length ? `<div class="card"><h3 style="margin-top:0">Trends to watch</h3><ul class="clean gp-trends">${trends.slice(0, 6).map(t => `<li>${t}</li>`).join('')}</ul></div>` : ''}
@@ -1570,6 +1710,8 @@ document.addEventListener('click', async e => {
   else if (t.dataset.kinv || t.dataset.kacc || t.dataset.kdec || t.dataset.kcan) kickAction(t);
   else if (t.dataset.act === 'place') placeBet();
   else if (t.dataset.act === 'saveSlip') saveSlip();
+  else if (t.dataset.act === 'cheat') showCheat();
+  else if (t.dataset.act === 'saveCheat') { const C = UI.cheat; saveCanvas(UI.cheatCanvas, `oec-${slug((C?.A.abbr || 'away') + '-at-' + (C?.H.abbr || 'home'))}-cheat-sheet.png`, 'OEC broadcast cheat sheet'); }
   else if (t.dataset.slip) showSlipImage(D.wagers.find(x => x.id === t.dataset.slip));
   else if (t.dataset.act === 'clearLegs') { UI.legs = []; route(); }
   else if (t.dataset.act === 'reviewParlay') showParlaySlip();
