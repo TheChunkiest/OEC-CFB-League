@@ -169,7 +169,7 @@ or video. Use the coaches' names and the schools. Reply with JSON only:
 "oneliner": "<one sentence recap of the game, under 30 words>",
 "potg_title": "<the single best play, under 45 characters>",
 "potg": "<one sentence describing the play of the game and why it mattered, under 35 words>",
-"players": [{{"name": "<full name if known>", "team": "home|away", "pos": "QB|RB|WR|TE|OL|DL|LB|CB|S|K|P|?", "line": "<their game in under 12 words, e.g. '3 TD passes, 1 INT, 40-yard TD run'>", "grade": <1-10, how well they played>}}],
+"players": [{{"name": "<full name if known>", "team": "home|away", "pos": "QB|RB|WR|TE|OL|DL|LB|CB|S|K|P|?", "line": "<just their numbers/plays, under 10 words, no adjectives: e.g. '30-yd TD pass, 40-yd TD run' or '2 sacks, forced fumble'>", "grade": <1-10, how well they played>}}],
 "teams": {{"home": {{"good": "<what worked for them, under 20 words>", "bad": "<where they struggled, under 20 words>"}}, "away": {{"good": "...", "bad": "..."}}}},
 "luck": <number from -10 to 10: how many points the final margin FLATTERED the home team compared with how the game was
 actually played (garbage-time scores, fluky tips, return TDs, a missed kick). Positive = home looked better on the
