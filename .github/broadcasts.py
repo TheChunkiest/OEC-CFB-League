@@ -82,6 +82,12 @@ def run():
     state = load('videos.json', {})
     games = [g for g in (season.get('games') or []) + (archive.get('games') or []) if not g.get('deleted')]
     teams = {t['id']: aliases(t) for t in (season.get('teams') or []) if not t.get('deleted')}
+    # CPU opponents that only exist as an id on a game (no team doc): name them from programs.js
+    for g in games:
+        for tid in (g.get('home'), g.get('away')):
+            if tid and tid not in teams:
+                p = PROG.get(tid.replace('-', ' ')) or {}
+                teams[tid] = aliases({'name': p.get('name') or tid.replace('-', ' ').title(), 'abbr': p.get('abbr', '')})
     if not games or not teams:
         print('broadcasts: no league data yet')
         return
