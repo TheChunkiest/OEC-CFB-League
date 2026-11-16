@@ -5,7 +5,7 @@ name: League notifications
 #     when there's something to send; what has been sent is remembered in push-state.json.
 #   - Keeps season.json (a copy of the current season) and archive.json (past seasons) up to date, so visitors
 #     load those files for free and only read what changed from the database.
-# Each run reads about 5 small documents/queries plus the games with an agreed kickoff time.
+# A typical run reads about 4 documents; more only when something actually happened.
 on:
   schedule:
     - cron: '*/5 * * * *'
@@ -70,9 +70,9 @@ jobs:
 
           now = time.time() * 1000
           LG = one('meta/league')   # read once per run and shared below
-          # Only invites for upcoming kickoffs (one indexed range filter), so each run reads a handful of
-          # documents instead of whole collections. Team names are fetched just for the games involved.
-          body = {'structuredQuery': {'from': [{'collectionId': 'invites'}], 'where': {'fieldFilter': {'field': {'fieldPath': 'time'}, 'op': 'GREATER_THAN', 'value': {'integerValue': str(int(now - 6 * 3600e3))}}}}}
+          # Only kickoffs inside the reminder window (next 45 minutes), so most runs read nothing here.
+          rng = lambda op, v: {'fieldFilter': {'field': {'fieldPath': 'time'}, 'op': op, 'value': {'integerValue': str(int(v))}}}
+          body = {'structuredQuery': {'from': [{'collectionId': 'invites'}], 'where': {'compositeFilter': {'op': 'AND', 'filters': [rng('GREATER_THAN', now), rng('LESS_THAN_OR_EQUAL', now + 45 * 60e3)]}}}}
           req = urllib.request.Request(f'{base}:runQuery?key={key}', data=json.dumps(body).encode(), headers={'Content-Type': 'application/json'})
           with urllib.request.urlopen(req, timeout=30) as r:
               rows = json.load(r)
@@ -162,7 +162,10 @@ jobs:
               try: snapf = json.load(open('season.json'))
               except Exception: snapf = {}
               rebuild = not snapf or snapf.get('season') != cur or not snapf.get('T')
-              if not rebuild:
+              # Live updates never wait on this file (visitors read changes directly), so checking the change
+              # counts about every 30 minutes is plenty.
+              if not rebuild and int(now / 60e3) % 30 >= 10: print('season.json: not checking this run')
+              elif not rebuild:
                   n = sum(changed_since(c, snapf['T']) for c in SNAPC)
                   rebuild = n >= 25 or (n > 0 and now - snapf.get('generatedAt', 0) > 6 * 3600e3)
                   print(f'season.json: {n} documents changed since it was built')
@@ -243,74 +246,86 @@ jobs:
                       if d.get('uid') in skip: continue
                       send(d, title, body, url, tag)
 
-              if fresh:   # first run: remember where things stand, send nothing
-                  st = {'adv': advkey, 'ann': ann.get('id'), 'inv': int(now), 'resp': int(now), 'kick': {}}
-              else:
-                  # League advanced
-                  if advkey != st.get('adv'):
-                      ph = lg.get('phase') or ''
-                      t = f"🏈 Week {lg.get('week')} is here" if ph == 'Regular Season' else f'🏈 {ph}'
-                      dk = lg.get('desk') or {}
-                      note = (dk.get('text') or '').strip() if dk.get('show') else ''
-                      body = (note[:170] + '…' if len(note) > 170 else note) if note else 'The league advanced. Results are in and new lines are up.'
-                      to('advance', t, body, link + '#home', tag='advance')
-                      st['adv'] = advkey
-                  # Commissioner announcement
-                  if ann.get('id') and ann.get('id') != st.get('ann'):
-                      to('advance', '📣 From the Commissioner', ann.get('text', ''), link + '#home', tag='news')
-                      st['ann'] = ann.get('id')
-                  # Commissioner turned on the manual "Live on YouTube" pop-up (backup for the automatic check)
-                  lv = lg.get('live') or {}
-                  if lv.get('on') and lv.get('since') and now - lv['since'] < 6 * 3600e3 and lv['since'] != st.get('liveManual'):
-                      try: auto = json.load(open('live.json')).get('notified')
-                      except Exception: auto = None
-                      if not (auto and now - lv['since'] < 30 * 60e3 and json.load(open('live.json')).get('live')):   # skip if the automatic check already sent one
-                          for d in devs():
-                              if (d.get('prefs') or {}).get('live', True): send(d, '🔴 OEC is live on YouTube', lv.get('title') or 'Tap to watch.', lv.get('url') or 'https://youtube.com/@originalentertainingcrackers/live', 'live')
-                      st['liveManual'] = lv['since']
-                  # Kickoff reminders (GitHub runs every 5 to 15 minutes, so remind anything starting within 45)
-                  sk = st.setdefault('kick', {})
-                  for gid, inv in kick.items():
-                      t = inv['time']
-                      if not (now < t <= now + 45 * 60e3) or sk.get(gid) == t: continue
-                      g = game(gid)
-                      if not g or g.get('homeScore') is not None: continue
-                      mins = max(1, round((t - now) / 60e3 / 5) * 5)
-                      mu = {uid_of(g.get('home')), uid_of(g.get('away'))} - {None}
-                      m = f"{ab(g.get('away'))} @ {ab(g.get('home'))}"
-                      to('mygame', f'⏰ Kickoff in about {mins} min', f'Your game, {m}, is coming up.', f'{link}#game/{gid}', uids=mu, tag='k' + gid)
-                      to('league', f'📺 {m} kicks off in about {mins} min', 'Watch it live on the OEC YouTube channel.', 'https://youtube.com/@originalentertainingcrackers', skip=mu, tag='k' + gid)
-                      sk[gid] = t
-                  st['kick'] = {k: v for k, v in sk.items() if v > now - 24 * 3600e3}
-                  # Kickoff invites sent, and replies to them
-                  new = query('invites', 'ts', 'GREATER_THAN', int(st.get('inv') or now))
-                  resp = query('invites', 'respondedAt', 'GREATER_THAN', int(st.get('resp') or now))
-                  countered = {(i.get('gameId'), i.get('from')) for i in new}
-                  for i in new:
-                      if i.get('status') != 'pending': continue
-                      g = game(i['gameId']); m = f"{ab(g.get('away'))} @ {ab(g.get('home'))}" if g else 'your game'
-                      to('invites', f"📅 Coach {i.get('fromName') or ''} sent kickoff times", f'Pick a time for {m}.', f"{link}#game/{i['gameId']}", uids={i.get('to')}, tag='i' + i['gameId'])
-                  for i in resp:
-                      g = game(i['gameId']); m = f"{ab(g.get('away'))} @ {ab(g.get('home'))}" if g else 'your game'
-                      if i.get('status') == 'accepted':
-                          to('invites', '✅ Kickoff time set', f"Coach {i.get('toName') or ''} picked a time for {m}.", f"{link}#game/{i['gameId']}", uids={i.get('from')}, tag='i' + i['gameId'])
-                      elif i.get('status') == 'declined' and (i['gameId'], i.get('to')) not in countered:
-                          to('invites', 'Kickoff times declined', f"Coach {i.get('toName') or ''} couldn't make those times for {m}. Send new ones.", f"{link}#game/{i['gameId']}", uids={i.get('from')}, tag='i' + i['gameId'])
-                  if new: st['inv'] = max(int(i.get('ts') or 0) for i in new)
-                  if resp: st['resp'] = max(int(i.get('respondedAt') or 0) for i in resp)
-              # Welcome message for devices that just turned notifications on (confirms it works)
-              for d in query('push', 'welcomed', 'EQUAL', False):
-                  send(d, '🔔 Notifications are on', "You'll get OEC Hub alerts on this device. Change them anytime on your Account page.", link + '#account', 'welcome')
-                  try: call(f"{base}/push/{d['id']}?updateMask.fieldPaths=welcomed", {'fields': {'welcomed': {'booleanValue': True}}}, method='PATCH')
-                  except Exception as e: print('welcome flag failed', e)
-              old = None
-              try: old = json.load(open('push-state.json'))
-              except Exception: pass
-              if old != st: json.dump(st, open('push-state.json', 'w'), separators=(',', ':'), sort_keys=True)
-              print(f'notifications: {sent} sent')
+              try:   # whatever happens, remember what was already sent so nothing goes out twice
+                if fresh:   # first run: remember where things stand, so old events aren't announced...
+                    st = {'adv': advkey, 'ann': ann.get('id'), 'inv': int(now), 'resp': int(now), 'kick': {}}
+                    if now - int(lg.get('advancedAt') or 0) < 3600e3:   # ...except an advance from the last hour
+                        st['adv'] = ''; fresh = False
+                if not fresh:
+                    # League advanced
+                    if advkey != st.get('adv'):
+                        ph = lg.get('phase') or ''
+                        t = f"🏈 Week {lg.get('week')} is here" if ph == 'Regular Season' else f'🏈 {ph}'
+                        dk = lg.get('desk') or {}
+                        note = (dk.get('text') or '').strip() if dk.get('show') else ''
+                        body = (note[:170] + '…' if len(note) > 170 else note) if note else 'The league advanced. Results are in and new lines are up.'
+                        to('advance', t, body, link + '#home', tag='advance')
+                        st['adv'] = advkey
+                    # Commissioner announcement
+                    if ann.get('id') and ann.get('id') != st.get('ann'):
+                        to('advance', '📣 From the Commissioner', ann.get('text', ''), link + '#home', tag='news')
+                        st['ann'] = ann.get('id')
+                    # Commissioner turned on the manual "Live on YouTube" pop-up (backup for the automatic check)
+                    lv = lg.get('live') or {}
+                    if lv.get('on') and lv.get('since') and now - lv['since'] < 6 * 3600e3 and lv['since'] != st.get('liveManual'):
+                        try: auto = json.load(open('live.json')).get('notified')
+                        except Exception: auto = None
+                        if not (auto and now - lv['since'] < 30 * 60e3 and json.load(open('live.json')).get('live')):   # skip if the automatic check already sent one
+                            for d in devs():
+                                if (d.get('prefs') or {}).get('live', True): send(d, '🔴 OEC is live on YouTube', lv.get('title') or 'Tap to watch.', lv.get('url') or 'https://youtube.com/@originalentertainingcrackers/live', 'live')
+                        st['liveManual'] = lv['since']
+                    # Kickoff reminders (GitHub runs every 5 to 15 minutes, so remind anything starting within 45)
+                    sk = st.setdefault('kick', {})
+                    for gid, inv in kick.items():
+                        t = inv['time']
+                        if not (now < t <= now + 45 * 60e3) or sk.get(gid) == t: continue
+                        g = game(gid)
+                        if not g or g.get('homeScore') is not None: continue
+                        mins = max(1, round((t - now) / 60e3 / 5) * 5)
+                        mu = {uid_of(g.get('home')), uid_of(g.get('away'))} - {None}
+                        m = f"{ab(g.get('away'))} @ {ab(g.get('home'))}"
+                        to('mygame', f'⏰ Kickoff in about {mins} min', f'Your game, {m}, is coming up.', f'{link}#game/{gid}', uids=mu, tag='k' + gid)
+                        to('league', f'📺 {m} kicks off in about {mins} min', 'Watch it live on the OEC YouTube channel.', 'https://youtube.com/@originalentertainingcrackers', skip=mu, tag='k' + gid)
+                        sk[gid] = t
+                    st['kick'] = {k: v for k, v in sk.items() if v > now - 24 * 3600e3}
+                    # Kickoff invites sent, and replies to them
+                    new = query('invites', 'ts', 'GREATER_THAN', int(st.get('inv') or now))
+                    resp = query('invites', 'respondedAt', 'GREATER_THAN', int(st.get('resp') or now))
+                    countered = {(i.get('gameId'), i.get('from')) for i in new}
+                    for i in new:
+                        if i.get('status') != 'pending': continue
+                        g = game(i['gameId']); m = f"{ab(g.get('away'))} @ {ab(g.get('home'))}" if g else 'your game'
+                        to('invites', f"📅 Coach {i.get('fromName') or ''} sent kickoff times", f'Pick a time for {m}.', f"{link}#game/{i['gameId']}", uids={i.get('to')}, tag='i' + i['gameId'])
+                    accepted_now = {i['gameId'] for i in resp if i.get('status') == 'accepted'}
+                    for i in resp:
+                        g = game(i['gameId']); m = f"{ab(g.get('away'))} @ {ab(g.get('home'))}" if g else 'your game'
+                        if i.get('status') == 'accepted':
+                            to('invites', '✅ Kickoff time set', f"Coach {i.get('toName') or ''} picked a time for {m}.", f"{link}#game/{i['gameId']}", uids={i.get('from')}, tag='i' + i['gameId'])
+                        elif i.get('status') == 'cancelled' and i.get('time') and i['gameId'] not in accepted_now:
+                            # An agreed time was cleared (Reschedule): tell both coaches.
+                            to('invites', '🔄 Kickoff time cleared', f'The time for {m} was cleared. Set a new one on the game page.', f"{link}#game/{i['gameId']}", uids={i.get('from'), i.get('to')}, tag='i' + i['gameId'])
+                        elif i.get('status') == 'declined' and i['gameId'] in accepted_now:
+                            pass   # auto-declined because another invite for the same game was just accepted
+                        elif i.get('status') == 'declined' and (i['gameId'], i.get('to')) not in countered:
+                            to('invites', 'Kickoff times declined', f"Coach {i.get('toName') or ''} couldn't make those times for {m}. Send new ones.", f"{link}#game/{i['gameId']}", uids={i.get('from')}, tag='i' + i['gameId'])
+                    if new: st['inv'] = max(int(i.get('ts') or 0) for i in new)
+                    if resp: st['resp'] = max(int(i.get('respondedAt') or 0) for i in resp)
+                # Welcome message for devices that just turned notifications on (confirms it works)
+                for d in query('push', 'welcomed', 'EQUAL', False):
+                    send(d, '🔔 Notifications are on', "You'll get OEC Hub alerts on this device. Change them anytime on your Account page.", link + '#account', 'welcome')
+                    try: call(f"{base}/push/{d['id']}?updateMask.fieldPaths=welcomed", {'fields': {'welcomed': {'booleanValue': True}}}, method='PATCH')
+                    except Exception as e: print('welcome flag failed', e)
+              finally:
+                old = None
+                try: old = json.load(open('push-state.json'))
+                except Exception: pass
+                if old != st: json.dump(st, open('push-state.json', 'w'), separators=(',', ':'), sort_keys=True)
+                print(f'notifications: {sent} sent')
 
           if os.environ.get('SA'):
               try: notify()
+              except urllib.error.HTTPError as e:
+                  print('notifications skipped:', e.code, e.url.split('?')[0][-60:], e.read().decode(errors='ignore')[:400])
               except Exception as e: print('notifications skipped:', repr(e)[:300])
           PY
       - name: Save
