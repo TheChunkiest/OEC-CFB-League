@@ -259,6 +259,15 @@ jobs:
                   if ann.get('id') and ann.get('id') != st.get('ann'):
                       to('advance', '📣 From the Commissioner', ann.get('text', ''), link + '#home', tag='news')
                       st['ann'] = ann.get('id')
+                  # Commissioner turned on the manual "Live on YouTube" pop-up (backup for the automatic check)
+                  lv = lg.get('live') or {}
+                  if lv.get('on') and lv.get('since') and now - lv['since'] < 6 * 3600e3 and lv['since'] != st.get('liveManual'):
+                      try: auto = json.load(open('live.json')).get('notified')
+                      except Exception: auto = None
+                      if not (auto and now - lv['since'] < 30 * 60e3 and json.load(open('live.json')).get('live')):   # skip if the automatic check already sent one
+                          for d in devs():
+                              if (d.get('prefs') or {}).get('live', True): send(d, '🔴 OEC is live on YouTube', lv.get('title') or 'Tap to watch.', lv.get('url') or 'https://youtube.com/@originalentertainingcrackers/live', 'live')
+                      st['liveManual'] = lv['since']
                   # Kickoff reminders (GitHub runs every 5 to 15 minutes, so remind anything starting within 45)
                   sk = st.setdefault('kick', {})
                   for gid, inv in kick.items():
