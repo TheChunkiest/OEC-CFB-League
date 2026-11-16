@@ -21,6 +21,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           YT_API_KEY: ${{ secrets.YT_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}   # optional: Settings → Secrets and variables → Actions → Variables
         run: python3 .github/moments.py
       - name: Save
         run: |
