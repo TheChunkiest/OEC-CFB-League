@@ -23,6 +23,7 @@ MIN_CHUNK = 2 * 60
 THINK = {'on': True}
 SIMPLE = {'on': True}   # low resolution + fewer frames; dropped if a model refuses those settings     # ask for minimal "thinking" (faster); dropped automatically if the model doesn't take it
 START = time.time()
+SCRIPT_VERSION = 4       # bump when the way games are processed changes: failed games then get fresh retries
 MAX_MOMENTS = 14
 KINDS = {'td': '🏈', 'fg': '🥅', 'safety': '🛡️', 'turnover': '🔄', 'big': '💥', 'stop': '🧱', 'twopt': '✌️', 'final': '🏁', 'other': '⭐'}
 
@@ -122,10 +123,29 @@ If nothing from this game happens in this part, reply {{"moments": [], "notes": 
             return ask(model, url, start, end, ctx)
         raise
     txt = ''.join(p.get('text', '') for c in r.get('candidates', []) for p in (c.get('content') or {}).get('parts', []))
-    m = re.search(r'\{.*\}', txt, re.S)
-    out = json.loads(m.group(0)) if m else {}
+    out = parse_json(txt)
     pl = [p for p in (out.get('players') or []) if isinstance(p, dict) and p.get('name')][:20]
     return out.get('moments') or [], str(out.get('notes') or '').strip(), pl
+
+
+def parse_json(txt):
+    """Reads the JSON out of a model reply, even when the model adds a second object, notes or code fences after it.
+    Several objects in one reply (some models split their answer) are merged."""
+    dec, out, i = json.JSONDecoder(), {}, 0
+    txt = re.sub(r'```(?:json)?', ' ', txt or '')
+    while True:
+        i = txt.find('{', i)
+        if i < 0: break
+        try:
+            obj, end = dec.raw_decode(txt, i)
+        except ValueError:
+            i += 1; continue
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                if isinstance(v, list) and isinstance(out.get(k), list): out[k] += v
+                elif k not in out or not out[k]: out[k] = v
+        i = end
+    return out
 
 
 def text_call(prompt):
@@ -135,8 +155,7 @@ def text_call(prompt):
         try:
             r = gemini(model, {'contents': [{'parts': [{'text': prompt}]}], 'generationConfig': {'responseMimeType': 'application/json', 'temperature': 0.6}}, 180)
             txt = ''.join(p.get('text', '') for c in r.get('candidates', []) for p in (c.get('content') or {}).get('parts', []))
-            m = re.search(r'\{.*\}', txt, re.S)
-            return json.loads(m.group(0)) if m else {}
+            return parse_json(txt)
         except ApiErr as x:
             err = str(x)
             if x.code == 404: MODELS.remove(model); continue
@@ -291,6 +310,19 @@ def run():
             rec['rfail'] = rec.get('rfail', 0) + 1; print('moments: recap failed:', str(x)[:200])
             if '429' in str(x): break
 
+    # Games that failed get 2 quick retries (right away, ahead of new games). After that they wait their turn
+    # behind new games. A new version of this script gives every failed game a fresh 2 tries.
+    if state.get('ver') != SCRIPT_VERSION:
+        for f in fails.values(): f['tries'] = 0; f['n'] = 0
+        state['ver'] = SCRIPT_VERSION
+    # The newest unfinished game never gives up: no retry limit, no waiting, always first in line.
+    def unfinished(gid, g):
+        if g.get('homeScore') is None or g.get('awayScore') is None or g.get('forfeit'): return False
+        vl = vlist(g); have = done.get(gid)
+        return bool(vl) and not (have and have.get('vids') == vl and not redo.get(gid, 0) > have.get('at', 0) * 1000)
+    newest = max((g for gid, g in games.items() if unfinished(gid, g)),
+                 key=lambda g: (g.get('playedAt') or 0, g.get('season', 0), g.get('week') or 0), default=None)
+    newest = newest and newest['id']
     todo = []
     for gid, g in games.items():
         if g.get('homeScore') is None or g.get('awayScore') is None or g.get('forfeit'): continue
@@ -300,10 +332,12 @@ def run():
         want_redo = redo.get(gid, 0) > (have or {}).get('at', 0) * 1000
         if have and have.get('vids') == vl and not want_redo: continue
         f = fails.get(gid) or {}
-        if f.get('n', 0) >= 3 and not want_redo: continue
-        wait = 25 * 60 if f.get('slow') or 'timed out' in str(f.get('err', '')) or str(f.get('err', ''))[:3] in {str(c) for c in BUSY} else 6 * 3600 * f.get('n', 1)   # a timeout just tries again next run
-        if f and NOW - f.get('last', 0) < wait and not want_redo: continue
-        todo.append((0 if want_redo or (state.get('partial') or {}).get('gid') == gid else 1, -(g.get('playedAt') or 0), -g.get('season', 0), -(g.get('week') or 0), gid, vl))
+        fresh = bool(f) and (f.get('tries', 0) < 2 or gid == newest)   # still in its quick retries (newest: always)
+        if f.get('n', 0) >= 3 and not want_redo and not fresh: continue
+        wait = 0 if fresh else 25 * 60 if f.get('slow') or 'timed out' in str(f.get('err', '')) or str(f.get('err', ''))[:3] in {str(c) for c in BUSY} else 6 * 3600 * f.get('n', 1)   # a timeout just tries again next run
+        if f and wait and NOW - f.get('last', 0) < wait and not want_redo: continue
+        rank = 0 if want_redo or gid == newest or gid in (state.get('partials') or {}) else 1 if fresh else 3 if f else 2
+        todo.append((rank, -(g.get('playedAt') or 0), -g.get('season', 0), -(g.get('week') or 0), gid, vl))
     if not todo:
         print('moments: up to date')
         if state != load('moments.json', {}): json.dump(state, open('moments.json', 'w'), separators=(',', ':'))
@@ -322,10 +356,13 @@ def run():
     # Progress is saved after every piece, so a slow or failed request never throws away the pieces already done.
     # Piece size adapts: if Gemini is busy or slow with a piece, it's cut in half and tried again right away
     # (down to 2 minutes); after a few good pieces it grows back. The size that works is remembered.
-    part = state.get('partial') or {}
+    # Saved progress is kept per game, so switching to a newer game never throws away pieces of another one.
+    parts = state.setdefault('partials', {})
+    if state.get('partial'): old = state.pop('partial'); parts.setdefault(old.get('gid'), old)   # older format
+    part = parts.get(gid) or {}
     if part.get('gid') != gid or part.get('vids') != vl: part = {'gid': gid, 'vids': vl, 'chunks': {}, 'pos': {}}
     part.setdefault('pos', {})
-    state['partial'] = part
+    parts[gid] = part
     used, used_model = 0, part.get('model') or MODELS[0]
     size, good = int(state.get('size') or CHUNK), 0
     try:
@@ -381,7 +418,7 @@ def run():
         f = fails.get(gid) or {}
         slow = 'timed out' in str(x).lower() or 'timeout' in str(x).lower() or str(x)[:3] in {str(c) for c in BUSY} or 'busy' in str(x)
         busy = str(x)[:3] in {str(c) for c in BUSY}
-        fails[gid] = {'n': f.get('n', 0) + (0 if busy else 0.5 if slow else 1), 'last': int(NOW), 'err': str(x)[:300], 'slow': slow}
+        fails[gid] = {'n': f.get('n', 0) + (0 if busy else 0.5 if slow else 1), 'tries': f.get('tries', 0) + 1, 'last': int(NOW), 'err': str(x)[:300], 'slow': slow}
         q['sec'] += used
         print('moments: failed:', str(x)[:300])
         json.dump(state, open('moments.json', 'w'), separators=(',', ':'))
@@ -390,7 +427,7 @@ def run():
     found = [dict(m, v_i=c['i']) for c in chunks for m in c['m']]
     notes = [c['n'] for c in chunks if c.get('n')]
     seen = [p for c in chunks for p in (c.get('p') or [])]
-    state.pop('partial', None)
+    parts.pop(gid, None)
     q['sec'] += used
     fails.pop(gid, None)
     done[gid] = {'vids': vl, 'at': int(NOW), 'model': used_model, 'm': pick(found), 'n': notes, 'p': seen[:60]}
