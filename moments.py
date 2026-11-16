@@ -20,7 +20,8 @@ CHUNK = 15 * 60          # 15-minute pieces: each request comes back in a few mi
 RUN_BUDGET = 17 * 60     # stop starting new pieces after this long; the next run picks up where this one left off
 REQ_TIMEOUT = 300       # a piece that takes longer than this is too big: it gets split
 MIN_CHUNK = 2 * 60
-THINK = {'on': True}     # ask for minimal "thinking" (faster); dropped automatically if the model doesn't take it
+THINK = {'on': True}
+SIMPLE = {'on': True}   # low resolution + fewer frames; dropped if a model refuses those settings     # ask for minimal "thinking" (faster); dropped automatically if the model doesn't take it
 START = time.time()
 MAX_MOMENTS = 14
 KINDS = {'td': '🏈', 'fg': '🥅', 'safety': '🛡️', 'turnover': '🔄', 'big': '💥', 'stop': '🧱', 'twopt': '✌️', 'final': '🏁', 'other': '⭐'}
@@ -31,6 +32,24 @@ def load(path, default):
         return json.load(open(path))
     except Exception:
         return default
+
+
+class ApiErr(Exception):
+    """An error answer from Google, with its message kept (so the log says what actually went wrong)."""
+    def __init__(self, code, body):
+        self.code, self.body = code, body
+        super().__init__(f'{code} {body}')
+
+
+def gemini(model, body, timeout):
+    try:
+        return http(f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent', body, {'x-goog-api-key': KEY}, timeout=timeout)
+    except urllib.error.HTTPError as x:
+        try: raw = x.read().decode()
+        except Exception: raw = ''
+        try: msg = json.loads(raw)['error']['message']
+        except Exception: msg = raw
+        raise ApiErr(x.code, re.sub(r'\s+', ' ', msg or str(x.reason or ''))[:300])
 
 
 def http(url, body=None, headers=None, timeout=300):
@@ -89,14 +108,16 @@ If nothing from this game happens in this part, reply {{"moments": [], "notes": 
         {'text': prompt}]}],
         'generationConfig': {'responseMimeType': 'application/json', 'mediaResolution': 'MEDIA_RESOLUTION_LOW', 'temperature': 0.2}}
     if THINK['on']: body['generationConfig']['thinkingConfig'] = {'thinkingBudget': 0}
+    if not SIMPLE['on']:   # a model that rejected the extra settings: plain request (just the clip and the prompt)
+        body['generationConfig'].pop('mediaResolution', None); body['generationConfig'].pop('thinkingConfig', None)
+        body['contents'][0]['parts'][0]['video_metadata'].pop('fps', None)
     try:
-        r = http(f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent', body, {'x-goog-api-key': KEY}, timeout=REQ_TIMEOUT)
-    except urllib.error.HTTPError as x:
-        if x.code == 400 and THINK['on']:
-            msg = x.read().decode()[:300]
-            if 'think' in msg.lower():
-                THINK['on'] = False; return ask(model, url, start, end, ctx)
-            raise urllib.error.HTTPError(x.url, 400, msg, x.headers, None)
+        r = gemini(model, body, REQ_TIMEOUT)
+    except ApiErr as x:
+        if x.code == 400 and SIMPLE['on']:   # "invalid argument": retry once with the plain request
+            print(f'  {model}: rejected the request settings ({x.body[:120]}); retrying with plain settings')
+            SIMPLE['on'] = False; THINK['on'] = False
+            return ask(model, url, start, end, ctx)
         raise
     txt = ''.join(p.get('text', '') for c in r.get('candidates', []) for p in (c.get('content') or {}).get('parts', []))
     m = re.search(r'\{.*\}', txt, re.S)
@@ -109,14 +130,12 @@ def text_call(prompt):
     err = None
     for model in list(MODELS):
         try:
-            r = http(f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent',
-                     {'contents': [{'parts': [{'text': prompt}]}], 'generationConfig': {'responseMimeType': 'application/json', 'temperature': 0.6}},
-                     {'x-goog-api-key': KEY}, timeout=180)
+            r = gemini(model, {'contents': [{'parts': [{'text': prompt}]}], 'generationConfig': {'responseMimeType': 'application/json', 'temperature': 0.6}}, 180)
             txt = ''.join(p.get('text', '') for c in r.get('candidates', []) for p in (c.get('content') or {}).get('parts', []))
             m = re.search(r'\{.*\}', txt, re.S)
             return json.loads(m.group(0)) if m else {}
-        except urllib.error.HTTPError as x:
-            err = f'{x.code} {x.read().decode()[:200]}'
+        except ApiErr as x:
+            err = str(x)
             if x.code == 404: MODELS.remove(model); continue
             if x.code in BUSY: time.sleep(5); continue   # busy: try the next model
             raise RuntimeError(err)
@@ -277,17 +296,20 @@ def run():
                 raw, err, note, t0, slow = None, None, '', time.time(), False
                 for model in list(MODELS):
                     try:
-                        raw, note = ask(model, url, pos, e, ctx); used_model = model; break
-                    except urllib.error.HTTPError as x:
-                        body = (x.read() or b'').decode()[:300] if x.fp else str(x.msg)
-                        err = f'{x.code} {body}'
+                        raw, note = ask(model, url, pos, e, ctx); used_model = model
+                        if MODELS[0] != model: MODELS.remove(model); MODELS.insert(0, model)   # it works: use it first for the rest of the run
+                        break
+                    except ApiErr as x:
+                        err = str(x)
                         if x.code == 404: MODELS.remove(model); print(f'  {model}: not available'); continue
-                        if x.code == 429: MODELS.remove(model); print(f'  {model}: free limit used up for now'); continue
-                        if x.code in BUSY: print(f'  {model}: busy ({x.code}) on a {size // 60}-min piece'); time.sleep(5); continue
-                        raise RuntimeError(err)
+                        if x.code == 429: MODELS.remove(model); print(f'  {model}: free limit used up for now ({x.body[:100]})'); continue
+                        if x.code in BUSY: print(f'  {model}: busy ({x.code}) on a {size // 60}-min piece: {x.body[:100]}'); time.sleep(5); continue
+                        # Anything else (400 bad request, 403 key problem...): say exactly what Google said, then try the next model.
+                        print(f'  {model}: error {x.code}: {x.body}'); MODELS.remove(model); continue
                     except (TimeoutError, OSError, urllib.error.URLError) as x:
                         err, slow = f'timed out after {time.time() - t0:.0f}s on a {size // 60}-min piece', True
                         print(f'  {model}: {err}'); break   # too much for one request: shrink it rather than try other models
+                if raw is None and not MODELS: raise RuntimeError(err or 'no model available')
                 if raw is None and size > MIN_CHUNK:
                     size = max(MIN_CHUNK, size // 2); good = 0; state['size'] = size
                     print(f'  trying smaller pieces: {size // 60} min'); continue
