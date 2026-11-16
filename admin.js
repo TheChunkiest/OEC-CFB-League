@@ -853,7 +853,7 @@ function render() {
   ST.msg = ''; ST.clear = false;
   saveView();
   if (restoreY) requestAnimationFrame(() => { if (restoreY && document.documentElement.scrollHeight >= restoreY + innerHeight * 0.6) { scrollTo(0, restoreY); restoreY = 0; } });
-  if ($('#autoLive')) fetch('live.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : { live: false }).then(j => { const el = $('#autoLive'); if (!el) return; const fresh = j.live && j.checkedAt && Date.now() - j.checkedAt < 25 * 60e3; el.textContent = fresh ? 'LIVE — ' + (j.title || '') + ' (checked ' + Math.round((Date.now() - j.checkedAt) / 60e3) + ' min ago)' : j.live ? 'stale "live" status ignored — the checker hasn\'t confirmed it recently' : 'not live'; }).catch(() => { const el = $('#autoLive'); if (el) el.textContent = 'not set up yet'; });
+  if ($('#autoLive')) fetch('live.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : { live: false }).then(j => { const el = $('#autoLive'); if (!el) return; const fresh = j.live && j.checkedAt && Date.now() - j.checkedAt < 25 * 60e3; el.textContent = fresh ? 'LIVE — ' + ((j.streams || []).length > 1 ? j.streams.length + ' streams: ' + j.streams.map(x => x.title).join(' | ') : (j.title || '')) + ' (checked ' + Math.round((Date.now() - j.checkedAt) / 60e3) + ' min ago)' : j.live ? 'stale "live" status ignored — the checker hasn\'t confirmed it recently' : 'not live'; }).catch(() => { const el = $('#autoLive'); if (el) el.textContent = 'not set up yet'; });
 }
 document.addEventListener('click', async e => {
   const t = e.target.closest('[data-tab],[data-act],[data-desk],[data-delgame],[data-delteam],[data-void],[data-delcat],[data-savehist],[data-delhist],[data-savegoty]');

@@ -1409,7 +1409,10 @@ const MANUAL_TTL = 6 * 3600e3, AUTO_TTL = 25 * 60e3;
 function liveInfo() {
   const m = D.league.live, now = Date.now();
   if (m && m.on && m.since && now - m.since < MANUAL_TTL) return { key: 'm:' + m.since, url: m.url || YT_CHANNEL + '/live', title: m.title || 'OEC is live on YouTube' };
-  if (autoLive.live && autoLive.checkedAt && now - autoLive.checkedAt < AUTO_TTL) return { key: 'a:' + autoLive.videoId, url: autoLive.url || YT_CHANNEL + '/live', title: autoLive.title || 'OEC is live on YouTube' };
+  if (autoLive.live && autoLive.checkedAt && now - autoLive.checkedAt < AUTO_TTL) {
+    const st = (autoLive.streams || []).filter(x => x && x.videoId);
+    return { key: 'a:' + (st.length ? st.map(x => x.videoId).sort().join(',') : autoLive.videoId), url: autoLive.url || YT_CHANNEL + '/live', title: autoLive.title || 'OEC is live on YouTube', streams: st };
+  }
   return null;
 }
 function showLive() {
@@ -1419,8 +1422,11 @@ function showLive() {
   if (!info || dismissed === info.key) { if (el) el.remove(); return; }
   if (!el) { el = document.createElement('div'); el.id = 'livePop'; el.className = 'livepop'; document.body.appendChild(el); }
   el.innerHTML = `<button class="lp-x" data-livex="${esc(info.key)}" aria-label="Close">✕</button>
-    <div class="lp-badge"><i></i>LIVE NOW</div><div class="lp-title">${esc(info.title)}</div>
-    <a class="btn lp-go" href="${esc(info.url)}" target="_blank" rel="noopener">▶ Watch on YouTube</a>`;
+    ${info.streams?.length > 1
+      ? `<div class="lp-badge"><i></i>${info.streams.length} STREAMS LIVE</div><div class="lp-title">Multiple streams</div>
+        ${info.streams.map(x => `<a class="btn lp-go lp-multi" href="${esc(x.url)}" target="_blank" rel="noopener">▶ ${esc(x.title || 'Watch on YouTube')}</a>`).join('')}`
+      : `<div class="lp-badge"><i></i>LIVE NOW</div><div class="lp-title">${esc(info.title)}</div>
+    <a class="btn lp-go" href="${esc(info.url)}" target="_blank" rel="noopener">▶ Watch on YouTube</a>`}`;
 }
 setInterval(() => checkLive(), 60000);   // re-checks live.json / expiry; no database reads
 
