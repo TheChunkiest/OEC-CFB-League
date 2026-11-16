@@ -315,6 +315,14 @@ def run():
     if state.get('ver') != SCRIPT_VERSION:
         for f in fails.values(): f['tries'] = 0; f['n'] = 0
         state['ver'] = SCRIPT_VERSION
+    # The newest unfinished game never gives up: no retry limit, no waiting, always first in line.
+    def unfinished(gid, g):
+        if g.get('homeScore') is None or g.get('awayScore') is None or g.get('forfeit'): return False
+        vl = vlist(g); have = done.get(gid)
+        return bool(vl) and not (have and have.get('vids') == vl and not redo.get(gid, 0) > have.get('at', 0) * 1000)
+    newest = max((g for gid, g in games.items() if unfinished(gid, g)),
+                 key=lambda g: (g.get('playedAt') or 0, g.get('season', 0), g.get('week') or 0), default=None)
+    newest = newest and newest['id']
     todo = []
     for gid, g in games.items():
         if g.get('homeScore') is None or g.get('awayScore') is None or g.get('forfeit'): continue
@@ -324,11 +332,11 @@ def run():
         want_redo = redo.get(gid, 0) > (have or {}).get('at', 0) * 1000
         if have and have.get('vids') == vl and not want_redo: continue
         f = fails.get(gid) or {}
-        fresh = bool(f) and f.get('tries', 0) < 2   # still in its 2 quick retries
+        fresh = bool(f) and (f.get('tries', 0) < 2 or gid == newest)   # still in its quick retries (newest: always)
         if f.get('n', 0) >= 3 and not want_redo and not fresh: continue
         wait = 0 if fresh else 25 * 60 if f.get('slow') or 'timed out' in str(f.get('err', '')) or str(f.get('err', ''))[:3] in {str(c) for c in BUSY} else 6 * 3600 * f.get('n', 1)   # a timeout just tries again next run
         if f and wait and NOW - f.get('last', 0) < wait and not want_redo: continue
-        rank = 0 if want_redo or (state.get('partial') or {}).get('gid') == gid else 1 if fresh else 3 if f else 2
+        rank = 0 if want_redo or gid == newest or gid in (state.get('partials') or {}) else 1 if fresh else 3 if f else 2
         todo.append((rank, -(g.get('playedAt') or 0), -g.get('season', 0), -(g.get('week') or 0), gid, vl))
     if not todo:
         print('moments: up to date')
@@ -348,10 +356,13 @@ def run():
     # Progress is saved after every piece, so a slow or failed request never throws away the pieces already done.
     # Piece size adapts: if Gemini is busy or slow with a piece, it's cut in half and tried again right away
     # (down to 2 minutes); after a few good pieces it grows back. The size that works is remembered.
-    part = state.get('partial') or {}
+    # Saved progress is kept per game, so switching to a newer game never throws away pieces of another one.
+    parts = state.setdefault('partials', {})
+    if state.get('partial'): old = state.pop('partial'); parts.setdefault(old.get('gid'), old)   # older format
+    part = parts.get(gid) or {}
     if part.get('gid') != gid or part.get('vids') != vl: part = {'gid': gid, 'vids': vl, 'chunks': {}, 'pos': {}}
     part.setdefault('pos', {})
-    state['partial'] = part
+    parts[gid] = part
     used, used_model = 0, part.get('model') or MODELS[0]
     size, good = int(state.get('size') or CHUNK), 0
     try:
@@ -416,7 +427,7 @@ def run():
     found = [dict(m, v_i=c['i']) for c in chunks for m in c['m']]
     notes = [c['n'] for c in chunks if c.get('n')]
     seen = [p for c in chunks for p in (c.get('p') or [])]
-    state.pop('partial', None)
+    parts.pop(gid, None)
     q['sec'] += used
     fails.pop(gid, None)
     done[gid] = {'vids': vl, 'at': int(NOW), 'model': used_model, 'm': pick(found), 'n': notes, 'p': seen[:60]}
