@@ -123,10 +123,29 @@ If nothing from this game happens in this part, reply {{"moments": [], "notes": 
             return ask(model, url, start, end, ctx)
         raise
     txt = ''.join(p.get('text', '') for c in r.get('candidates', []) for p in (c.get('content') or {}).get('parts', []))
-    m = re.search(r'\{.*\}', txt, re.S)
-    out = json.loads(m.group(0)) if m else {}
+    out = parse_json(txt)
     pl = [p for p in (out.get('players') or []) if isinstance(p, dict) and p.get('name')][:20]
     return out.get('moments') or [], str(out.get('notes') or '').strip(), pl
+
+
+def parse_json(txt):
+    """Reads the JSON out of a model reply, even when the model adds a second object, notes or code fences after it.
+    Several objects in one reply (some models split their answer) are merged."""
+    dec, out, i = json.JSONDecoder(), {}, 0
+    txt = re.sub(r'```(?:json)?', ' ', txt or '')
+    while True:
+        i = txt.find('{', i)
+        if i < 0: break
+        try:
+            obj, end = dec.raw_decode(txt, i)
+        except ValueError:
+            i += 1; continue
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                if isinstance(v, list) and isinstance(out.get(k), list): out[k] += v
+                elif k not in out or not out[k]: out[k] = v
+        i = end
+    return out
 
 
 def text_call(prompt):
@@ -136,8 +155,7 @@ def text_call(prompt):
         try:
             r = gemini(model, {'contents': [{'parts': [{'text': prompt}]}], 'generationConfig': {'responseMimeType': 'application/json', 'temperature': 0.6}}, 180)
             txt = ''.join(p.get('text', '') for c in r.get('candidates', []) for p in (c.get('content') or {}).get('parts', []))
-            m = re.search(r'\{.*\}', txt, re.S)
-            return json.loads(m.group(0)) if m else {}
+            return parse_json(txt)
         except ApiErr as x:
             err = str(x)
             if x.code == 404: MODELS.remove(model); continue
