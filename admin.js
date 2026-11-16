@@ -200,6 +200,31 @@ const cpuList = () => Array.isArray(L().vidCpu) ? L().vidCpu : [];
 const autoVids = g => { const r = VIDS?.links?.[g.id]; return !r ? [] : Array.isArray(r) ? r : [r]; };
 // The videos on a game: the commissioner's list (or 'none') wins over the automatic match.
 const vidsOfGame = g => g.video === 'none' ? [] : g.video ? (Array.isArray(g.video) ? g.video : [g.video]) : autoVids(g);
+// Key moments status: what the Game moments workflow has done (moments.json), what's waiting and what failed.
+let MOMS = null, momsLoading = false;
+function loadMoms() { if (MOMS || momsLoading) return; momsLoading = true; fetch('moments.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(j => { MOMS = j || { games: {} }; if (ST.tab === 'games') render(); }).catch(() => { MOMS = { games: {} }; }); }
+function momentsCard() {
+  loadMoms(); loadVids();
+  const head = `<details class="card" data-keepopen="mom" ${ST.open?.mom ? 'open' : ''}><summary><b>🤖 Key moments (AI)</b> `;
+  if (!MOMS || !VIDS) return head + '<span class="muted small">loading…</span></summary></details>';
+  const done = MOMS.games || {}, fails = MOMS.fails || {}, redo = L().momRedo || {}, q = MOMS.quota || {};
+  const glabel = g => `S${seasonNum(g.season)} ${g.type === 'ccg' ? 'Title' : g.type === 'bowl' ? 'Bowl' : 'Wk ' + g.week}: ${esc(team(g.away).abbr || team(g.away).name)} @ ${esc(team(g.home).abbr || team(g.home).name)} ${g.awayScore}-${g.homeScore}`;
+  const link = g => `<a href="index.html#game/${esc(g.id)}" target="_blank">${glabel(g)}</a>`;
+  const games = D.games.filter(g => played(g) && !g.forfeit && vidsOfGame(g).length);
+  const same = (a, b) => JSON.stringify(a || []) === JSON.stringify(b || []);
+  const isDone = g => done[g.id] && same(done[g.id].vids, vidsOfGame(g)) && !(redo[g.id] > done[g.id].at * 1000);
+  const ok = games.filter(isDone).sort((a, b) => (done[b.id].at || 0) - (done[a.id].at || 0));
+  const bad = games.filter(g => !isDone(g) && fails[g.id]);
+  const wait = games.filter(g => !isDone(g) && !fails[g.id]).sort((a, b) => (redo[b.id] ? 1 : 0) - (redo[a.id] ? 1 : 0) || (b.playedAt || 0) - (a.playedAt || 0) || b.season - a.season || (b.week || 0) - (a.week || 0));
+  const day = new Date().toISOString().slice(0, 10), used = q.day === day ? (q.sec || 0) / 3600 : 0;
+  const when = t => t ? new Date(t * 1000).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+  return head + `<span class="muted small">${ok.length} of ${games.length} done${wait.length ? ` · ${wait.length} waiting` : ''}${bad.length ? ` · <span class="loss">${bad.length} problem${bad.length === 1 ? '' : 's'}</span>` : ''}</span></summary>
+    <p class="muted small">Every finished game with a linked broadcast, as the Game moments workflow sees it. It does one game about every 30 minutes, newest first, up to 6 hours of video a day (${used.toFixed(1)} used today, UTC). A new final shows up here after the site's season.json copy refreshes (a few hours at most).</p>
+    ${bad.length ? `<h4>Problems</h4>${bad.map(g => `<div class="small" style="padding:6px 0;border-top:1px solid var(--line)">${link(g)}<div class="muted">Tried ${fails[g.id].n}× · last ${when(fails[g.id].last)}${fails[g.id].n >= 3 ? ' · stopped trying (tap Redo on the game page to try again)' : ' · will retry'}</div><div class="vreason">${esc(String(fails[g.id].err || '').slice(0, 160))}</div></div>`).join('')}` : ''}
+    ${wait.length ? `<h4>Waiting (in order)</h4>${wait.slice(0, 15).map((g, i) => `<div class="small" style="padding:4px 0">${i === 0 ? '<b>Next:</b> ' : ''}${link(g)}${redo[g.id] ? ' <span class="muted">· redo requested</span>' : ''}${done[g.id] ? ' <span class="muted">· broadcast changed</span>' : ''}</div>`).join('')}${wait.length > 15 ? `<div class="muted small">+ ${wait.length - 15} more</div>` : ''}` : ''}
+    ${ok.length ? `<h4>Done</h4>${ok.map(g => { const r = done[g.id], hid = (L().momHide || {})[g.id] || []; return `<div class="small" style="padding:4px 0">${link(g)} <span class="muted">· ${(r.m || []).length} moments · ${r.r ? (hid.includes('recap') ? 'recap hidden' : 'recap ✓') : 'recap pending'} · ${when(r.at)}</span></div>`; }).join('')}` : ''}
+    ${!games.length ? '<p class="muted small">No finished games have a linked broadcast yet.</p>' : ''}</details>`;
+}
 function broadcastCard() {
   loadVids();
   const head = `<details class="card" data-keepopen="bc" ${ST.open?.bc ? 'open' : ''}><summary><b>▶ YouTube broadcasts</b> `;
@@ -300,7 +325,7 @@ const views = {
       ${scoreRows(games)}${games.length ? `<div class="card row"><button data-act="saveGames">Save scores</button> ${games.map(g => `<button class="sm danger" data-delgame="${esc(g.id)}">✕ ${esc(team(g.away).abbr)} @ ${esc(team(g.home).abbr)}</button>`).join('')}</div>` : ''}
       <div class="card"><h3 style="margin-top:0">Add a game to week ${wk}</h3><div class="row"><select id="gA">${teamOpts('', 'Away')}</select> @ <select id="gH">${teamOpts('', 'Home')}</select>
         <select id="gT"><option value="reg">Regular season</option><option value="ccg">League Championship</option><option value="bowl">Postseason</option></select><label class="row" style="margin:0"><input type="checkbox" id="gN" style="width:auto"> Neutral</label><button data-act="addGame">Add</button></div></div>
-      ${broadcastCard()}`;
+      ${broadcastCard()}${momentsCard()}`;
   },
 
   teams() {
