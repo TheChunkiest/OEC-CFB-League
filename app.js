@@ -2,9 +2,9 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, batch, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout, PUSH_PREFS, pushDefaults, pushLocal, pushSupported, pushEnable, pushPrefs, pushDisable,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, raceSim, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
+  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, AI, aiRecap, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
 , playbookOf, pbSeason, pbText
-} from './core.js?v=59';
+} from './core.js?v=60';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -51,19 +51,19 @@ const videosOf = g => {
 const videoOf = g => videosOf(g)[0]?.id || null;
 // Key moments the Game moments workflow pulled out of each broadcast with Gemini (moments.json, loaded the first
 // time a finished game is opened). The commissioner can hide a wrong one or ask for a redo (saved on the league doc).
-let MOMS = null, momsLoading = false;
+let momsLoading = false;
 async function loadMoments() {
-  if (MOMS || momsLoading) return; momsLoading = true;
-  try { const r = await fetch('moments.json?t=' + Math.floor(Date.now() / 600000), { cache: 'no-cache' }); MOMS = r.ok ? await r.json() : { games: {} }; } catch (e) { MOMS = { games: {} }; }
-  if (/^#game\//.test(location.hash)) route();
+  if (AI.moms || momsLoading) return; momsLoading = true;
+  try { const r = await fetch('moments.json?t=' + Math.floor(Date.now() / 600000), { cache: 'no-cache' }); AI.moms = r.ok ? await r.json() : { games: {} }; } catch (e) { AI.moms = { games: {} }; }
+  if (/^#(game\/|home|$)/.test(location.hash || '#home')) route();
 }
 const MOM_ICON = { td: '🏈', fg: '🥅', safety: '🛡️', turnover: '🔄', big: '💥', stop: '🧱', twopt: '✌️', final: '🏁', other: '⭐' };
 const momKey = m => m.v + '@' + m.t;
 const fmtStamp = t => { const h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), sec = String(t % 60).padStart(2, '0'); return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`; };
 function momentsCard(g, A, H) {
   if (!videosOf(g).length) return '';
-  if (!MOMS) { loadMoments(); return ''; }
-  const rec = MOMS.games?.[g.id], commish = isCommish(), hidden = (D.league.momHide || {})[g.id] || [];
+  if (!AI.moms) { loadMoments(); return ''; }
+  const rec = AI.moms.games?.[g.id], commish = isCommish(), hidden = (D.league.momHide || {})[g.id] || [];
   const redo = (D.league.momRedo || {})[g.id], pending = redo && (!rec || redo > rec.at * 1000);
   if (!rec) return commish ? `<div class="card"><h3 style="margin-top:0">Key moments</h3><p class="muted small" style="margin:0">${pending ? 'Redo requested.' : 'Not pulled from the broadcast yet.'} The Game moments workflow does one game about every 30 minutes, newest first.</p></div>` : '';
   const parts = rec.vids || [], ms = (rec.m || []).filter(m => commish || !hidden.includes(momKey(m)));
@@ -72,7 +72,7 @@ function momentsCard(g, A, H) {
   return `<div class="card moments"><h3 style="margin-top:0">Key moments</h3>
     ${ms.map(m => { const off = hidden.includes(momKey(m)); return `<div class="mom${off ? ' off' : ''}"><a href="https://youtu.be/${esc(m.v)}?t=${m.t}" target="_blank" rel="noopener">
       <span class="mi">${MOM_ICON[m.k] || '⭐'}</span><span class="mt"><b>${esc(m.x)}</b><span class="muted small">${[tag(m), m.q ? (m.q > 4 ? 'OT' : 'Q' + m.q) : '', m.sc ? `${esc(A.abbr || A.name)} ${m.sc.split('-')[0]}, ${esc(H.abbr || H.name)} ${m.sc.split('-')[1]}` : '', (parts.length > 1 ? `Part ${parts.indexOf(m.v) + 1} · ` : '') + '▶ ' + fmtStamp(m.t)].filter(Boolean).join(' · ')}</span></span></a>${commish ? `<button class="sm ghost" data-momhide="${esc(g.id)}|${esc(momKey(m))}" title="${off ? 'Show' : 'Hide'}">${off ? '↩' : '✕'}</button>` : ''}</div>`; }).join('')}
-    <p class="muted small" style="margin:10px 0 0">Picked out of the broadcast by AI, so a play can be off. Tap one to jump to it.${commish ? ` <a href="javascript:void 0" data-act="momRedo" data-gid="${esc(g.id)}">${pending ? 'Redo requested' : 'Redo this game'}</a>` : ''}</p></div>`;
+    <p class="muted small" style="margin:10px 0 0">Picked out of the broadcast by AI, so a play can be off. Tap one to jump to it.${commish ? ` <a href="javascript:void 0" data-act="momRedo" data-gid="${esc(g.id)}">${pending ? 'Redo requested' : 'Redo this game'}</a>${rec.r ? ` · <a href="javascript:void 0" data-momhide="${esc(g.id)}|recap">${hidden.includes('recap') ? 'Show AI recap' : 'Hide AI recap'}</a>` : ''}` : ''}</p></div>`;
 }
 // Broadcasts the commissioner filed as "User vs CPU" (games against teams outside the league), on the team's page.
 function cpuBroadcasts(tid) {
@@ -1697,7 +1697,9 @@ PAGES.game = function (id) {
       ${canBet ? `<button class="gold" data-betgame="${g.week}" style="margin-top:12px">Bet this game${isGotw ? ' · +10% boost' : ''} →</button>` : ''}${ko.ctl}</div>
     ${done ? broadcastCard(g) : ''}
     ${l && !g.forfeit ? winChart(g, A, H) : ''}
-    <div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(title)}</h2>${(() => { const vs = {}; return paras.map(t => `<p>${esc(vary(t, vs))}</p>`).join(''); })()}</div>
+    ${(() => { const air = done ? aiRecap(g) : null; if (done && !AI.moms && videosOf(g).length) loadMoments();
+      return air ? `<div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(air.h)}</h2>${air.p.map(t => `<p>${esc(t)}</p>`).join('')}<p class="muted small" style="margin-bottom:0">Recap written by AI from the broadcast.</p></div>`
+        : `<div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(title)}</h2>${(() => { const vs = {}; return paras.map(t => `<p>${esc(vary(t, vs))}</p>`).join(''); })()}</div>`; })()}
     ${done ? momentsCard(g, A, H) : ''}
     ${trends.length ? `<div class="card"><h3 style="margin-top:0">Trends to watch</h3><ul class="clean gp-trends">${trends.slice(0, 6).map(t => `<li>${t}</li>`).join('')}</ul></div>` : ''}
     <div class="card"><h3 style="margin-top:0">Tale of the tape</h3><p class="muted small" style="margin-top:0"><span class="tb">✓ Green</span> = the edge in that category, <span class="tw">red</span> = behind.</p><div class="tablewrap"><table class="gp-tape">
@@ -1883,6 +1885,7 @@ document.addEventListener('submit', async e => {
     route();
     checkVersion(); document.addEventListener('visibilitychange', () => { if (!document.hidden) checkVersion(); });
     loadVideos().then(() => { if (VIDS && /^#(game|schedule|home|team)/.test(location.hash || '#home')) route(); });
+    loadMoments();
     checkLive();
     await watchAuth(async () => { if (D.league.awards?.open && auth.user) await loadBallots(false); try { await ensureFutures(); } catch (e) { console.warn('futures post failed', e); } route(); showResultsPopup(); });
   } catch (e) {

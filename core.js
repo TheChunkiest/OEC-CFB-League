@@ -1139,6 +1139,12 @@ export function awardGame(h, a) {
 }
 
 /* ---------------- Storylines ---------------- */
+/* ---------- AI game recaps (moments.json from the Game moments workflow; loaded by app.js) ---------- */
+export const AI = { moms: null };
+const aiHidden = (gid, k) => ((D.league.momHide || {})[gid] || []).includes(k);
+// The written recap for a final, unless the commissioner hid it.
+export const aiRecap = g => (g && !aiHidden(g.id, 'recap') && AI.moms?.games?.[g.id]?.r) || null;
+
 export function storylines() {
   const L = D.league, s = L.season, out = [], pool = [];
   const lw = lastPlayedWeek(s);
@@ -1158,7 +1164,8 @@ export function storylines() {
       const ats = l.spread === 0 ? '' : fav !== w ? ` ${team(fav).name} lost outright as a ${ptsTxt}.` : m === 0 ? ` ${team(fav).name} pushed at ${fmtLine(-pts)}.` : ` ${team(fav).name} ${favCovered ? 'covered' : "won but didn't cover"} ${fmtLine(-pts)}.`;
       const ou = tot === l.total ? ` The total pushed at ${l.total}.` : ` The ${tot > l.total ? 'over' : 'under'} (${l.total}) hit.`;
       const [now, past] = ws - ls <= 3 ? ['holds off', 'held off'] : ws - ls >= 21 ? ['rolls past', 'rolled past'] : ['beats', 'beat'];
-      return { href: '#game/' + g.id, tag: 'Game of the Week', teams: [g.home, g.away], title: `Week ${g.week}: ${team(w).name} ${now} ${team(lo).name}, ${ws}-${ls}`, body: `${name(w)} ${past} ${name(lo)}.${ats}${ou}` };
+      const ai = aiRecap(g);
+      return { href: '#game/' + g.id, tag: 'Game of the Week', teams: [g.home, g.away], title: `Week ${g.week}: ${team(w).name} ${now} ${team(lo).name}, ${ws}-${ls}`, body: `${ai?.o || `${name(w)} ${past} ${name(lo)}.`}${ats}${ou}` };
     }
     return { href: '#game/' + g.id, tag: isG ? 'Game of the Week' : 'Up Next', title: `Week ${L.week}: ${team(g.away).name} at ${team(g.home).name}`, body: `${name(g.away)} visits ${name(g.home)}. ${l.spread === 0 ? "Pick'em" : `${team(fav).name} ${fmtLine(-Math.abs(l.spread))}`}, total ${l.total}.` };
   };
@@ -1268,6 +1275,12 @@ export function storylines() {
   // 3) Upset of the Week.
   const info = real.map(g => { const l = lineAt(g), hw = +g.homeScore > +g.awayScore; return { g, l, w: hw ? g.home : g.away, lo: hw ? g.away : g.home, ws: Math.max(+g.homeScore, +g.awayScore), ls: Math.min(+g.homeScore, +g.awayScore), pw: l ? (hw ? l.pHome : 1 - l.pHome) : 0.5 }; });
   const upset = info.filter(x => x.pw < 0.45 && '#game/' + x.g.id !== gotwHref).sort((a, b) => a.pw - b.pw)[0];
+  // Play of the Week: the AI's play of the game from last week's Game of the Week (or else a user-vs-user game).
+  const potw = (() => {
+    const gw = gotwTally(s, lw).game, cands = [gw, ...real.filter(g => isUserTeam(team(g.home)) && isUserTeam(team(g.away)))].filter(Boolean);
+    const g = cands.find(x => aiRecap(x)?.pp); return g && { g, r: aiRecap(g) };
+  })();
+  if (potw) out.push({ href: '#game/' + potw.g.id, tag: 'Play of the Week', teams: [potw.g.home, potw.g.away], title: potw.r.pt || `${team(potw.g.away).name} at ${team(potw.g.home).name}`, body: potw.r.pp });
   if (upset) out.push({ href: '#game/' + upset.g.id, tag: 'Upset of the Week', title: `${rankName(upset.w, s, lw)} stuns ${rankName(upset.lo, s, lw)}`, body: `${name(upset.w)} entered with a ${pctStr(upset.pw)} chance to win (${fmtOdds(upset.w === upset.g.home ? upset.l.mlHome : upset.l.mlAway)}) and won ${upset.ws}-${upset.ls}.` });
 
   // 4) Big Cash — the biggest winning bet that settled on last week's games.
@@ -1287,7 +1300,7 @@ export function storylines() {
   if (hot) pool.push({ href: '#team/' + hot.t.id, tag: 'Hot Streak', title: `${hot.t.name} has won ${hot.st.slice(1)} straight`, body: `${hot.t.coach} is ${rec(recs[hot.t.id])} and rolling into Week ${L.week}.` });
   const unbeaten = leagueTeams().filter(t => recs[t.id].l === 0 && recs[t.id].w >= 3);
   if (unbeaten.length && unbeaten.length <= 3) pool.push({ href: unbeaten.length === 1 ? '#team/' + unbeaten[0].id : '#standings', tag: 'Unbeaten Watch', title: unbeaten.length === 1 ? `${unbeaten[0].name} is the last unbeaten team` : `${unbeaten.length} teams still unbeaten`, body: unbeaten.map(t => `${name(t.id)} (${rec(recs[t.id])})`).join(', ') + '.' });
-  wk.filter(g => isUserTeam(team(g.home)) && isUserTeam(team(g.away)) && '#game/' + g.id !== gotwHref).forEach(g => { const hw = +g.homeScore > +g.awayScore, w = hw ? g.home : g.away, l = hw ? g.away : g.home; pool.push({ href: '#game/' + g.id, tag: 'User Game', title: `${team(w).coach} over ${team(l).coach}`, body: g.forfeit ? `${name(w)} won by forfeit over ${name(l)}.` : `${name(w)} beat ${name(l)} ${Math.max(+g.homeScore, +g.awayScore)}-${Math.min(+g.homeScore, +g.awayScore)} in Week ${lw}.` }); });
+  wk.filter(g => isUserTeam(team(g.home)) && isUserTeam(team(g.away)) && '#game/' + g.id !== gotwHref).forEach(g => { const hw = +g.homeScore > +g.awayScore, w = hw ? g.home : g.away, l = hw ? g.away : g.home; pool.push({ href: '#game/' + g.id, tag: 'User Game', title: `${team(w).coach} over ${team(l).coach}`, body: g.forfeit ? `${name(w)} won by forfeit over ${name(l)}.` : aiRecap(g)?.o || `${name(w)} beat ${name(l)} ${Math.max(+g.homeScore, +g.awayScore)}-${Math.min(+g.homeScore, +g.awayScore)} in Week ${lw}.` }); });
   const r = rng(s * 97 + L.week * 13 + 7);
   shuffle(pool, r);
   while (out.length < (u ? 4 : 5) && pool.length) out.push(pool.shift());
