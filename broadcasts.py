@@ -41,7 +41,8 @@ try:
 except Exception:
     pass
 EXTRA = {   # nicknames people actually type; add more any time
-    'delaware': ['UD'], 'kennesaw state': ['KSU', 'Kennesaw'], 'louisiana tech': ['LA Tech', 'La. Tech', 'LaTech'],
+    'delaware': ['UD'], 'kennesaw state': ['KSU', 'Kennesaw'], 'louisiana tech': ['LA Tech', 'La. Tech', 'LaTech', 'LTU'],
+    'app state': ['App', 'Appalachian State', 'ASU'], 'east carolina': ['ECU'], 'georgia state': ['GSU', 'GA State'], 'north texas': ['UNT', 'Mean Green'],
     'boston college': ['BC'], 'west virginia': ['WVU', 'WV'], 'north carolina': ['UNC', 'Carolina'], 'kentucky': ['UK'],
     'florida international': ['FIU'], 'fiu': ['Florida International'], 'ucf': ['Central Florida'], 'purdue': ['PU'],
 }
@@ -57,7 +58,7 @@ def aliases(t):
     words = [w for w in re.split(r'\s+', re.sub(r'[()]', '', name)) if w]
     if len(words) > 1:
         ini = ''.join(w[0] for w in words).upper()
-        out |= {ini, ini + 'U' if words[-1].lower() == 'state' else ''}
+        out |= {ini, ini + 'U'}   # "Louisiana Tech" -> LT / LTU, "Kennesaw State" -> KS / KSU
         out.add(name.replace('State', 'St.').replace('  ', ' '))
         out.add(name.replace('State', 'St'))
         out.add(name.replace('Louisiana', 'LA'))
@@ -76,18 +77,38 @@ def mentions(title, teams):
     return found
 
 
+# Every FBS school's aliases (for spotting an opponent we don't track as a team).
+PROGAL = {k: aliases({'name': p['name'], 'abbr': p['abbr']}) | ({p['mascot']} if p.get('mascot') else set()) for k, p in PROG.items()}
+TEAMNAME = {}
+def norm_name(tid):
+    return (TEAMNAME.get(tid) or tid.replace('-', ' ')).lower()
+
+
 def run():
     season = load('season.json', {})
     archive = load('archive.json', {})
     state = load('videos.json', {})
     games = [g for g in (season.get('games') or []) + (archive.get('games') or []) if not g.get('deleted')]
     teams = {t['id']: aliases(t) for t in (season.get('teams') or []) if not t.get('deleted')}
+    TEAMNAME.update({t['id']: t.get('name', '') for t in (season.get('teams') or [])})
+    # CPU opponents that only exist as an id on a game (no team doc): name them from programs.js
+    for g in games:
+        for tid in (g.get('home'), g.get('away')):
+            if tid and tid not in teams:
+                p = PROG.get(tid.replace('-', ' ')) or {}
+                teams[tid] = aliases({'name': p.get('name') or tid.replace('-', ' ').title(), 'abbr': p.get('abbr', '')})
     if not games or not teams:
         print('broadcasts: no league data yet')
         return
     seasons = sorted({g['season'] for g in games})
     lg_first = int(season.get('firstSeason') or seasons[0])
     played = [g for g in games if g.get('homeScore') is not None and g.get('awayScore') is not None]
+    # League teams each season = teams with several games on record that season (CPU opponents show up once or twice).
+    from collections import Counter
+    league = {}
+    for yr in seasons:
+        c = Counter(t for g in games if g['season'] == yr for t in (g['home'], g['away']))
+        league[yr] = {t for t, n in c.items() if n >= 4}
 
     # 1) New uploads (every 3 hours, or right after a stream ends)
     vids = {v['id']: v for v in state.get('videos', [])}
@@ -117,17 +138,32 @@ def run():
             print('broadcasts: YouTube fetch skipped:', repr(e)[:200])
 
     # 2) Match every video to a game
-    links, review, when = {}, [], {}   # links: gameId -> [videoIds] (several when a stream had to restart)
+    abbr = {t['id']: (t.get('abbr') or t.get('name') or t['id']) for t in (season.get('teams') or [])}
+    nice = lambda ids: ', '.join(sorted(abbr.get(i, i) for i in ids))
+    links, review, when, why = {}, [], {}, {}   # links: gameId -> [videoIds] (several when a stream had to restart)
     for v in sorted(vids.values(), key=lambda v: v['d']):
         title = v['t']
         found = mentions(title, teams)
-        if len(found) < 2: continue                     # not a two-team game title
         sm = re.search(r'\bS(?:EASON)?\s*(\d+)\b', title, re.I)
         wm = re.search(r'\bW(?:EEK|K)?\s*(\d+)\b', title, re.I)
-        cands = [g for g in played if g['home'] in found and g['away'] in found]
-        if sm: cands = [g for g in cands if g['season'] == lg_first + int(sm.group(1)) - 1]
+        yr = lg_first + int(sm.group(1)) - 1 if sm else None
+        if len(found) >= 2:
+            cands = [g for g in played if g['home'] in found and g['away'] in found]
+        elif len(found) == 1 and sm and wm:
+            # Season + week given and one league team named (the other is a CPU team we may not know): a team
+            # plays once a week, so that pins the game.
+            t = next(iter(found)); cands = [g for g in played if t in (g['home'], g['away'])]
+            # ...unless the title names some other school that isn't that game's opponent.
+            others = {k for k in mentions(title, PROGAL)} - {norm_name(t)}
+            if others: cands = [g for g in cands if norm_name(g['away'] if g['home'] == t else g['home']) in others]
+        else:
+            if found: why[v['id']] = 'only recognized ' + nice(found) + ('' if sm and wm else ' (title has no season/week)')
+            continue
+        if sm: cands = [g for g in cands if g['season'] == yr]
         if wm: cands = [g for g in cands if g.get('week') == int(wm.group(1))]
-        if not cands: continue
+        if not cands:
+            why[v['id']] = f"recognized {nice(found)} but no finished game" + (f" in S{sm.group(1)}" if sm else '') + (f" W{wm.group(1)}" if wm else '')
+            continue
         # A restarted stream: same matchup uploaded within ~36 hours of a video already on one of these games.
         part = [g for g in cands if any(abs(v['d'] - d) < 36 * 3600e3 for d in when.get(g['id'], []))]
         if part:
@@ -147,7 +183,8 @@ def run():
         links.setdefault(g['id'], []).append(v['id']); when.setdefault(g['id'], []).append(v['d'])
         if how == 'guess': review.append(v['id'])
     out = {'uploads': state.get('uploads'), 'fetchedAt': state.get('fetchedAt', 0),
-           'videos': sorted(vids.values(), key=lambda v: -v['d'])[:400], 'links': links, 'guessed': review}
+           'videos': sorted(vids.values(), key=lambda v: -v['d'])[:400], 'links': links, 'guessed': review, 'why': why,
+           'league': {str(y): sorted(t) for y, t in league.items()}}
     if out != state:
         json.dump(out, open('videos.json', 'w'), separators=(',', ':'))
         print(f'broadcasts: {len(links)} game(s) linked, {len(review)} guessed')

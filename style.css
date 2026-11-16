@@ -712,3 +712,4 @@ h3{margin-bottom:10px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--gold);color:#140b00;font-weight:800;padding:10px 16px;border-radius:12px;opacity:0;transition:.2s;z-index:99;pointer-events:none;max-width:90vw;text-align:center}
 .toast.on{opacity:1;transform:translateX(-50%)}
 .vfilt{flex-wrap:wrap;margin-bottom:6px}.vfilt button{font-size:.8rem;padding:6px 10px}
+.vwhy{color:#ffb35c}
