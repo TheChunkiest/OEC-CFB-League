@@ -57,7 +57,7 @@ function cpuBroadcasts(tid) {
 function broadcastCard(g) {
   const vs = videosOf(g); if (!vs.length) return '';
   const one = vs.length === 1, v = vs[0];
-  const inner = `<img src="https://i.ytimg.com/vi/${esc(v.id)}/mqdefault.jpg" alt="" loading="lazy"><span><b>▶ Watch the broadcast</b><span class="muted small">${one ? esc(v.t || 'OEC on YouTube') : `${vs.length} parts · the stream restarted`}</span></span>`;
+  const inner = `<img src="https://i.ytimg.com/vi/${esc(v.id)}/mqdefault.jpg" alt="" loading="lazy"><span><b>▶ Watch the broadcast</b>${one ? '' : `<span class="muted small">${vs.length} parts</span>`}</span>`;
   return one ? `<a class="card vidcard" href="https://youtu.be/${esc(v.id)}" target="_blank" rel="noopener">${inner}</a>`
     : `<a class="card vidcard" href="#" data-vidlist="${esc(g.id)}">${inner}</a>`;
 }
@@ -65,7 +65,7 @@ function showVideoList(gid) {
   const g = D.games.find(x => x.id === gid), vs = videosOf(g); if (!vs.length) return;
   $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card"><h2>Watch the broadcast</h2>
     <p class="muted small" style="margin-top:0">${esc(team(g.away).name)} ${g.neutral ? 'vs' : '@'} ${esc(team(g.home).name)} was streamed in ${vs.length} parts.</p>
-    ${vs.map((v, i) => `<a class="vidpart" href="https://youtu.be/${esc(v.id)}" target="_blank" rel="noopener"><img src="https://i.ytimg.com/vi/${esc(v.id)}/mqdefault.jpg" alt="" loading="lazy"><span><b>Part ${i + 1}</b><span class="muted small">${esc(v.t || 'OEC on YouTube')}</span></span></a>`).join('')}
+    ${vs.map((v, i) => `<a class="vidpart" href="https://youtu.be/${esc(v.id)}" target="_blank" rel="noopener"><img src="https://i.ytimg.com/vi/${esc(v.id)}/mqdefault.jpg" alt="" loading="lazy"><span><b>Part ${i + 1}</b>${v.d ? `<span class="muted small">${new Date(v.d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>` : ''}</span></a>`).join('')}
     <div class="row" style="margin-top:12px"><button class="ghost" data-close="1">Close</button></div></div></div>`;
 }
 function gameCard(g, opts = {}) {
