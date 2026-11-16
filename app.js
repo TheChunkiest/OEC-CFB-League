@@ -1517,6 +1517,25 @@ PAGES.install = function () {
     <div class="card"><p style="margin:0">The OEC Hub works like an app once it's on your Home Screen: it gets its own icon, opens full screen without the browser bars, and stays logged in.</p></div>
     ${and && !ios ? android + iphone : iphone + android}`;
 };
+// Every bet that touches this game (singles and parlay legs), so nobody has to dig through the sportsbook for them.
+function gameBets(g) {
+  const ws = D.wagers.filter(w => !w.deleted && (w.gameId === g.id || (w.market === 'parlay' && (w.legs || []).some(l => l.gameId === g.id))));
+  if (!ws.length) return played(g) || g.forfeit ? '' : `<div class="card"><h3 style="margin-top:0">Bets on this game</h3><p class="muted small" style="margin:0">No bets yet.</p></div>`;
+  const STO = { open: 0, won: 1, cashed: 1.5, push: 2, void: 3, lost: 4 };
+  const payOf = w => w.status === 'push' || w.status === 'void' ? w.stake : w.status === 'cashed' ? w.stake + (w.payout || 0) : w.stake + winProfit(w);
+  const pay = w => { const v = payOf(w).toLocaleString(); return w.status === 'lost' ? `<s class="muted">${v}</s>` : w.status === 'won' || w.status === 'cashed' ? `<b class="win">${v}</b>` : v; };
+  const mark = r => r === 'won' ? ' <span class="win">✓</span>' : r === 'lost' ? ' <span class="loss">✗</span>' : r === 'push' || r === 'void' ? ' <span class="muted">(push)</span>' : '';
+  const bet = w => {
+    if (w.market !== 'parlay') return esc(wagerLabel(w).replace(/ — .*$/, '')) + (w.boost ? ' <span class="boosttag">⚡ +10%</span>' : '');
+    const here = w.legs.filter(l => l.gameId === g.id), rest = w.legs.length - here.length;
+    return `${w.legs.length}-leg parlay (${fmtOdds(w.odds)})${w.boost ? ' <span class="boosttag">⚡ +10%</span>' : ''}<div class="muted small">${here.map(l => esc(wagerLabel(l).replace(/ — .*$/, '')) + mark(l.result)).join('<br>')}${rest ? `<br>+ ${rest} leg${rest === 1 ? '' : 's'} on other games` : ''}</div>`;
+  };
+  ws.sort((a, b) => (STO[a.status] ?? 9) - (STO[b.status] ?? 9) || b.stake - a.stake || (b.ts || 0) - (a.ts || 0));
+  const total = ws.reduce((t, w) => t + (+w.stake || 0), 0);
+  return `<div class="card"><h3 style="margin-top:0">Bets on this game</h3><p class="muted small" style="margin-top:0">${ws.length} bet${ws.length === 1 ? '' : 's'} · ${total.toLocaleString()} Crackers wagered</p>
+    <div class="tablewrap"><table class="bets"><tr><th>Coach</th><th>Bet</th><th class="num">Stake</th><th class="num">Payout</th><th class="num hide-xs">Status</th></tr>
+    ${ws.map(w => `<tr><td>${esc(w.coach || '')}</td><td class="wrap">${bet(w)}</td><td class="num">${w.stake}</td><td class="num">${pay(w)}</td><td class="num hide-xs"><span class="pill ${w.status}">${w.status}</span></td></tr>`).join('')}</table></div></div>`;
+}
 PAGES.game = function (id) {
   const g = D.games.find(x => x.id === id); if (!g) return '<div class="card empty">Game not found.</div>';
   const L = D.league, s = g.season, A = team(g.away), H = team(g.home), done = played(g), l = lineOf(g), p = winPct(g, l);
@@ -1651,6 +1670,7 @@ PAGES.game = function (id) {
       ${l && !g.forfeit ? (done ? finalLines(g, l, A, H) : `<div class="gp-odds"><div><span>Spread</span><b>${l.spread === 0 ? 'PK' : esc(fav.abbr || fav.name) + ' ' + fmtLine(-Math.abs(l.spread))}</b></div><div><span>Total</span><b>O/U ${l.total}</b></div>
         <div><span>Moneyline</span><b>${esc(A.abbr)} ${fmtOdds(l.mlAway)}</b><b>${esc(H.abbr)} ${fmtOdds(l.mlHome)}</b></div></div>`) + probBar(g, l, done) : ''}
       ${canBet ? `<button class="gold" data-betgame="${g.week}" style="margin-top:12px">Bet this game${isGotw ? ' · +10% boost' : ''} →</button>` : ''}${ko.ctl}</div>
+    ${gameBets(g)}
     ${done ? broadcastCard(g) : ''}
     ${l && !g.forfeit ? winChart(g, A, H) : ''}
     <div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(title)}</h2>${(() => { const vs = {}; return paras.map(t => `<p>${esc(vary(t, vs))}</p>`).join(''); })()}</div>
