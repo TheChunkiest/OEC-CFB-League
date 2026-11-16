@@ -1069,13 +1069,28 @@ function showSlip(gid, market, pick) {
 function updToWin() { const s = Math.floor(+$('#stake').value || 0), o = UI.slip.odds;
   if (UI.slip.parlay) { const p = Math.round(parlayProfit(s, UI.legs) * (UI.slip.boost || 1)); $('#towin').textContent = s > 0 ? p + ' (returns ' + (s + p) + ')' : '–'; return; } $('#towin').textContent = s > 0 ? Math.round(Math.round(o > 0 ? s * o / 100 : s * 100 / -o) * (UI.slip.boost || 1)) + ' (returns ' + (s + Math.round(Math.round(o > 0 ? s * o / 100 : s * 100 / -o) * (UI.slip.boost || 1))) + ')' : '–'; }
 // If the database rejects a bet, the usual reason is that the line just moved. Reload and tell the coach.
+// Only blame a line move when a line really changed; otherwise say so (usually an outdated copy of the site).
 async function lineMoved(e) {
   if (e && (e.code === 'permission-denied' || /permission/i.test(e.message || ''))) {
-    await reload(); $('#modal').innerHTML = '';
-    alert('The line just moved after new results came in. Check the new price and place your bet again.');
+    const sl = UI.slip || {};
+    const before = (sl.parlay ? UI.legs : [{ gameId: sl.g?.id || '', market: sl.market, pick: sl.pick, team: sl.team, odds: sl.odds, line: sl.line }]).map(l => ({ ...l }));
+    await reload();
+    const moved = before.some(b => { const n = legFor(b.gameId, b.market, b.pick, b.team); return !n || n.odds !== b.odds || (n.line ?? null) !== (b.line ?? null); });
+    if (moved) { $('#modal').innerHTML = ''; alert('A line in this bet just changed. Check the new price and place it again.'); return; }
+    const sm = $('#smsg');
+    if (sm) sm.innerHTML = 'The sportsbook turned this bet down even though the lines haven\'t changed. This usually means your browser has an old copy of the site: <a href="#" data-act="hardReload">tap here to refresh</a> and try again.';
     return;
   }
   $('#smsg').textContent = 'Could not place this bet. ' + friendlyError(e);
+}
+// Stale-copy guard: if GitHub has a newer version than the one running, reload once to pick it up.
+async function checkVersion() {
+  try {
+    const mine = new URL(import.meta.url).searchParams.get('v');
+    const html = await (await fetch('index.html?t=' + Date.now(), { cache: 'no-store' })).text();
+    const live = (/app\.js\?v=(\d+)/.exec(html) || [])[1];
+    if (live && mine && live !== mine && sessionStorage.getItem('oecReloaded') !== live) { sessionStorage.setItem('oecReloaded', live); location.reload(); }
+  } catch (e) { }
 }
 async function placeBet() {
   const { g, market, pick, odds, line } = UI.slip, me = auth.profile, stake = Math.floor(+$('#stake').value || 0), L = D.league;
@@ -1749,6 +1764,7 @@ document.addEventListener('click', async e => {
   else if (t.dataset.kinv || t.dataset.kacc || t.dataset.kdec || t.dataset.kcan) kickAction(t);
   else if (t.dataset.act === 'place') placeBet();
   else if (t.dataset.act === 'saveSlip') saveSlip();
+  else if (t.dataset.act === 'hardReload') { sessionStorage.removeItem('oecReloaded'); location.reload(); }
   else if (t.dataset.act === 'cheat') showCheat();
   else if (t.dataset.act === 'saveCheat') { const C = UI.cheat; saveCanvas(UI.cheatCanvas, `oec-${slug((C?.A.abbr || 'away') + '-at-' + (C?.H.abbr || 'home'))}-cheat-sheet.png`, 'OEC broadcast cheat sheet'); }
   else if (t.dataset.slip) showSlipImage(D.wagers.find(x => x.id === t.dataset.slip));
@@ -1803,6 +1819,7 @@ document.addEventListener('submit', async e => {
     await loadAll();
     window.addEventListener('hashchange', route);
     route();
+    checkVersion(); document.addEventListener('visibilitychange', () => { if (!document.hidden) checkVersion(); });
     loadVideos().then(() => { if (VIDS && /^#(game|schedule|home|team)/.test(location.hash || '#home')) route(); });
     checkLive();
     await watchAuth(async () => { if (D.league.awards?.open && auth.user) await loadBallots(false); try { await ensureFutures(); } catch (e) { console.warn('futures post failed', e); } route(); showResultsPopup(); });
