@@ -13,12 +13,13 @@ import json, os, re, sys, time, urllib.request, urllib.parse, urllib.error
 
 NOW = time.time()
 KEY = os.environ.get('GEMINI_API_KEY', '').strip()
-MODELS = [m for m in [os.environ.get('GEMINI_MODEL', '').strip(), 'gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite'] if m]
+MODELS = list(dict.fromkeys(m for m in [os.environ.get('GEMINI_MODEL', '').strip(), 'gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-3.1-flash-lite', 'gemini-3-flash-preview'] if m))
 BUSY = (429, 500, 502, 503, 504)   # Google's "busy / try again later" answers: never count against a game
 DAILY_HOURS = float(os.environ.get('MOMENTS_DAILY_HOURS') or 6)    # free tier allows about 8 hours of YouTube a day
 CHUNK = 15 * 60          # 15-minute pieces: each request comes back in a few minutes
 RUN_BUDGET = 17 * 60     # stop starting new pieces after this long; the next run picks up where this one left off
-REQ_TIMEOUT = 840
+REQ_TIMEOUT = 300       # a piece that takes longer than this is too big: it gets split
+MIN_CHUNK = 2 * 60
 THINK = {'on': True}     # ask for minimal "thinking" (faster); dropped automatically if the model doesn't take it
 START = time.time()
 MAX_MOMENTS = 14
@@ -117,7 +118,7 @@ def text_call(prompt):
         except urllib.error.HTTPError as x:
             err = f'{x.code} {x.read().decode()[:200]}'
             if x.code == 404: MODELS.remove(model); continue
-            if x.code in BUSY: time.sleep(20); continue   # busy: try the next model
+            if x.code in BUSY: time.sleep(5); continue   # busy: try the next model
             raise RuntimeError(err)
     raise RuntimeError(err or 'no model available')
 
@@ -254,47 +255,63 @@ def run():
     ctx = make_ctx(g)
     print(f"moments: {gid} — {nm(A, g['away'])} @ {nm(H, g['home'])}, {len(vl)} part(s), {total / 60:.0f} min")
     # Progress is saved after every piece, so a slow or failed request never throws away the pieces already done.
+    # Piece size adapts: if Gemini is busy or slow with a piece, it's cut in half and tried again right away
+    # (down to 2 minutes); after a few good pieces it grows back. The size that works is remembered.
     part = state.get('partial') or {}
-    if part.get('gid') != gid or part.get('vids') != vl: part = {'gid': gid, 'vids': vl, 'chunks': {}}
+    if part.get('gid') != gid or part.get('vids') != vl: part = {'gid': gid, 'vids': vl, 'chunks': {}, 'pos': {}}
+    part.setdefault('pos', {})
     state['partial'] = part
     used, used_model = 0, part.get('model') or MODELS[0]
+    size, good = int(state.get('size') or CHUNK), 0
     try:
         for i, v in enumerate(vl):
             L = lens.get(v) or 3 * 3600
             url = f'https://www.youtube.com/watch?v={v}'
-            for s in range(0, L, CHUNK):
-                key = f'{v}@{s}'
-                if key in part['chunks']: continue
+            pos = int(part['pos'].get(v, 0))
+            while pos < L - 20:
                 if time.time() - START > RUN_BUDGET:
                     q['sec'] += used
                     print(f'moments: out of time this run; {len(part["chunks"])} piece(s) saved, continuing next run')
                     json.dump(state, open('moments.json', 'w'), separators=(',', ':')); return
-                e = min(L, s + CHUNK + 60)   # a minute of overlap so a play on the seam isn't lost
-                raw, err, note, t0 = None, None, '', time.time()
+                e = min(L, pos + size + 30)   # 30 seconds of overlap so a play on the seam isn't lost
+                raw, err, note, t0, slow = None, None, '', time.time(), False
                 for model in list(MODELS):
-                    for attempt in range(3):   # busy: wait and try again, then fall back to the next model
+                    try:
+                        raw, note = ask(model, url, pos, e, ctx); used_model = model; break
+                    except urllib.error.HTTPError as x:
+                        body = (x.read() or b'').decode()[:300] if x.fp else str(x.msg)
+                        err = f'{x.code} {body}'
+                        if x.code == 404: MODELS.remove(model); print(f'  {model}: not available'); continue
+                        if x.code == 429: MODELS.remove(model); print(f'  {model}: free limit used up for now'); continue
+                        if x.code in BUSY: print(f'  {model}: busy ({x.code}) on a {size // 60}-min piece'); time.sleep(5); continue
+                        raise RuntimeError(err)
+                    except (TimeoutError, OSError, urllib.error.URLError) as x:
+                        err, slow = f'timed out after {time.time() - t0:.0f}s on a {size // 60}-min piece', True
+                        print(f'  {model}: {err}'); break   # too much for one request: shrink it rather than try other models
+                if raw is None and size > MIN_CHUNK:
+                    size = max(MIN_CHUNK, size // 2); good = 0; state['size'] = size
+                    print(f'  trying smaller pieces: {size // 60} min'); continue
+                if raw is None:
+                    if not slow:   # Is Gemini busy in general, or just with video? (one tiny text request, for the log)
                         try:
-                            raw, note = ask(model, url, s, e, ctx); used_model = model; break
-                        except urllib.error.HTTPError as x:
-                            err = f'{x.code} {(x.read() or b"").decode()[:200] if x.fp else x.msg}'
-                            if x.code == 404: MODELS.remove(model); break   # model name not available: try the next one
-                            if x.code in BUSY:
-                                print(f'  {model} busy ({x.code}); {"waiting" if attempt < 2 else "trying another model"}')
-                                if attempt < 2: time.sleep(45 * (attempt + 1)); continue
-                                if len(MODELS) > 1: MODELS.remove(model); MODELS.append(model)   # busy all run: try others first
-                                break
-                            raise RuntimeError(err)
-                    if raw is not None: break
-                if raw is None: raise RuntimeError(err or 'no model available')
-                part['chunks'][key] = {'i': i, 'm': clean(raw, v, s, e, L), 'n': note[:600]}
+                            text_call('Reply with JSON {"ok": true}'); print('  a plain text request worked, so only video requests are being turned away')
+                            err = f'{(err or "")[:3]} busy for video even in {size // 60}-min pieces (text requests work); trying again next run'
+                        except Exception:
+                            err = f'{(err or "")[:3]} every model busy right now; trying again next run'
+                    raise RuntimeError(err or 'no model available')
+                part['chunks'][f'{v}@{pos}'] = {'i': i, 'm': clean(raw, v, pos, e, L), 'n': note[:600]}
                 part['model'] = used_model
-                used += e - s
-                print(f'  part {i + 1} {s // 60}-{e // 60} min: {len(raw)} moment(s) in {time.time() - t0:.0f}s ({used_model})')
+                used += e - pos
+                print(f'  part {i + 1} {pos // 60}-{e // 60} min: {len(raw)} moment(s) in {time.time() - t0:.0f}s ({used_model})')
+                pos = e if e >= L else e - 30
+                part['pos'][v] = pos if e < L else L
+                good += 1
+                if good >= 6 and size < CHUNK: size = min(CHUNK, size * 2); good = 0; state['size'] = size
                 json.dump(state, open('moments.json', 'w'), separators=(',', ':'))
-                time.sleep(15)   # stay under the free tier's per-minute limit
+                time.sleep(10)   # stay under the free tier's per-minute limit
     except Exception as x:
         f = fails.get(gid) or {}
-        slow = 'timed out' in str(x).lower() or 'timeout' in str(x).lower() or str(x)[:3] in {str(c) for c in BUSY}
+        slow = 'timed out' in str(x).lower() or 'timeout' in str(x).lower() or str(x)[:3] in {str(c) for c in BUSY} or 'busy' in str(x)
         busy = str(x)[:3] in {str(c) for c in BUSY}
         fails[gid] = {'n': f.get('n', 0) + (0 if busy else 0.5 if slow else 1), 'last': int(NOW), 'err': str(x)[:300], 'slow': slow}
         q['sec'] += used
