@@ -1274,7 +1274,7 @@ function winChart(g, A, H) {
   const when = `${done ? 'Matchup open to kickoff' : 'Since the matchup opened'} · ${n} point${n === 1 ? '' : 's'}`;
   return `<div class="card wpchart" data-wp="${data}" data-when="${esc(when)}"><div class="row spread" style="align-items:flex-end;gap:6px 14px"><div><h3 style="margin:0">Win chance</h3><div class="muted small wph-when">${esc(when)}</div></div>
     <div class="wph">${head(A, ca, fa(last), fa(first))}${head(H, ch, fh(last), fh(first))}</div></div>
-    <div class="wpwrap">${svg}</div><p class="muted small" style="margin:6px 0 0">The model's chance for each team, updated whenever lines re-price (new scores, an advance or rating changes). Weeks before tracking started are rebuilt from the model as of each week. Touch or hover to see each point.</p></div>`;
+    <div class="wpwrap">${svg}</div><p class="muted small" style="margin:6px 0 0">${done ? "The model's chance for each team from when the matchup opened until kickoff, updated whenever the lines re-priced." : "The model's chance for each team, updated whenever lines re-price (new scores, an advance or rating changes)."} Weeks before tracking started are rebuilt from the model as of each week. Touch or hover to see each point.</p></div>`;
 }
 // Crosshair + header readout for the win-chance chart.
 function wpHover(e) {
@@ -1406,9 +1406,9 @@ setInterval(() => checkLive(), 60000);   // re-checks live.json / expiry; no dat
 const pct0 = p => Math.round(p * 100) + '%';
 const possN = n => /s$/i.test(n) ? n + "'" : n + "'s";
 // Season numbers for one team: ATS, O/U, scoring, underdog record (forfeits skipped).
-function teamProfile(tid, s) {
+function teamProfile(tid, s, upto = Infinity) {
   const out = { gp: 0, pf: 0, pa: 0, ats: [0, 0, 0], ou: [0, 0, 0], dog: [0, 0], fav: [0, 0] };
-  D.games.filter(g => g.season === s && played(g) && !g.forfeit && (g.home === tid || g.away === tid)).forEach(g => {
+  D.games.filter(g => g.season === s && g.week < upto && played(g) && !g.forfeit && (g.home === tid || g.away === tid)).forEach(g => {
     const home = g.home === tid, my = home ? +g.homeScore : +g.awayScore, th = home ? +g.awayScore : +g.homeScore, l = lineOf(g);
     out.gp++; out.pf += my; out.pa += th;
     if (!l) return;
@@ -1569,8 +1569,10 @@ PAGES.game = function (id) {
   const ca = isUserTeam(A) ? A.coach : (g.awayCoach || 'CPU'), ch = isUserTeam(H) ? H.coach : (g.homeCoach || 'CPU');
   const coachA = done ? coachOf(g, 'away') : ca, coachH = done ? coachOf(g, 'home') : ch;
   const pbA = playbookOf(A, s, coachA), pbH = playbookOf(H, s, coachH);
-  const PA = teamProfile(A.id, s), PH = teamProfile(H.id, s);
-  const R = ratings(s, nowUpto()), formOf = t => { const r = R[t.id]; if (!r || !r.perf.length) return null; const x = r.perf.slice(-3); return x.reduce((a, b) => a + b.v, 0) / x.length; };
+  // A finished game shows both teams as they were going in (stats from earlier weeks only).
+  const upto = done ? g.week : Infinity, recs0 = done ? records(s, upto) : recs;
+  const PA = teamProfile(A.id, s, upto), PH = teamProfile(H.id, s, upto);
+  const R = ratings(s, done ? g.week : nowUpto()), formOf = t => { const r = R[t.id]; if (!r || !r.perf.length) return null; const x = r.perf.slice(-3); return x.reduce((a, b) => a + b.v, 0) / x.length; };
   const fav = l ? (l.spread <= 0 ? H : A) : null, dog = fav ? (fav === H ? A : H) : null;
   const meets = coachMeetings(coachA, coachH, g.id);
   const mw = meets.reduce((o, m) => { const w = meetingWinner(m).coach; o[w] = (o[w] || 0) + 1; return o; }, {});
@@ -1653,16 +1655,17 @@ PAGES.game = function (id) {
 
   // ----- trends to watch -----
   const trends = [];
+  const is = done ? 'was' : 'is', has = done ? 'had' : 'has';
   [[A, PA], [H, PH]].forEach(([t, P]) => {
-    if (P.ats[0] + P.ats[1] >= 3) trends.push(`${t.name} is <b>${P.ats[0]}-${P.ats[1]}${P.ats[2] ? '-' + P.ats[2] : ''}</b> against the spread this season.`);
-    if (P.ou[0] + P.ou[1] >= 3 && Math.abs(P.ou[0] - P.ou[1]) >= 2) trends.push(`The ${P.ou[0] > P.ou[1] ? 'Over' : 'Under'} is <b>${Math.max(P.ou[0], P.ou[1])}-${Math.min(P.ou[0], P.ou[1])}</b> in ${t.name} games.`);
-    if (P.dog[0] + P.dog[1] >= 2) trends.push(`${t.name} is <b>${P.dog[0]}-${P.dog[1]}</b> straight up as an underdog.`);
-    const st = streak(recs[t.id]); if (/^[WL]\d+$/.test(st) && +st.slice(1) >= 3) trends.push(`${t.name} has ${st[0] === 'W' ? 'won' : 'lost'} <b>${st.slice(1)} straight</b>.`);
+    if (P.ats[0] + P.ats[1] >= 3) trends.push(`${t.name} ${is} <b>${P.ats[0]}-${P.ats[1]}${P.ats[2] ? '-' + P.ats[2] : ''}</b> against the spread this season${done ? ' going in' : ''}.`);
+    if (P.ou[0] + P.ou[1] >= 3 && Math.abs(P.ou[0] - P.ou[1]) >= 2) trends.push(`The ${P.ou[0] > P.ou[1] ? 'Over' : 'Under'} ${is} <b>${Math.max(P.ou[0], P.ou[1])}-${Math.min(P.ou[0], P.ou[1])}</b> in ${t.name} games.`);
+    if (P.dog[0] + P.dog[1] >= 2) trends.push(`${t.name} ${is} <b>${P.dog[0]}-${P.dog[1]}</b> straight up as an underdog.`);
+    const st = streak(recs0[t.id]); if (/^[WL]\d+$/.test(st) && +st.slice(1) >= 3) trends.push(`${t.name} ${has} ${st[0] === 'W' ? 'won' : 'lost'} <b>${st.slice(1)} straight</b>.`);
   });
-  if (meets.length >= 2) { const wa = mw[coachA] || 0, wh = mw[coachH] || 0; trends.push(`${coachA} is <b>${wa}-${wh}</b> all-time against ${coachH}.`); }
+  if (meets.length >= 2) { const wa = mw[coachA] || 0, wh = mw[coachH] || 0; trends.push(`${coachA} ${is} <b>${wa}-${wh}</b> all-time against ${coachH}${done ? ' going in' : ''}.`); }
 
   // ----- render -----
-  const pr = currentPower(s), prOf = t => pr.find(x => x.id === t.id)?.rank;
+  const pr = done ? powerRankings(s, g.week) : currentPower(s), prOf = t => pr.find(x => x.id === t.id)?.rank;
   const sim = L.phase === PHASES.REG && s === L.season ? simulate(s, nowUpto()) : null;
   // dir: +1 higher is better, -1 lower is better, 0 no comparison. Green = edge, red = behind.
   const tape = [];
@@ -1701,17 +1704,17 @@ PAGES.game = function (id) {
       return air ? `<div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(air.h)}</h2>${air.p.map(t => `<p>${esc(t)}</p>`).join('')}<p class="muted small" style="margin-bottom:0">Recap written by AI from the broadcast.</p></div>`
         : `<div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(title)}</h2>${(() => { const vs = {}; return paras.map(t => `<p>${esc(vary(t, vs))}</p>`).join(''); })()}</div>`; })()}
     ${done ? momentsCard(g, A, H) : ''}
-    ${trends.length ? `<div class="card"><h3 style="margin-top:0">Trends to watch</h3><ul class="clean gp-trends">${trends.slice(0, 6).map(t => `<li>${t}</li>`).join('')}</ul></div>` : ''}
-    <div class="card"><h3 style="margin-top:0">Tale of the tape</h3><p class="muted small" style="margin-top:0"><span class="tb">✓ Green</span> = the edge in that category, <span class="tw">red</span> = behind.</p><div class="tablewrap"><table class="gp-tape">
+    ${trends.length ? `<div class="card"><h3 style="margin-top:0">${done ? 'Trends going in' : 'Trends to watch'}</h3><ul class="clean gp-trends">${trends.slice(0, 6).map(t => `<li>${t}</li>`).join('')}</ul></div>` : ''}
+    <div class="card"><h3 style="margin-top:0">Tale of the tape</h3><p class="muted small" style="margin-top:0">${done ? 'How the teams stacked up going in. ' : ''}<span class="tb">✓ Green</span> = the edge in that category, <span class="tw">red</span> = behind.</p><div class="tablewrap"><table class="gp-tape">
       <tr><td class="num"><b>${esc(A.abbr || A.name)}</b></td><th></th><td><b>${esc(H.abbr || H.name)}</b></td></tr>
-      ${row('Record', rec(recs[A.id]), rec(recs[H.id]), wpct(recs[A.id]), wpct(recs[H.id]), 1)}${row('Points / game', ppg(PA), ppg(PH), num(PA, 'pf'), num(PH, 'pf'), 1)}${row('Allowed / game', papg(PA), papg(PH), num(PA, 'pa'), num(PH, 'pa'), -1)}
-      ${row('Against the spread', rec3(PA.ats), rec3(PH.ats), ap(PA.ats), ap(PH.ats), 1)}${row('Over-Under', rec3(PA.ou), rec3(PH.ou))}${row('Streak', streak(recs[A.id]), streak(recs[H.id]), stv(recs[A.id]), stv(recs[H.id]), 1)}
+      ${row('Record', rec(recs0[A.id]), rec(recs0[H.id]), wpct(recs0[A.id]), wpct(recs0[H.id]), 1)}${row('Points / game', ppg(PA), ppg(PH), num(PA, 'pf'), num(PH, 'pf'), 1)}${row('Allowed / game', papg(PA), papg(PH), num(PA, 'pa'), num(PH, 'pa'), -1)}
+      ${row('Against the spread', rec3(PA.ats), rec3(PH.ats), ap(PA.ats), ap(PH.ats), 1)}${row('Over-Under', rec3(PA.ou), rec3(PH.ou))}${row('Streak', streak(recs0[A.id]), streak(recs0[H.id]), stv(recs0[A.id]), stv(recs0[H.id]), 1)}
       ${row('Top 25', rk(A) ? '#' + rk(A) : '–', rk(H) ? '#' + rk(H) : '–', rk(A) || rk(H) ? rkv(rk(A)) : null, rkv(rk(H)), -1)}${row('Power rank', prOf(A) ? '#' + prOf(A) : '–', prOf(H) ? '#' + prOf(H) : '–', prOf(A), prOf(H), -1)}
       ${row('Overall', A.ovr || '–', H.ovr || '–', nz(A.ovr), nz(H.ovr), 1)}${row('Offense', A.off || '–', H.off || '–', nz(A.off), nz(H.off), 1)}${row('Defense', A.def || '–', H.def || '–', nz(A.def), nz(H.def), 1)}${pbA || pbH ? row('Offense playbook', esc(pbA?.off || '–'), esc(pbH?.off || '–')) + row('Defense playbook', esc(pbA?.def || '–'), esc(pbH?.def || '–')) : ''}
-      ${sim && sim[A.id] && sim[H.id] ? row('Title odds', pctStr(sim[A.id].titlePct), pctStr(sim[H.id].titlePct), sim[A.id].titlePct, sim[H.id].titlePct, 1) : ''}
+      ${!done && sim && sim[A.id] && sim[H.id] ? row('Title odds', pctStr(sim[A.id].titlePct), pctStr(sim[H.id].titlePct), sim[A.id].titlePct, sim[H.id].titlePct, 1) : ''}
     </table></div></div>
     ${coachA !== 'CPU' && coachH !== 'CPU' ? `<div class="card"><h3 style="margin-top:0">Past meetings: ${esc(coachA)} vs. ${esc(coachH)}</h3>${meets.length ? `<p class="muted small" style="margin-top:0">${mw[coachA] || 0}-${mw[coachH] || 0} all-time${done ? ' before this game' : ''}. Coaches' records follow them from team to team.</p><div class="tablewrap"><table>
-      <tr><th>When</th><th>Result</th></tr>${meets.map(m => { const w = meetingWinner(m); return `<tr class="clickable" data-game="${esc(m.id)}"><td class="muted">S${seasonNum(m.season)} · ${m.type === 'ccg' ? '<b class="win">Title game</b>' : 'Wk ' + m.week}</td><td class="wrap"><b>${esc(w.coach)}</b> (${esc(team(w.team).name)}) ${m.forfeit ? 'by forfeit over' : `${w.ws}-${w.ls} over`} ${esc(w.lcoach)} (${esc(team(w.lteam).name)})</td></tr>`; }).join('')}</table></div>` : `<p class="muted">First meeting ever between these two coaches.</p>`}</div>` : ''}
+      <tr><th>When</th><th>Result</th></tr>${meets.map(m => { const w = meetingWinner(m); return `<tr class="clickable" data-game="${esc(m.id)}"><td class="muted">S${seasonNum(m.season)} · ${m.type === 'ccg' ? '<b class="win">Title game</b>' : 'Wk ' + m.week}</td><td class="wrap"><b>${esc(w.coach)}</b> (${esc(team(w.team).name)}) ${m.forfeit ? 'by forfeit over' : `${w.ws}-${w.ls} over`} ${esc(w.lcoach)} (${esc(team(w.lteam).name)})</td></tr>`; }).join('')}</table></div>` : `<p class="muted">${done ? 'This was the first meeting between these two coaches.' : 'First meeting ever between these two coaches.'}</p>`}</div>` : ''}
     ${gameBets(g)}
     <p class="cheatlink"><a href="javascript:void 0" data-act="cheat">📺 Broadcast cheat sheet ›</a></p>`;
 };
