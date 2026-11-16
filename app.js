@@ -49,6 +49,31 @@ const videosOf = g => {
   return (Array.isArray(raw) ? raw : [raw]).filter(Boolean).map(vidInfo).sort((a, b) => a.d - b.d);
 };
 const videoOf = g => videosOf(g)[0]?.id || null;
+// Key moments the Game moments workflow pulled out of each broadcast with Gemini (moments.json, loaded the first
+// time a finished game is opened). The commissioner can hide a wrong one or ask for a redo (saved on the league doc).
+let MOMS = null, momsLoading = false;
+async function loadMoments() {
+  if (MOMS || momsLoading) return; momsLoading = true;
+  try { const r = await fetch('moments.json?t=' + Math.floor(Date.now() / 600000), { cache: 'no-cache' }); MOMS = r.ok ? await r.json() : { games: {} }; } catch (e) { MOMS = { games: {} }; }
+  if (/^#game\//.test(location.hash)) route();
+}
+const MOM_ICON = { td: '🏈', fg: '🥅', safety: '🛡️', turnover: '🔄', big: '💥', stop: '🧱', twopt: '✌️', final: '🏁', other: '⭐' };
+const momKey = m => m.v + '@' + m.t;
+const fmtStamp = t => { const h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), sec = String(t % 60).padStart(2, '0'); return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`; };
+function momentsCard(g, A, H) {
+  if (!videosOf(g).length) return '';
+  if (!MOMS) { loadMoments(); return ''; }
+  const rec = MOMS.games?.[g.id], commish = isCommish(), hidden = (D.league.momHide || {})[g.id] || [];
+  const redo = (D.league.momRedo || {})[g.id], pending = redo && (!rec || redo > rec.at * 1000);
+  if (!rec) return commish ? `<div class="card"><h3 style="margin-top:0">Key moments</h3><p class="muted small" style="margin:0">${pending ? 'Redo requested.' : 'Not pulled from the broadcast yet.'} The Game moments workflow does one game about every 30 minutes, newest first.</p></div>` : '';
+  const parts = rec.vids || [], ms = (rec.m || []).filter(m => commish || !hidden.includes(momKey(m)));
+  if (!ms.length && !commish) return '';
+  const tag = m => { const t = m.s === 'home' ? H : m.s === 'away' ? A : null; return t ? `<i class="sw" style="background:${esc(teamColor(t))}"></i>${esc(t.abbr || t.name)}` : ''; };
+  return `<div class="card moments"><h3 style="margin-top:0">Key moments</h3>
+    ${ms.map(m => { const off = hidden.includes(momKey(m)); return `<div class="mom${off ? ' off' : ''}"><a href="https://youtu.be/${esc(m.v)}?t=${m.t}" target="_blank" rel="noopener">
+      <span class="mi">${MOM_ICON[m.k] || '⭐'}</span><span class="mt"><b>${esc(m.x)}</b><span class="muted small">${[tag(m), m.q ? (m.q > 4 ? 'OT' : 'Q' + m.q) : '', m.sc ? `${esc(A.abbr || A.name)} ${m.sc.split('-')[0]}, ${esc(H.abbr || H.name)} ${m.sc.split('-')[1]}` : '', (parts.length > 1 ? `Part ${parts.indexOf(m.v) + 1} · ` : '') + '▶ ' + fmtStamp(m.t)].filter(Boolean).join(' · ')}</span></span></a>${commish ? `<button class="sm ghost" data-momhide="${esc(g.id)}|${esc(momKey(m))}" title="${off ? 'Show' : 'Hide'}">${off ? '↩' : '✕'}</button>` : ''}</div>`; }).join('')}
+    <p class="muted small" style="margin:10px 0 0">Picked out of the broadcast by AI, so a play can be off. Tap one to jump to it.${commish ? ` <a href="javascript:void 0" data-act="momRedo" data-gid="${esc(g.id)}">${pending ? 'Redo requested' : 'Redo this game'}</a>` : ''}</p></div>`;
+}
 // Broadcasts the commissioner filed as "User vs CPU" (games against teams outside the league), on the team's page.
 function cpuBroadcasts(tid) {
   const list = Array.isArray(D.league.vidCpu) ? D.league.vidCpu : [], vs = list.filter(x => (x.t || []).includes(tid)).map(x => vidInfo(x.v)).sort((a, b) => b.d - a.d);
@@ -1673,6 +1698,7 @@ PAGES.game = function (id) {
     ${done ? broadcastCard(g) : ''}
     ${l && !g.forfeit ? winChart(g, A, H) : ''}
     <div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(title)}</h2>${(() => { const vs = {}; return paras.map(t => `<p>${esc(vary(t, vs))}</p>`).join(''); })()}</div>
+    ${done ? momentsCard(g, A, H) : ''}
     ${trends.length ? `<div class="card"><h3 style="margin-top:0">Trends to watch</h3><ul class="clean gp-trends">${trends.slice(0, 6).map(t => `<li>${t}</li>`).join('')}</ul></div>` : ''}
     <div class="card"><h3 style="margin-top:0">Tale of the tape</h3><p class="muted small" style="margin-top:0"><span class="tb">✓ Green</span> = the edge in that category, <span class="tw">red</span> = behind.</p><div class="tablewrap"><table class="gp-tape">
       <tr><td class="num"><b>${esc(A.abbr || A.name)}</b></td><th></th><td><b>${esc(H.abbr || H.name)}</b></td></tr>
@@ -1763,7 +1789,7 @@ document.addEventListener('click', async e => {
   if (lx) { try { localStorage.setItem('oecLiveDismissed', lx.dataset.livex); } catch (err) { /* ignore */ } showLive(); return; }
   const tf = e.target.closest('[data-tsflip]'); if (tf) { UI.tsFlip = !UI.tsFlip; route(); return; }
   const tr = e.target.closest('tr[data-team]'); if (tr && !e.target.closest('a')) { location.hash = '#team/' + tr.dataset.team; return; }
-  const t = e.target.closest('[data-sort],[data-metric],[data-trend],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-slip],[data-popular],[data-res],[data-act],[data-close],[data-stake],[data-acct],[data-cancel],[data-cashout],[data-value],[data-kinv],[data-kacc],[data-kdec],[data-kcan]');
+  const t = e.target.closest('[data-momhide],[data-sort],[data-metric],[data-trend],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-slip],[data-popular],[data-res],[data-act],[data-close],[data-stake],[data-acct],[data-cancel],[data-cashout],[data-value],[data-kinv],[data-kacc],[data-kdec],[data-kcan]');
   if (!t) return;
   const page = (location.hash.slice(1) || 'home').split('/')[0];
   if (t.dataset.sort) {
@@ -1797,6 +1823,11 @@ document.addEventListener('click', async e => {
   else if (t.dataset.act === 'saveSlip') saveSlip();
   else if (t.dataset.act === 'hardReload') { sessionStorage.removeItem('oecReloaded'); location.reload(); }
   else if (t.dataset.act === 'cheat') showCheat();
+  else if (t.dataset.act === 'momRedo') { if (confirm('Run this game through the AI again? It will be redone within about an hour.')) { await put('meta', 'league', { momRedo: { [t.dataset.gid]: Date.now() } }); route(); } }
+  else if (t.dataset.momhide) {
+    const [gid, k] = t.dataset.momhide.split('|'), cur = (D.league.momHide || {})[gid] || [];
+    await put('meta', 'league', { momHide: { [gid]: cur.includes(k) ? cur.filter(x => x !== k) : [...cur, k] } }); route();
+  }
   else if (t.dataset.act === 'saveCheat') { const C = UI.cheat; saveCanvas(UI.cheatCanvas, `oec-${slug((C?.A.abbr || 'away') + '-at-' + (C?.H.abbr || 'home'))}-cheat-sheet.png`, 'OEC broadcast cheat sheet'); }
   else if (t.dataset.slip) showSlipImage(D.wagers.find(x => x.id === t.dataset.slip));
   else if (t.dataset.act === 'clearLegs') { UI.legs = []; route(); }

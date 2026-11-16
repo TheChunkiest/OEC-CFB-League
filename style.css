@@ -713,3 +713,13 @@ h3{margin-bottom:10px}
 .toast.on{opacity:1;transform:translateX(-50%)}
 .vfilt{flex-wrap:wrap;margin-bottom:6px}.vfilt button{font-size:.8rem;padding:6px 10px}
 .vreason{color:#ffb35c}
+/* Key moments (game recap) */
+.moments .mom{display:flex;align-items:center;gap:8px;border-top:1px solid var(--line);padding:9px 0}
+.moments .mom:first-of-type{border-top:0;padding-top:2px}
+.moments .mom a{display:flex;gap:10px;align-items:flex-start;flex:1;color:inherit;text-decoration:none;min-width:0}
+.moments .mi{font-size:18px;line-height:22px;width:22px;text-align:center;flex:none}
+.moments .mt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.moments .mt b{font-weight:600}
+.moments .mt .sw{margin-right:4px}
+.moments .mom.off{opacity:.4}
+.moments .mom.off b{text-decoration:line-through}
