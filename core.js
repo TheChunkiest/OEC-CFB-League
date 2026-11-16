@@ -1167,8 +1167,25 @@ export function teamPlayers(tid, season = D.league.season) {
     if (p.pos && p.pos !== '?') x.pos[p.pos] = (x.pos[p.pos] || 0) + 1;
     x.games++; if (p.g) x.grades.push(p.g); if (p.l && x.lines.length < 3) x.lines.push({ w: g.week, l: p.l, gid: g.id });
   }));
+  // A player first seen by last name only ("Battles") joins the full-name entry ("Jim Battles") once one shows up,
+  // as long as only one player on the team has that last name.
+  const last = k => k.split(' ').pop();
+  Object.keys(by).filter(k => !k.includes(' ')).forEach(k => {
+    const full = Object.keys(by).filter(f => f.includes(' ') && last(f) === k);
+    if (full.length !== 1) return;
+    const x = by[k], y = by[full[0]];
+    Object.entries(x.pos).forEach(([ps, n]) => y.pos[ps] = (y.pos[ps] || 0) + n);
+    y.games += x.games; y.grades.push(...x.grades); y.lines = [...y.lines, ...x.lines].sort((a, b) => b.w - a.w).slice(0, 3);
+    delete by[k];
+  });
   return Object.values(by).map(x => ({ ...x, pos: Object.entries(x.pos).sort((a, b) => b[1] - a[1])[0]?.[0] || '', grade: x.grades.length ? x.grades.reduce((a, b) => a + b, 0) / x.grades.length : null }))
     .sort((a, b) => (b.grade ?? 0) * Math.min(b.games, 3) - (a.grade ?? 0) * Math.min(a.games, 3) || b.games - a.games);
+}
+// The fullest name on record for a player on this team ("Battles" -> "Jim Battles"), for older recaps.
+export function playerName(tid, season, n) {
+  const k = pkey(n), ps = teamPlayers(tid, season);
+  const hit = ps.find(p => pkey(p.name) === k) || (!k.includes(' ') ? ps.find(p => pkey(p.name).split(' ').pop() === k) : null);
+  return hit && hit.name.length > n.length ? hit.name : n;
 }
 // Scouting notes for a team from its most recent broadcasts: what's been working and where it struggles.
 export function teamScouting(tid, season = D.league.season, n = 3) {

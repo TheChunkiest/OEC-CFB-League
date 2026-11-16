@@ -2,9 +2,9 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, batch, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout, PUSH_PREFS, pushDefaults, pushLocal, pushSupported, pushEnable, pushPrefs, pushDisable,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, raceSim, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, AI, aiRecap, loadAI, teamPlayers, teamScouting, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
+  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
 , playbookOf, pbSeason, pbText
-} from './core.js?v=61';
+} from './core.js?v=62';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -61,7 +61,7 @@ function aiExtras(g, A, H) {
   const r = aiRecap(g), rec = AI.moms?.games?.[g.id], commish = isCommish(), hidden = (D.league.momHide || {})[g.id] || [];
   const redo = (D.league.momRedo || {})[g.id], pending = redo && (!rec || redo > rec.at * 1000);
   const stars = r?.pl?.length ? `<h4 class="aistars-h">Standouts</h4><ul class="aistars">${r.pl.slice(0, 4).map(p => { const t = p.s === 'home' ? H : A;
-    return `<li><i class="sw" style="background:${esc(teamColor(t))}"></i><div><b>${esc(p.n)}</b> <span class="muted small">${esc(t.abbr || t.name)}${p.pos && p.pos !== '?' ? ' · ' + esc(p.pos) : ''}</span>${p.l ? `<div class="muted small">${esc(p.l)}</div>` : ''}</div></li>`; }).join('')}</ul>` : '';
+    return `<li><i class="sw" style="background:${esc(teamColor(t))}"></i><div><b>${esc(playerName(t.id, g.season, p.n))}</b> <span class="muted small">${esc(t.abbr || t.name)}${p.pos && p.pos !== '?' ? ' · ' + esc(p.pos) : ''}</span>${p.l ? `<div class="muted small">${esc(p.l)}</div>` : ''}</div></li>`; }).join('')}</ul>` : '';
   const ctl = commish && rec ? `<p class="muted small" style="margin:8px 0 0"><a href="javascript:void 0" data-act="momRedo" data-gid="${esc(g.id)}">${pending ? 'Redo requested' : 'Redo with AI'}</a>${rec.r ? ` · <a href="javascript:void 0" data-momhide="${esc(g.id)}|recap">${hidden.includes('recap') ? 'Show AI recap' : 'Hide AI recap'}</a>` : ''}</p>` : '';
   return stars + ctl;
 }
