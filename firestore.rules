@@ -38,10 +38,10 @@ service cloud.firestore {
     }
     // Missing fields are read with defaults (an unplayed game may have no score field at all, and older lines
     // have no juice fields, which the site prices at -110), so a missing field never blocks a valid bet.
-    function validGameWager(d, t) {
+    function validGameWager(d, t, L) {
       let g = gameOf(d.gameId);
       let ln = g.get('lines', {});
-      return g.home != t && g.away != t && g.season == league().season && g.week >= league().week && g.get('homeScore', null) == null
+      return g.home != t && g.away != t && g.season == L.season && g.week >= L.week && g.get('homeScore', null) == null
         && ((d.market == 'ml' && ((d.pick == 'home' && d.odds == ln.get('mlHome', null)) || (d.pick == 'away' && d.odds == ln.get('mlAway', null))))
           || (d.market == 'spread' && d.line == ln.get('spread', null) && ((d.pick == 'home' && d.odds == ln.get('spreadOddsHome', -110)) || (d.pick == 'away' && d.odds == ln.get('spreadOddsAway', -110))))
           || (d.market == 'total' && d.line == ln.get('total', null) && ((d.pick == 'over' && d.odds == ln.get('overOdds', -110)) || (d.pick == 'under' && d.odds == ln.get('underOdds', -110)))));
@@ -58,7 +58,7 @@ service cloud.firestore {
     }
     function validLeg(leg, L, t) {
       return (leg.market == 'future' && validFuture(leg, L, t)) || (leg.market == 'wins' && validWins(leg, L, t))
-        || (leg.market != 'future' && leg.market != 'wins' && validGameWager(leg, t));
+        || (leg.market != 'future' && leg.market != 'wins' && validGameWager(leg, t, L));
     }
     function validParlay(d, L, t) {
       let n = d.legs.size();
@@ -75,13 +75,16 @@ service cloud.firestore {
             && (d.legs.size() < 2 || d.legs[1].gameId == L.gotw.gameId)
             && (d.legs.size() < 3 || d.legs[2].gameId == L.gotw.gameId))));
     }
+    // The league doc and the bettor's profile are each read once here and passed down, so even a 6-leg parlay
+    // stays well under Firestore's limit of 10 document lookups per request (profile + league + up to 6 games).
     function validWager(d) {
+      let u = userDoc().data;
       let L = league();
-      let t = userDoc().data.teamId;
-      return baseWager(d, L) && validBoost(d, L) && ((d.market == 'future' && validFuture(d, L, t))
+      let t = u.teamId;
+      return t != '' && baseWager(d, L) && validBoost(d, L) && ((d.market == 'future' && validFuture(d, L, t))
         || (d.market == 'wins' && validWins(d, L, t))
         || (d.market == 'parlay' && validParlay(d, L, t))
-        || (d.market != 'future' && d.market != 'wins' && d.market != 'parlay' && validGameWager(d, t)));
+        || (d.market != 'future' && d.market != 'wins' && d.market != 'parlay' && validGameWager(d, t, L)));
     }
     // Parlay cash out: the owner can settle their own open parlay early once more than half its legs have won
     // (none lost, at least one still open). Pays at most the stake's profit on the winning legs alone x 0.75,
@@ -119,7 +122,7 @@ service cloud.firestore {
     }
     match /wagers/{id} {
       allow read: if true;
-      allow create: if isCoach() && validWager(request.resource.data);
+      allow create: if signedIn() && validWager(request.resource.data);
       allow update: if isCommish() || validCashOut() || validCancel();
       allow delete: if isCommish() || (signedIn() && resource.data.uid == request.auth.uid && resource.data.status == 'open'
         && league().bettingOpen == true
