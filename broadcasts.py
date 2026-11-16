@@ -140,13 +140,14 @@ def run():
     # 2) Match every video to a game
     abbr = {t['id']: (t.get('abbr') or t.get('name') or t['id']) for t in (season.get('teams') or [])}
     nice = lambda ids: ', '.join(sorted(abbr.get(i, i) for i in ids))
-    links, review, when, why = {}, [], {}, {}   # links: gameId -> [videoIds] (several when a stream had to restart)
+    links, review, when, why, vteams = {}, [], {}, {}, {}   # links: gameId -> [videoIds] (several when a stream had to restart)
     for v in sorted(vids.values(), key=lambda v: v['d']):
         title = v['t']
         found = mentions(title, teams)
         sm = re.search(r'\bS(?:EASON)?\s*(\d+)\b', title, re.I)
         wm = re.search(r'\bW(?:EEK|K)?\s*(\d+)\b', title, re.I)
         yr = lg_first + int(sm.group(1)) - 1 if sm else None
+        if found: vteams[v['id']] = sorted(found)
         if len(found) >= 2:
             cands = [g for g in played if g['home'] in found and g['away'] in found]
         elif len(found) == 1 and sm and wm:
@@ -183,7 +184,7 @@ def run():
         links.setdefault(g['id'], []).append(v['id']); when.setdefault(g['id'], []).append(v['d'])
         if how == 'guess': review.append(v['id'])
     out = {'uploads': state.get('uploads'), 'fetchedAt': state.get('fetchedAt', 0),
-           'videos': sorted(vids.values(), key=lambda v: -v['d'])[:400], 'links': links, 'guessed': review, 'why': why,
+           'videos': sorted(vids.values(), key=lambda v: -v['d'])[:400], 'links': links, 'guessed': review, 'why': why, 'teams': {k: t for k, t in vteams.items() if not any(k in ids for ids in links.values())},
            'league': {str(y): sorted(t) for y, t in league.items()}}
     if out != state:
         json.dump(out, open('videos.json', 'w'), separators=(',', ':'))

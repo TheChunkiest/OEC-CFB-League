@@ -48,6 +48,12 @@ const videosOf = g => {
   return (Array.isArray(raw) ? raw : [raw]).filter(Boolean).map(vidInfo).sort((a, b) => a.d - b.d);
 };
 const videoOf = g => videosOf(g)[0]?.id || null;
+// Broadcasts the commissioner filed as "User vs CPU" (games against teams outside the league), on the team's page.
+function cpuBroadcasts(tid) {
+  const list = Array.isArray(D.league.vidCpu) ? D.league.vidCpu : [], vs = list.filter(x => (x.t || []).includes(tid)).map(x => vidInfo(x.v)).sort((a, b) => b.d - a.d);
+  if (!vs.length) return '';
+  return `<div class="card"><h3 style="margin-top:0">▶ Broadcasts vs CPU teams</h3>${vs.slice(0, 12).map(v => `<a class="vidpart" href="https://youtu.be/${esc(v.id)}" target="_blank" rel="noopener"><img src="https://i.ytimg.com/vi/${esc(v.id)}/mqdefault.jpg" alt="" loading="lazy"><span><b>${esc(v.t || 'OEC on YouTube')}</b><span class="muted small">${v.d ? new Date(v.d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</span></span></a>`).join('')}</div>`;
+}
 function broadcastCard(g) {
   const vs = videosOf(g); if (!vs.length) return '';
   const one = vs.length === 1, v = vs[0];
@@ -373,6 +379,7 @@ const PAGES = {
         <div class="stat" style="margin-top:10px"><div><span>Record</span><b>${rec(r)}</b></div><div><span>Conf</span><b>${r.cw}-${r.cl}</b></div><div><span>PF / PA</span><b>${r.pf} / ${r.pa}</b></div><div><span>Streak</span><b>${streak(r)}</b></div>
           <div><span>OVR / OFF / DEF</span><b>${t.ovr || '–'} / ${t.off || '–'} / ${t.def || '–'}</b></div>${sim ? `<div><span>Likely record</span><b>${sim.likely}</b></div><div><span>Title odds</span><b>${pctStr(sim.titlePct)}</b></div>` : ''}</div></div>
       ${teamStatsCard(id, s)}
+      ${cpuBroadcasts(id)}
       <div class="card"><h3 style="margin-top:0">${s} Schedule</h3><div class="tablewrap"><table><tr><th>Wk</th><th>Opponent</th><th>Line</th><th class="num">Result</th></tr>
       ${games.map(g => {
         const home = g.home === id, opp = home ? g.away : g.home, done = played(g), l = lineOf(g);

@@ -195,6 +195,8 @@ function wizard() {
    unlinks mistakes. Choices are saved on the game (video id, or 'none'); "not a game" goes in league.vidIgnore. */
 let VIDS = null, vidsLoading = false;
 function loadVids() { if (VIDS || vidsLoading) return; vidsLoading = true; fetch('videos.json?t=' + Date.now(), { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(j => { VIDS = j || { videos: [], links: {} }; if (ST.tab === 'games') render(); }).catch(() => { VIDS = { videos: [], links: {} }; }); }
+// "User vs CPU" broadcasts: a plain list [{ v: videoId, t: [teamIds] }] (a list replaces cleanly when saved).
+const cpuList = () => Array.isArray(L().vidCpu) ? L().vidCpu : [];
 const autoVids = g => { const r = VIDS?.links?.[g.id]; return !r ? [] : Array.isArray(r) ? r : [r]; };
 // The videos on a game: the commissioner's list (or 'none') wins over the automatic match.
 const vidsOfGame = g => g.video === 'none' ? [] : g.video ? (Array.isArray(g.video) ? g.video : [g.video]) : autoVids(g);
@@ -212,19 +214,18 @@ function broadcastCard() {
   const nm = (g, side) => { const r = g[side + 'Coach']; return r && r !== 'CPU' ? r : g.season === L().season && isUserTeam(team(g[side])) ? team(g[side]).coach : 'User'; };
   const kind = g => { const a = inLeague(g, 'away'), h = inLeague(g, 'home'); return a && h ? 'uu' : a || h ? 'uc' : 'cc'; };
   const who = g => { const k = kind(g); return k === 'uu' ? ` (${nm(g, 'away')} vs ${nm(g, 'home')})` : k === 'uc' ? ` (${nm(g, inLeague(g, 'away') ? 'away' : 'home')} vs CPU)` : ' (CPU game)'; };
-  const vf = ST.vidFilter || 'all';
-  const gopts = playedGames.filter(g => vf === 'all' || kind(g) === vf).map(g => `<option value="${esc(g.id)}">${esc(glabel(g) + who(g))}</option>`).join('');
-  const filt = `<div class="seg vfilt">${[['all', 'All games'], ['uu', 'User vs User'], ['uc', 'User vs CPU']].map(([k, l]) => `<button class="${vf === k ? 'on' : ''}" data-act="vidFilter" data-f="${k}">${l}</button>`).join('')}</div>`;
+  const gopts = playedGames.map(g => `<option value="${esc(g.id)}">${esc(glabel(g) + who(g))}</option>`).join('');
+  const cpuSet = new Set(cpuList().map(x => x.v));
   const guessed = (VIDS.guessed || []).map(id => [id, playedGames.find(g => !g.video && autoVids(g).includes(id))]).filter(([, g]) => g);
-  const loose = vids.filter(v => !usedVid.has(v.id) && !ignore.has(v.id)).slice(0, 15);
+  const loose = vids.filter(v => !usedVid.has(v.id) && !ignore.has(v.id) && !cpuSet.has(v.id)).slice(0, 15);
   const linked = playedGames.filter(g => vidsOfGame(g).length).slice(0, 30);
   const hidden = vids.filter(v => ignore.has(v.id) && !usedVid.has(v.id));
   const vt = id => esc(byId[id]?.t || id);
   if (!vids.length) return head + `<span class="muted small">none yet</span></summary><p class="muted small">The workflow pulls the channel's videos every few hours once the <code>YT_API_KEY</code> secret is set, and links each one to its game from the title.</p></details>`;
   return head + `<span class="muted small">${linked.length} linked${guessed.length ? ` · ${guessed.length} to check` : ''}${loose.length ? ` · ${loose.length} unmatched` : ''}</span></summary>
-    <p class="muted small" style="margin:10px 0 6px">Show in the game lists:</p>${filt}
     ${guessed.length ? `<h3>Check these</h3><p class="muted small" style="margin-top:0">The title didn't say which season, so these are best guesses.</p>${guessed.map(([vid, g]) => `<div class="vrow"><div><b>${vt(vid)}</b><span class="muted small">→ ${esc(glabel(g))}</span></div><div class="row"><button class="sm" data-act="vidLink" data-vid="${esc(vid)}" data-gid="${esc(g.id)}">✓ Right</button><button class="sm ghost" data-act="vidUnlink" data-gid="${esc(g.id)}" data-vid="${esc(vid)}">✕ Wrong</button></div></div>`).join('')}` : ''}
-    ${loose.length ? `<h3>Not linked</h3><p class="muted small" style="margin-top:0">Pick the game, or mark it as not a league game.</p>${loose.map(v => `<div class="vrow"><div><b>${esc(v.t)}</b><span class="muted small">${new Date(v.d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${VIDS.why?.[v.id] ? ` · <span class="vwhy">${esc(VIDS.why[v.id])}</span>` : ''}</span></div><div class="row"><select data-vidpick="${esc(v.id)}" style="max-width:220px"><option value="">Pick a game…</option>${gopts}</select><button class="sm" data-act="vidLink" data-vid="${esc(v.id)}">Link</button><button class="sm ghost" data-act="vidIgnore" data-vid="${esc(v.id)}">Not a game</button></div></div>`).join('')}` : ''}
+    ${loose.length ? `<h3>Not linked</h3><p class="muted small" style="margin-top:0">Pick the game, or mark it as not a league game.</p>${loose.map(v => `<div class="vrow"><div><b>${esc(v.t)}</b><span class="muted small">${new Date(v.d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}${VIDS.why?.[v.id] ? ` · <span class="vwhy">${esc(VIDS.why[v.id])}</span>` : ''}</span></div><div class="row"><select data-vidpick="${esc(v.id)}" style="max-width:220px"><option value="">Pick a game…</option>${gopts}</select><button class="sm" data-act="vidLink" data-vid="${esc(v.id)}">Link</button><button class="sm ghost" data-act="vidCpu" data-vid="${esc(v.id)}">User vs CPU</button><button class="sm ghost" data-act="vidIgnore" data-vid="${esc(v.id)}">Not a game</button></div></div>`).join('')}` : ''}
+    ${cpuSet.size ? `<details style="margin-top:12px" data-keepopen="cpu" ${ST.open?.cpu ? 'open' : ''}><summary class="muted small">User vs CPU broadcasts (${cpuSet.size}): shown on the team's page</summary>${vids.filter(v => cpuSet.has(v.id)).map(v => `<div class="vrow"><div><b>${esc(v.t)}</b><span class="muted small">${(cpuList().find(x => x.v === v.id)?.t || []).map(id => esc(team(id).abbr || team(id).name)).join(', ') || 'no league team recognized'}</span></div><button class="sm ghost" data-act="vidCpuUndo" data-vid="${esc(v.id)}">Undo</button></div>`).join('')}</details>` : ''}
     ${hidden.length ? `<details style="margin-top:12px" data-keepopen="hid" ${ST.open?.hid ? 'open' : ''}><summary class="muted small">Marked "not a game" (${hidden.length}): tap to review or undo</summary>${hidden.map(v => `<div class="vrow"><div><b>${esc(v.t)}</b><span class="muted small">${new Date(v.d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span></div><div class="row"><select data-vidpick="${esc(v.id)}" style="max-width:220px"><option value="">Pick a game…</option>${gopts}</select><button class="sm" data-act="vidLink" data-vid="${esc(v.id)}">Link</button><button class="sm ghost" data-act="vidRestore" data-vid="${esc(v.id)}">Undo</button></div></div>`).join('')}</details>` : ''}
     <div class="row" style="margin-top:14px"><button class="sm ghost" data-act="vidReset">↺ Start over (re-match everything)</button></div>
     ${linked.length ? `<h3>Linked</h3><p class="muted small" style="margin-top:0">A game can have several parts if a stream restarted. Link another video to the same game to add a part.</p>${linked.map(g => `<div class="vrow"><div><b>${esc(glabel(g))}</b>${vidsOfGame(g).map((id, i, a) => `<span class="muted small vpart">${a.length > 1 ? `Part ${i + 1}: ` : ''}${vt(id)} <a href="#" data-act="vidUnlink" data-gid="${esc(g.id)}" data-vid="${esc(id)}" title="Unlink">✕</a></span>`).join('')}</div></div>`).join('')}` : ''}
@@ -678,11 +679,20 @@ const ACT = {
     const g = D.games.find(x => x.id === t.dataset.gid), rest = t.dataset.vid ? vidsOfGame(g).filter(v => v !== t.dataset.vid) : [];
     await put('games', g.id, { video: rest.length ? rest : 'none' }); stay('Unlinked.');
   },
-  vidFilter(t) { ST.vidFilter = t.dataset.f; stay(); },
+  async vidCpu(t) {
+    const vid = t.dataset.vid; let teams = (VIDS.teams || {})[vid] || [];
+    if (!teams.length) {   // the title didn't name a team we know: ask which league team it was
+      const ab = prompt('Which league team played in this one? (abbreviation, e.g. PUR)'); if (!ab) return;
+      const tm = D.teams.find(x => (x.abbr || '').toLowerCase() === ab.trim().toLowerCase() || x.name.toLowerCase() === ab.trim().toLowerCase());
+      if (!tm) return alert('No team with that abbreviation.'); teams = [tm.id];
+    }
+    await put('meta', 'league', { vidCpu: [...cpuList().filter(x => x.v !== vid), { v: vid, t: teams }] }); stay('Filed as a User vs CPU broadcast.');
+  },
+  async vidCpuUndo(t) { await put('meta', 'league', { vidCpu: cpuList().filter(x => x.v !== t.dataset.vid) }); stay('Back in the "Not linked" list.'); },
   async vidReset() {
     const manual = D.games.filter(g => g.video), hid = (L().vidIgnore || []).length;
     if (!confirm(`Start over on broadcasts?\n\nThis clears your ${manual.length} manual link${manual.length === 1 ? '' : 's'} and ${hid} "not a game" mark${hid === 1 ? '' : 's'}, so every video is matched again automatically from its title and upload date (league and CPU games). Run the League notifications workflow afterward.`)) return;
-    await batch([...manual.map(g => ({ op: 'set', col: 'games', id: g.id, data: { video: null } })), { op: 'set', col: 'meta', id: 'league', data: { vidIgnore: [] } }]);
+    await batch([...manual.map(g => ({ op: 'set', col: 'games', id: g.id, data: { video: null } })), { op: 'set', col: 'meta', id: 'league', data: { vidIgnore: [], vidCpu: [] } }]);
     stay('Cleared. Now run the League notifications workflow.');
   },
   async vidRestore(t) { await put('meta', 'league', { vidIgnore: (L().vidIgnore || []).filter(x => x !== t.dataset.vid) }); stay('Back in the "Not linked" list.'); },
