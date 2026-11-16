@@ -88,7 +88,7 @@ function playersToWatch(A, H, s) {
 // Team page: the players the AI has seen this season, and what's been working / where the team struggles.
 function scoutCard(t, s = D.league.season) {
   if (!AI.moms) { loadMoments(); return ''; }
-  const ps = teamPlayers(t.id, s).slice(0, 8), sc = teamScouting(t.id, s);
+  const ps = teamPlayers(t.id, s).slice(0, 6), sc = teamScouting(t.id, s);
   if (!ps.length && !sc.length) return '';
   return `<div class="card"><h3 style="margin-top:0">Players to know</h3>
     ${ps.length ? `<div class="tablewrap"><table><tr><th>Player</th><th class="num">Games</th><th class="num">Grade</th></tr>${ps.map(p => `<tr><td class="wrap"><b>${esc(p.name)}</b>${p.pos ? ` <span class="muted small">${esc(p.pos)}</span>` : ''}${p.lines[0] ? `<div class="muted small">Wk ${p.lines[0].w}: ${esc(p.lines[0].l)}</div>` : ''}</td><td class="num">${p.games}</td><td class="num">${p.grade ? p.grade.toFixed(1) : '–'}</td></tr>`).join('')}</table></div>` : ''}
