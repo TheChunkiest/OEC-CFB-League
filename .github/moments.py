@@ -13,7 +13,8 @@ import json, os, re, sys, time, urllib.request, urllib.parse, urllib.error
 
 NOW = time.time()
 KEY = os.environ.get('GEMINI_API_KEY', '').strip()
-MODELS = [m for m in [os.environ.get('GEMINI_MODEL', '').strip(), 'gemini-flash-latest', 'gemini-2.5-flash'] if m]
+MODELS = [m for m in [os.environ.get('GEMINI_MODEL', '').strip(), 'gemini-flash-latest', 'gemini-2.5-flash', 'gemini-flash-lite-latest', 'gemini-2.5-flash-lite'] if m]
+BUSY = (429, 500, 502, 503, 504)   # Google's "busy / try again later" answers: never count against a game
 DAILY_HOURS = float(os.environ.get('MOMENTS_DAILY_HOURS') or 6)    # free tier allows about 8 hours of YouTube a day
 CHUNK = 15 * 60          # 15-minute pieces: each request comes back in a few minutes
 RUN_BUDGET = 17 * 60     # stop starting new pieces after this long; the next run picks up where this one left off
@@ -116,6 +117,7 @@ def text_call(prompt):
         except urllib.error.HTTPError as x:
             err = f'{x.code} {x.read().decode()[:200]}'
             if x.code == 404: MODELS.remove(model); continue
+            if x.code in BUSY: time.sleep(20); continue   # busy: try the next model
             raise RuntimeError(err)
     raise RuntimeError(err or 'no model available')
 
@@ -233,7 +235,7 @@ def run():
         if have and have.get('vids') == vl and not want_redo: continue
         f = fails.get(gid) or {}
         if f.get('n', 0) >= 3 and not want_redo: continue
-        wait = 25 * 60 if f.get('slow') or 'timed out' in str(f.get('err', '')) else 6 * 3600 * f.get('n', 1)   # a timeout just tries again next run
+        wait = 25 * 60 if f.get('slow') or 'timed out' in str(f.get('err', '')) or str(f.get('err', ''))[:3] in {str(c) for c in BUSY} else 6 * 3600 * f.get('n', 1)   # a timeout just tries again next run
         if f and NOW - f.get('last', 0) < wait and not want_redo: continue
         todo.append((0 if want_redo or (state.get('partial') or {}).get('gid') == gid else 1, -(g.get('playedAt') or 0), -g.get('season', 0), -(g.get('week') or 0), gid, vl))
     if not todo:
@@ -270,12 +272,19 @@ def run():
                 e = min(L, s + CHUNK + 60)   # a minute of overlap so a play on the seam isn't lost
                 raw, err, note, t0 = None, None, '', time.time()
                 for model in list(MODELS):
-                    try:
-                        raw, note = ask(model, url, s, e, ctx); used_model = model; break
-                    except urllib.error.HTTPError as x:
-                        err = f'{x.code} {(x.read() or b"").decode()[:200] if x.fp else x.msg}'
-                        if x.code == 404: MODELS.remove(model); continue   # model name not available: try the next one
-                        raise RuntimeError(err)
+                    for attempt in range(3):   # busy: wait and try again, then fall back to the next model
+                        try:
+                            raw, note = ask(model, url, s, e, ctx); used_model = model; break
+                        except urllib.error.HTTPError as x:
+                            err = f'{x.code} {(x.read() or b"").decode()[:200] if x.fp else x.msg}'
+                            if x.code == 404: MODELS.remove(model); break   # model name not available: try the next one
+                            if x.code in BUSY:
+                                print(f'  {model} busy ({x.code}); {"waiting" if attempt < 2 else "trying another model"}')
+                                if attempt < 2: time.sleep(45 * (attempt + 1)); continue
+                                if len(MODELS) > 1: MODELS.remove(model); MODELS.append(model)   # busy all run: try others first
+                                break
+                            raise RuntimeError(err)
+                    if raw is not None: break
                 if raw is None: raise RuntimeError(err or 'no model available')
                 part['chunks'][key] = {'i': i, 'm': clean(raw, v, s, e, L), 'n': note[:600]}
                 part['model'] = used_model
@@ -285,8 +294,9 @@ def run():
                 time.sleep(15)   # stay under the free tier's per-minute limit
     except Exception as x:
         f = fails.get(gid) or {}
-        slow = 'timed out' in str(x).lower() or 'timeout' in str(x).lower()
-        fails[gid] = {'n': f.get('n', 0) + (0.5 if slow else 1), 'last': int(NOW), 'err': str(x)[:300], 'slow': slow}
+        slow = 'timed out' in str(x).lower() or 'timeout' in str(x).lower() or str(x)[:3] in {str(c) for c in BUSY}
+        busy = str(x)[:3] in {str(c) for c in BUSY}
+        fails[gid] = {'n': f.get('n', 0) + (0 if busy else 0.5 if slow else 1), 'last': int(NOW), 'err': str(x)[:300], 'slow': slow}
         q['sec'] += used
         print('moments: failed:', str(x)[:300])
         json.dump(state, open('moments.json', 'w'), separators=(',', ':'))
