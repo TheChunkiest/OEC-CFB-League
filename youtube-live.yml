@@ -1,7 +1,10 @@
 name: YouTube live check
-# Every ~5 minutes, see if the OEC YouTube channel is live and update live.json.
-# The site reads live.json to show (or hide) the "We're live" pop-up.
+# Checks whether the OEC YouTube channel is live about once a minute and updates live.json.
+# GitHub only starts scheduled workflows every 5 minutes (at best), so each run checks
+# 5 times, a minute apart. The site reads live.json every minute to show the pop-up.
 # Best results: add a repo secret named YT_API_KEY (a YouTube Data API v3 key).
+# When the channel goes live it also sends a phone notification right away (if the FIREBASE_SERVICE_ACCOUNT
+# secret is set) to every device with "OEC goes live on YouTube" turned on. One notification per stream.
 on:
   schedule:
     - cron: '*/5 * * * *'
@@ -14,15 +17,21 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
     steps:
       - uses: actions/checkout@v5
+      - name: Notification tools
+        if: env.SA != ''
+        run: python3 -m pip install -q --break-system-packages google-auth || python3 -m pip install -q google-auth
       - name: Check channel
         id: check
         shell: python
         env:
           YT_API_KEY: ${{ secrets.YT_API_KEY }}
         run: |
-          import json, os, re, time, urllib.request, urllib.parse
+          import json, os, re, time, urllib.request, urllib.parse, urllib.error
           HANDLE = "@originalentertainingcrackers"
           key = (os.environ.get("YT_API_KEY") or "").strip()
 
@@ -56,29 +65,85 @@ jobs:
               return {"live": True, "videoId": vid.group(1), "url": "https://www.youtube.com/watch?v=" + vid.group(1),
                       "title": (title.group(1) if title else "Live on YouTube").replace("&amp;", "&").replace("&#39;", "'").replace("&quot;", '"')}
 
-          try:
-              new = via_api() if key else via_page()
-              print("Method:", "YouTube API" if key else "page check (add YT_API_KEY secret for reliability)")
-          except Exception as e:
-              print("Check failed, leaving live.json alone:", e); raise SystemExit(0)
-          old = {}
-          if os.path.exists("live.json"):
-              try: old = json.load(open("live.json"))
-              except Exception: pass
-          # While live, re-stamp checkedAt every run so the site knows the status is fresh;
-          # the site ignores a "live" status that hasn't been confirmed in 25 minutes.
-          if new["live"]:
-              new["checkedAt"] = int(time.time() * 1000)
-          elif old.get("live") is False or (not old.get("live") and "live" in old):
-              print("No change:", new); raise SystemExit(0)
-          json.dump(new, open("live.json", "w"), indent=1)
-          open(os.environ["GITHUB_OUTPUT"], "a").write("changed=true\n")
-          print("Updated:", new)
-      - name: Save
-        if: steps.check.outputs.changed == 'true'
-        run: |
-          git config user.name "oec-live-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add live.json
-          git commit -m "YouTube live status update"
-          git push
+          import subprocess
+          def git(*a): return subprocess.run(["git", *a], check=False, capture_output=True, text=True)
+          git("config", "user.name", "oec-live-bot"); git("config", "user.email", "actions@users.noreply.github.com")
+
+          def save(data, why):
+              json.dump(data, open("live.json", "w"), indent=1)
+              git("add", "live.json")
+              if git("diff", "--cached", "--quiet").returncode == 0: return
+              git("commit", "-m", "YouTube live status: " + why)
+              for _ in range(3):
+                  if git("push").returncode == 0: print("Pushed:", why); return
+                  git("pull", "--rebase", "-X", "theirs")
+              print("Push failed")
+
+          # Phone notification when a stream starts (free Firebase Cloud Messaging; reads the device list only then).
+          def notify_live(v):
+              if not os.environ.get("SA"): return
+              try:
+                  from google.oauth2 import service_account
+                  from google.auth.transport.requests import Request
+                  cfg = open("firebase-config.js").read()
+                  pid = re.search(r'projectId\s*:\s*["\']([^"\']+)', cfg).group(1)
+                  base = f"https://firestore.googleapis.com/v1/projects/{pid}/databases/(default)/documents"
+                  creds = service_account.Credentials.from_service_account_info(json.loads(os.environ["SA"]),
+                      scopes=["https://www.googleapis.com/auth/firebase.messaging", "https://www.googleapis.com/auth/datastore"])
+                  creds.refresh(Request())
+                  H = {"Authorization": f"Bearer {creds.token}", "Content-Type": "application/json"}
+                  def call(url, body=None, method=None):
+                      rq = urllib.request.Request(url, data=json.dumps(body).encode() if body is not None else None, headers=H, method=method)
+                      with urllib.request.urlopen(rq, timeout=30) as r: return json.load(r)
+                  devs, tok = [], ""
+                  while True:
+                      d = call(f"{base}/push?pageSize=300" + (f"&pageToken={tok}" if tok else ""))
+                      devs += d.get("documents", []); tok = d.get("nextPageToken")
+                      if not tok: break
+                  sent = 0
+                  for x in devs:
+                      f = x.get("fields", {}); prefs = f.get("prefs", {}).get("mapValue", {}).get("fields", {})
+                      if not prefs.get("live", {}).get("booleanValue", True): continue   # on unless turned off
+                      token = f.get("token", {}).get("stringValue")
+                      if not token: continue
+                      msg = {"message": {"token": token, "data": {"title": "🔴 OEC is live on YouTube", "body": v.get("title") or "Tap to watch.", "link": v.get("url") or "https://youtube.com/@originalentertainingcrackers", "tag": "live"},
+                             "webpush": {"headers": {"Urgency": "high", "TTL": "3600"}}}}
+                      try: call(f"https://fcm.googleapis.com/v1/projects/{pid}/messages:send", msg); sent += 1
+                      except urllib.error.HTTPError as e:
+                          err = e.read().decode(errors="ignore")
+                          if e.code == 404 or "UNREGISTERED" in err:
+                              try: call("https://firestore.googleapis.com/v1/" + x["name"], method="DELETE")
+                              except Exception: pass
+                          else: print("send failed", e.code, err[:200])
+                  print(f"Live notification sent to {sent} device(s)")
+              except Exception as e:
+                  print("Live notification skipped:", repr(e)[:300])
+
+          CHECKS, GAP = 5, 60
+          for i in range(CHECKS):
+              t0 = time.time()
+              try:
+                  new = via_api() if key else via_page()
+              except Exception as e:
+                  print(f"[{i+1}/{CHECKS}] check failed:", e); new = None
+              if new is not None:
+                  old = {}
+                  if os.path.exists("live.json"):
+                      try: old = json.load(open("live.json"))
+                      except Exception: pass
+                  now = int(time.time() * 1000)
+                  if new["live"]:
+                      # Commit when going live (or the video changes); while still live, re-stamp
+                      # checkedAt about every 5 minutes so the site knows it's fresh (it ignores a
+                      # "live" status not confirmed in 25 minutes) without a commit every minute.
+                      if not old.get("live") or old.get("videoId") != new.get("videoId"):
+                          new["checkedAt"] = now; new["notified"] = old.get("notified"); save(new, "live")
+                          if old.get("notified") != new.get("videoId"):   # one notification per stream
+                              notify_live(new); new["notified"] = new.get("videoId"); save(new, "notified")
+                      elif now - int(old.get("checkedAt") or 0) > 4.5 * 60e3:
+                          new["checkedAt"] = now; new["notified"] = old.get("notified"); save(new, "still live")
+                      else: print(f"[{i+1}/{CHECKS}] still live")
+                  elif old.get("live") or "live" not in old:
+                      save({"live": False, "notified": old.get("notified")}, "offline")
+                  else: print(f"[{i+1}/{CHECKS}] not live")
+              if i < CHECKS - 1: time.sleep(max(0, GAP - (time.time() - t0)))
