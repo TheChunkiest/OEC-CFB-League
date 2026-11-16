@@ -5,7 +5,7 @@ name: League notifications
 #     when there's something to send; what has been sent is remembered in push-state.json.
 #   - Keeps season.json (a copy of the current season) and archive.json (past seasons) up to date, so visitors
 #     load those files for free and only read what changed from the database.
-# Each run reads about 5 small documents/queries plus the games with an agreed kickoff time.
+# A typical run reads about 4 documents; more only when something actually happened.
 on:
   schedule:
     - cron: '*/5 * * * *'
@@ -70,9 +70,9 @@ jobs:
 
           now = time.time() * 1000
           LG = one('meta/league')   # read once per run and shared below
-          # Only invites for upcoming kickoffs (one indexed range filter), so each run reads a handful of
-          # documents instead of whole collections. Team names are fetched just for the games involved.
-          body = {'structuredQuery': {'from': [{'collectionId': 'invites'}], 'where': {'fieldFilter': {'field': {'fieldPath': 'time'}, 'op': 'GREATER_THAN', 'value': {'integerValue': str(int(now - 6 * 3600e3))}}}}}
+          # Only kickoffs inside the reminder window (next 45 minutes), so most runs read nothing here.
+          rng = lambda op, v: {'fieldFilter': {'field': {'fieldPath': 'time'}, 'op': op, 'value': {'integerValue': str(int(v))}}}
+          body = {'structuredQuery': {'from': [{'collectionId': 'invites'}], 'where': {'compositeFilter': {'op': 'AND', 'filters': [rng('GREATER_THAN', now), rng('LESS_THAN_OR_EQUAL', now + 45 * 60e3)]}}}}
           req = urllib.request.Request(f'{base}:runQuery?key={key}', data=json.dumps(body).encode(), headers={'Content-Type': 'application/json'})
           with urllib.request.urlopen(req, timeout=30) as r:
               rows = json.load(r)
@@ -162,7 +162,10 @@ jobs:
               try: snapf = json.load(open('season.json'))
               except Exception: snapf = {}
               rebuild = not snapf or snapf.get('season') != cur or not snapf.get('T')
-              if not rebuild:
+              # Live updates never wait on this file (visitors read changes directly), so checking the change
+              # counts about every 30 minutes is plenty.
+              if not rebuild and int(now / 60e3) % 30 >= 10: print('season.json: not checking this run')
+              elif not rebuild:
                   n = sum(changed_since(c, snapf['T']) for c in SNAPC)
                   rebuild = n >= 25 or (n > 0 and now - snapf.get('generatedAt', 0) > 6 * 3600e3)
                   print(f'season.json: {n} documents changed since it was built')
@@ -283,8 +286,17 @@ jobs:
                       sk[gid] = t
                   st['kick'] = {k: v for k, v in sk.items() if v > now - 24 * 3600e3}
                   # Kickoff invites sent, and replies to them
-                  new = query('invites', 'ts', 'GREATER_THAN', int(st.get('inv') or now))
-                  resp = query('invites', 'respondedAt', 'GREATER_THAN', int(st.get('resp') or now))
+                  # One query for both: invites sent since last time OR answered since last time.
+                  fl = lambda f, v: {'fieldFilter': {'field': {'fieldPath': f}, 'op': 'GREATER_THAN', 'value': {'integerValue': str(int(v))}}}
+                  rows = call(f'{base}:runQuery', {'structuredQuery': {'from': [{'collectionId': 'invites'}], 'where': {'compositeFilter': {'op': 'OR',
+                      'filters': [fl('ts', st.get('inv') or now), fl('respondedAt', st.get('resp') or now)]}}}})
+                  got = []
+                  for row in rows:
+                      x = row.get('document')
+                      if not x: continue
+                      f = {k: val(v) for k, v in x.get('fields', {}).items()}; f['id'] = x['name'].rsplit('/', 1)[1]; got.append(f)
+                  new = [i for i in got if (i.get('ts') or 0) > (st.get('inv') or now)]
+                  resp = [i for i in got if (i.get('respondedAt') or 0) > (st.get('resp') or now)]
                   countered = {(i.get('gameId'), i.get('from')) for i in new}
                   for i in new:
                       if i.get('status') != 'pending': continue
