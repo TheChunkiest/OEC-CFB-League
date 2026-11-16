@@ -15,7 +15,11 @@ NOW = time.time()
 KEY = os.environ.get('GEMINI_API_KEY', '').strip()
 MODELS = [m for m in [os.environ.get('GEMINI_MODEL', '').strip(), 'gemini-flash-latest', 'gemini-2.5-flash'] if m]
 DAILY_HOURS = float(os.environ.get('MOMENTS_DAILY_HOURS') or 6)    # free tier allows about 8 hours of YouTube a day
-CHUNK = 40 * 60
+CHUNK = 15 * 60          # 15-minute pieces: each request comes back in a few minutes
+RUN_BUDGET = 17 * 60     # stop starting new pieces after this long; the next run picks up where this one left off
+REQ_TIMEOUT = 840
+THINK = {'on': True}     # ask for minimal "thinking" (faster); dropped automatically if the model doesn't take it
+START = time.time()
 MAX_MOMENTS = 14
 KINDS = {'td': '🏈', 'fg': '🥅', 'safety': '🛡️', 'turnover': '🔄', 'big': '💥', 'stop': '🧱', 'twopt': '✌️', 'final': '🏁', 'other': '⭐'}
 
@@ -79,10 +83,19 @@ Reply with JSON only, shaped like:
 If nothing from this game happens in this part, reply {{"moments": [], "notes": ""}}."""
     body = {'contents': [{'parts': [
         {'file_data': {'file_uri': url, 'mime_type': 'video/*'},
-         'video_metadata': {'start_offset': f'{start}s', 'end_offset': f'{end}s', 'fps': 0.5}},
+         'video_metadata': {'start_offset': f'{start}s', 'end_offset': f'{end}s', 'fps': 0.25}},
         {'text': prompt}]}],
         'generationConfig': {'responseMimeType': 'application/json', 'mediaResolution': 'MEDIA_RESOLUTION_LOW', 'temperature': 0.2}}
-    r = http(f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent', body, {'x-goog-api-key': KEY}, timeout=600)
+    if THINK['on']: body['generationConfig']['thinkingConfig'] = {'thinkingBudget': 0}
+    try:
+        r = http(f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent', body, {'x-goog-api-key': KEY}, timeout=REQ_TIMEOUT)
+    except urllib.error.HTTPError as x:
+        if x.code == 400 and THINK['on']:
+            msg = x.read().decode()[:300]
+            if 'think' in msg.lower():
+                THINK['on'] = False; return ask(model, url, start, end, ctx)
+            raise urllib.error.HTTPError(x.url, 400, msg, x.headers, None)
+        raise
     txt = ''.join(p.get('text', '') for c in r.get('candidates', []) for p in (c.get('content') or {}).get('parts', []))
     m = re.search(r'\{.*\}', txt, re.S)
     out = json.loads(m.group(0)) if m else {}
@@ -220,8 +233,9 @@ def run():
         if have and have.get('vids') == vl and not want_redo: continue
         f = fails.get(gid) or {}
         if f.get('n', 0) >= 3 and not want_redo: continue
-        if f and NOW - f.get('last', 0) < 6 * 3600 * f.get('n', 1) and not want_redo: continue
-        todo.append((0 if want_redo else 1, -(g.get('playedAt') or 0), -g.get('season', 0), -(g.get('week') or 0), gid, vl))
+        wait = 25 * 60 if f.get('slow') or 'timed out' in str(f.get('err', '')) else 6 * 3600 * f.get('n', 1)   # a timeout just tries again next run
+        if f and NOW - f.get('last', 0) < wait and not want_redo: continue
+        todo.append((0 if want_redo or (state.get('partial') or {}).get('gid') == gid else 1, -(g.get('playedAt') or 0), -g.get('season', 0), -(g.get('week') or 0), gid, vl))
     if not todo:
         print('moments: up to date')
         if state != load('moments.json', {}): json.dump(state, open('moments.json', 'w'), separators=(',', ':'))
@@ -237,35 +251,50 @@ def run():
     A, H = teams.get(g['away'], {}), teams.get(g['home'], {})
     ctx = make_ctx(g)
     print(f"moments: {gid} — {nm(A, g['away'])} @ {nm(H, g['home'])}, {len(vl)} part(s), {total / 60:.0f} min")
-    found, used, used_model, notes = [], 0, MODELS[0], []
+    # Progress is saved after every piece, so a slow or failed request never throws away the pieces already done.
+    part = state.get('partial') or {}
+    if part.get('gid') != gid or part.get('vids') != vl: part = {'gid': gid, 'vids': vl, 'chunks': {}}
+    state['partial'] = part
+    used, used_model = 0, part.get('model') or MODELS[0]
     try:
         for i, v in enumerate(vl):
             L = lens.get(v) or 3 * 3600
             url = f'https://www.youtube.com/watch?v={v}'
             for s in range(0, L, CHUNK):
+                key = f'{v}@{s}'
+                if key in part['chunks']: continue
+                if time.time() - START > RUN_BUDGET:
+                    q['sec'] += used
+                    print(f'moments: out of time this run; {len(part["chunks"])} piece(s) saved, continuing next run')
+                    json.dump(state, open('moments.json', 'w'), separators=(',', ':')); return
                 e = min(L, s + CHUNK + 60)   # a minute of overlap so a play on the seam isn't lost
-                raw, err, note = None, None, ''
-
+                raw, err, note, t0 = None, None, '', time.time()
                 for model in list(MODELS):
                     try:
                         raw, note = ask(model, url, s, e, ctx); used_model = model; break
                     except urllib.error.HTTPError as x:
-                        err = f'{x.code} {x.read().decode()[:200]}'
+                        err = f'{x.code} {(x.read() or b"").decode()[:200] if x.fp else x.msg}'
                         if x.code == 404: MODELS.remove(model); continue   # model name not available: try the next one
                         raise RuntimeError(err)
                 if raw is None: raise RuntimeError(err or 'no model available')
-                found += [dict(m, v_i=i) for m in clean(raw, v, s, e, L)]
-                if note: notes.append(note[:600])
+                part['chunks'][key] = {'i': i, 'm': clean(raw, v, s, e, L), 'n': note[:600]}
+                part['model'] = used_model
                 used += e - s
-                print(f'  part {i + 1} {s // 60}-{e // 60} min: {len(raw)} moment(s)')
-                time.sleep(20)   # stay under the free tier's per-minute limit
+                print(f'  part {i + 1} {s // 60}-{e // 60} min: {len(raw)} moment(s) in {time.time() - t0:.0f}s ({used_model})')
+                json.dump(state, open('moments.json', 'w'), separators=(',', ':'))
+                time.sleep(15)   # stay under the free tier's per-minute limit
     except Exception as x:
         f = fails.get(gid) or {}
-        fails[gid] = {'n': f.get('n', 0) + 1, 'last': int(NOW), 'err': str(x)[:300]}
+        slow = 'timed out' in str(x).lower() or 'timeout' in str(x).lower()
+        fails[gid] = {'n': f.get('n', 0) + (0.5 if slow else 1), 'last': int(NOW), 'err': str(x)[:300], 'slow': slow}
         q['sec'] += used
         print('moments: failed:', str(x)[:300])
         json.dump(state, open('moments.json', 'w'), separators=(',', ':'))
         return
+    chunks = sorted(part['chunks'].values(), key=lambda c: c['i'])
+    found = [dict(m, v_i=c['i']) for c in chunks for m in c['m']]
+    notes = [c['n'] for c in chunks if c.get('n')]
+    state.pop('partial', None)
     q['sec'] += used
     fails.pop(gid, None)
     done[gid] = {'vids': vl, 'at': int(NOW), 'model': used_model, 'm': pick(found), 'n': notes}
