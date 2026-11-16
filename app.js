@@ -2,8 +2,8 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, batch, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout, PUSH_PREFS, pushDefaults, pushLocal, pushSupported, pushEnable, pushPrefs, pushDisable,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, raceSim, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
-} from './core.js?v=52';
+  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
+} from './core.js?v=53';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -456,7 +456,8 @@ const PAGES = {
       <h2>How Betting Works</h2><div class="card"><ul class="clean"><li>Every linked coach starts each season with ${START_CREDITS.toLocaleString()} Crackers. Crackers don't carry over.</li>
       <li>Lines are posted for every upcoming game, so you can bet future weeks early. Every bet pays the listed +/− odds. Spread and total payouts move around −110 based on the model's edge on the line, key numbers (3, 7, 10, 14) and each team's recent form.</li>
       <li>Each advance re-rates every team from the results, so lines for all later weeks move. Your bet keeps the line it was placed at.</li>
-      <li>A game locks once the commissioner enters its score or locks betting.</li></ul></div>
+      <li>A game locks once the commissioner enters its score or locks betting.</li>
+      <li><b>No betting on yourself.</b> Coaches can't bet on their own games (spread, moneyline or total, alone or in a parlay), their own team's win total, or their own team's title odds. Bets placed before this rule stand.</li></ul></div>
       ${(L.links || []).length ? `<h2>Links</h2><div class="card"><ul class="clean">${L.links.map(l => `<li><a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a></li>`).join('')}</ul></div>` : ''}`;
   },
 
@@ -481,9 +482,10 @@ const PAGES = {
 function betRows(g) {
   const l = lineOf(g); if (!l) return '';
   const a = team(g.away), h = team(g.home);
-  const b = (market, pick, top, odds) => `<button class="pick${UI.mode === 'parlay' && UI.legs.some(x => x.gameId === g.id && x.market === market && x.pick === pick) ? ' sel' : ''}" data-bet="${esc(g.id)}|${market}|${pick}">${top} <b>${fmtOdds(odds)}</b></button>`;
+  const own = ownGame(g);
+  const b = (market, pick, top, odds) => own ? `<span class="pick off">${top} <b>${fmtOdds(odds)}</b></span>` : `<button class="pick${UI.mode === 'parlay' && UI.legs.some(x => x.gameId === g.id && x.market === market && x.pick === pick) ? ' sel' : ''}" data-bet="${esc(g.id)}|${market}|${pick}">${top} <b>${fmtOdds(odds)}</b></button>`;
   const isG = gotwGameId() === g.id;
-  return `<div class="betgame${isG ? ' gotw' : ''}">${isG ? `<span class="ribbon">★ Game of the Week · +${Math.round((GOTW_BOOST - 1) * 100)}% profit boost</span>` : ''}<div class="tm matchup">${chip(a.id, { season: g.season, week: g.week, href: '#game/' + g.id })}<span class="at">${g.neutral ? 'vs' : '@'}</span>${chip(h.id, { season: g.season, week: g.week, href: '#game/' + g.id })}${gameTags(g)}</div>${probBar(g, l, false, 'tm')}
+  return `<div class="betgame${isG ? ' gotw' : ''}${own ? ' own' : ''}">${own ? '<span class="ownnote">Your game · no betting</span>' : ''}${isG ? `<span class="ribbon">★ Game of the Week · +${Math.round((GOTW_BOOST - 1) * 100)}% profit boost</span>` : ''}<div class="tm matchup">${chip(a.id, { season: g.season, week: g.week, href: '#game/' + g.id })}<span class="at">${g.neutral ? 'vs' : '@'}</span>${chip(h.id, { season: g.season, week: g.week, href: '#game/' + g.id })}${gameTags(g)}</div>${probBar(g, l, false, 'tm')}
     <div style="display:grid;gap:4px">${b('spread', 'away', esc(a.abbr) + ' ' + fmtLine(-l.spread), juiceOf(l, 'spread', 'away'))}${b('spread', 'home', esc(h.abbr) + ' ' + fmtLine(l.spread), juiceOf(l, 'spread', 'home'))}</div>
     <div style="display:grid;gap:4px">${b('ml', 'away', esc(a.abbr), l.mlAway)}${b('ml', 'home', esc(h.abbr), l.mlHome)}</div>
     <div style="display:grid;gap:4px">${b('total', 'over', 'O ' + l.total, juiceOf(l, 'total', 'over'))}${b('total', 'under', 'U ' + l.total, juiceOf(l, 'total', 'under'))}</div></div>`;
@@ -497,7 +499,7 @@ function futuresSection() {
   h += `<div class="card"><p class="muted small" style="margin-top:0">Pick who wins the ${esc(L.conference)} Championship Game. Odds update after every advance${board[0].posted ? '' : ' (projected until the commissioner posts this week\'s lines)'}. A bet keeps the odds it was placed at, and it pays out when the title game is final. Closes at the end of the regular season.</p>
     <div class="tablewrap"><table><tr><th>Team</th><th class="hide-sm">Coach</th><th class="num">Chance</th><th class="num">Odds</th></tr>
     ${board.map(r => { const t = team(r.id); return `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td>${chip(r.id)}${subSm(isUserTeam(t) ? esc(t.coach) : 'CPU')}</td><td class="hide-sm">${isUserTeam(t) ? esc(t.coach) : '<span class="muted">CPU</span>'}</td><td class="num">${pctStr(r.p)}</td>
-      <td class="num">${r.odds == null ? '<span class="muted small">Off the board</span>' : open ? `<button class="pick${UI.mode === 'parlay' && UI.legs.some(x => x.market === 'future' && x.pick === r.id) ? ' sel' : ''}" data-fut="${esc(r.id)}"><b>${fmtOdds(r.odds)}</b></button>` : `<b>${fmtOdds(r.odds)}</b>`}</td></tr>`; }).join('')}
+      <td class="num">${r.odds == null ? '<span class="muted small">Off the board</span>' : open && r.id !== myTeam()?.id ? `<button class="pick${UI.mode === 'parlay' && UI.legs.some(x => x.market === 'future' && x.pick === r.id) ? ' sel' : ''}" data-fut="${esc(r.id)}"><b>${fmtOdds(r.odds)}</b></button>` : `<b>${fmtOdds(r.odds)}</b>`}</td></tr>`; }).join('')}
     </table></div>${open ? '' : futuresOpen() ? '<p class="muted small">Futures odds open once the commissioner posts this week\'s lines.</p>' : '<p class="muted small">Betting is locked right now.</p>'}</div>`;
   return h;
 }
@@ -507,7 +509,7 @@ function winsSection() {
   if (!rows.length) return h + `<div class="card empty">Win totals are open during the regular season.</div>`;
   const open = futuresOpen() && winsPosted();
   const btn = (r, pick) => { const o = r.o; if (!o) return ''; const odds = pick === 'over' ? o.over : o.under;
-    return open ? `<button class="pick${UI.mode === 'parlay' && UI.legs.some(x => x.market === 'wins' && x.team === r.id && x.pick === pick) ? ' sel' : ''}" data-wins="${esc(r.id)}|${pick}">${pick === 'over' ? 'O' : 'U'} ${o.line} <b>${fmtOdds(odds)}</b></button>` : `${pick === 'over' ? 'O' : 'U'} ${o.line} <b>${fmtOdds(odds)}</b>`; };
+    return open && r.id !== myTeam()?.id ? `<button class="pick${UI.mode === 'parlay' && UI.legs.some(x => x.market === 'wins' && x.team === r.id && x.pick === pick) ? ' sel' : ''}" data-wins="${esc(r.id)}|${pick}">${pick === 'over' ? 'O' : 'U'} ${o.line} <b>${fmtOdds(odds)}</b></button>` : `${pick === 'over' ? 'O' : 'U'} ${o.line} <b>${fmtOdds(odds)}</b>`; };
   h += `<div class="card">
     <div class="tablewrap"><table><tr><th>Team</th><th class="num hide-sm">Record</th><th class="num hide-sm">Proj.</th><th class="num">Over</th><th class="num">Under</th></tr>
     ${rows.map(r => `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td>${chip(r.id)} <span class="muted small hide-sm">${esc(team(r.id).coach || '')}</span>${subSm(`${esc(team(r.id).coach || '')} · ${r.w}-${regRec(r.id).l} · proj ${r.proj.toFixed(1)}`)}</td><td class="num hide-sm">${r.w}-${(regRec(r.id)).l}</td><td class="num hide-sm">${r.proj.toFixed(1)}</td>
@@ -545,7 +547,7 @@ function popularCard() {
   if (!p) return `<div class="card popular"><span class="ribbon">🔥 Most Popular Bet · ${esc(weekLabel())}</span><div class="muted">No bets placed yet this week. The most popular pick will show up here.</div></div>`;
   const row = slipRows({ ...p.cur, season: L.season })[0], inSlip = UI.mode === 'parlay' && UI.legs.some(x => selKey(x) === p.k);
   const mine = auth.profile && D.wagers.some(w => w.uid === auth.profile.id && w.status === 'open' && w.market !== 'parlay' && selKey(w) === p.k);
-  const btn = UI.mode === 'parlay' ? `<button class="${inSlip ? 'ghost' : 'gold'}" data-popular="1">${inSlip ? '✓ In your parlay' : '+ Add to parlay'}</button>`
+  const btn = ownLeg(p.cur) ? '<span class="pill">Your game · no betting</span>' : UI.mode === 'parlay' ? `<button class="${inSlip ? 'ghost' : 'gold'}" data-popular="1">${inSlip ? '✓ In your parlay' : '+ Add to parlay'}</button>`
     : mine ? '<span class="pill open">✓ You\'re on this</span>' : '<button class="gold" data-popular="1">Bet it</button>';
   return `<div class="card popular"><span class="ribbon">🔥 Most Popular Bet · ${esc(weekLabel())}</span>
     <div class="vtop"><div style="min-width:0"><div class="pop-title">${esc(row.t)}</div><div class="muted small">${esc(row.s)}</div></div><div class="big vodds">${fmtOdds(p.cur.odds)}</div></div>
@@ -561,7 +563,7 @@ function valuePick(games) {
   const L = D.league, s = L.season, counts = {};
   D.wagers.filter(w => w.season === s && w.status !== 'void').forEach(w => (w.market === 'parlay' ? (w.legs || []) : [w]).forEach(l => { const k = selKey(l); counts[k] = (counts[k] || 0) + 1; }));
   const best = [];
-  games.filter(g => !played(g) && L.bettingOpen && g.week >= L.week).forEach(g => {
+  games.filter(g => !played(g) && L.bettingOpen && g.week >= L.week && !ownGame(g)).forEach(g => {
     const l = lineOf(g); if (!l) return;
     const PH = teamProfile(g.home, s), PA = teamProfile(g.away, s); if (PH.gp < 2 || PA.gp < 2) return;
     const ppg = P => P.pf / P.gp, papg = P => P.pa / P.gp;
@@ -818,6 +820,7 @@ function showFutureSlip(tid) {
   const me = auth.profile;
   if (!me) { location.hash = '#account'; return; }
   if (!me.teamId) return alert('Your account is not linked to a team yet.');
+  if (ownLeg({ market: 'future', pick: tid })) return alert(OWN_BET_MSG);
   const r = futuresBoard().find(x => x.id === tid); if (!r || r.odds == null) return;
   UI.slip = { future: true, pick: tid, odds: r.odds, line: null, market: 'future' };
   const bal = bankroll(me.id).balance;
@@ -831,6 +834,7 @@ function showFutureSlip(tid) {
 const legGroup = l => l.market === 'future' ? 'future' : l.market === 'wins' ? 'wins:' + l.team : `${l.market}:${l.gameId}`;
 const legWeek = l => l.market === 'future' ? 'Title' : l.market === 'wins' ? 'Wins' : 'Wk ' + (D.games.find(x => x.id === l.gameId)?.week ?? '?');
 function legFor(gid, market, pick, tid) {
+  if (ownLeg({ gameId: gid, market, pick, team: tid })) { alert(OWN_BET_MSG); return null; }
   if (market === 'wins') { const r = winsBoard().find(x => x.id === tid); return r && r.o ? { gameId: '', market, pick, team: tid, line: r.o.line, odds: pick === 'over' ? r.o.over : r.o.under } : null; }
   if (market === 'future') { const r = futuresBoard().find(x => x.id === pick); return r && r.odds != null ? { gameId: '', market, pick, line: null, odds: r.odds } : null; }
   const g = D.games.find(x => x.id === gid), l = g && lineOf(g); if (!l) return null;
@@ -864,6 +868,7 @@ function showParlaySlip() {
   const me = auth.profile;
   if (!me) { location.hash = '#account'; return; }
   if (!me.teamId) return alert('Your account is not linked to a team yet.');
+  if (UI.legs.some(ownLeg)) { UI.legs = UI.legs.filter(l => !ownLeg(l)); alert(OWN_BET_MSG + ' Those legs were removed.'); if (UI.legs.length < 2) { route(); return; } }
   UI.legs = UI.legs.map(l => legFor(l.gameId, l.market, l.pick, l.team)).filter(Boolean);
   const odds = parlayOdds(UI.legs), bal = bankroll(me.id).balance, boost = boostFor(UI.legs);
   UI.slip = { parlay: true, odds, boost };
@@ -880,6 +885,7 @@ function showSlip(gid, market, pick) {
   if (!me) { location.hash = '#account'; return; }
   if (!me.teamId) return alert('Your account is not linked to a team yet.');
   const g = D.games.find(x => x.id === gid), l = lineOf(g);
+  if (ownGame(g)) return alert(OWN_BET_MSG);
   const odds = market === 'ml' ? (pick === 'home' ? l.mlHome : l.mlAway) : juiceOf(l, market, pick);
   const line = market === 'spread' ? l.spread : market === 'total' ? l.total : null;
   const boost = boostFor([{ gameId: gid, market }]);
@@ -1434,7 +1440,7 @@ PAGES.game = function (id) {
     <div class="muted small">${rec(recs[t.id])}${coach && coach !== 'CPU' ? ` · <a href="#coach/${slug(coach)}">${esc(coach)}</a>` : ' · CPU'}</div></div>${done ? `<div class="gp-score">${g.forfeit ? (won ? 'FW' : 'FL') : scr}</div>` : ''}</div>`;
   const hw = +g.homeScore > +g.awayScore;
   const ko = kickoffCard(g);
-  const canBet = !done && s === L.season && g.week >= L.week && L.bettingOpen && L.phase !== PHASES.POST;
+  const canBet = !done && s === L.season && g.week >= L.week && L.bettingOpen && L.phase !== PHASES.POST && !ownGame(g);
   return `<p><a href="#schedule/${g.week}">← Week ${g.week} schedule</a></p>
     <div class="card gp-head${isGotw ? ' gotw' : ''}">${isGotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}
       <div class="muted small" style="text-transform:uppercase;letter-spacing:.8px;font-weight:800">Season ${seasonNum(s)} · ${g.type === 'ccg' ? 'League Championship' : g.type === 'bowl' ? 'Postseason' : 'Week ' + g.week}${done ? ' · Final' : ''}${gameTags(g) ? ' · ' + gameTags(g) : ''}</div>

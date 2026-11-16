@@ -172,6 +172,16 @@ export async function loadBallots(all) {
 export const auth = { user: null, profile: null, ready: false };
 export const isCommish = () => auth.profile?.role === 'commish';
 export const myTeam = () => auth.profile?.teamId ? team(auth.profile.teamId) : null;
+// League rule (Season 3 vote): coaches can't bet on their own games or on lines tied to their own team
+// (their win total or their title odds). Bets placed before the rule stay. The Firestore rules enforce it too.
+export const ownGame = g => { const t = auth.profile?.teamId; return !!t && !!g && (g.home === t || g.away === t); };
+export const ownLeg = l => {
+  const t = auth.profile?.teamId; if (!t || !l) return false;
+  if (l.market === 'future') return l.pick === t;
+  if (l.market === 'wins') return l.team === t;
+  return ownGame(D.games.find(x => x.id === l.gameId));
+};
+export const OWN_BET_MSG = "League rule: you can't bet on your own games, your team's win total or your team's title odds.";
 
 function setProfile() { auth.profile = auth.user ? (D.users.find(u => u.id === auth.user.uid) || null) : null; }
 export async function watchAuth(cb) {

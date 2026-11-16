@@ -686,3 +686,6 @@ h3{margin-bottom:10px}
 .rpk.on span{color:var(--gold)}
 .rat{color:var(--muted);font-size:.85rem}
 .rpath .rleft{color:var(--muted);font-size:.8rem;margin-top:6px}
+
+.pick.off{opacity:.45;cursor:default;pointer-events:none}
+.betgame.own .ownnote{display:block;grid-column:1/-1;font-size:.72rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
