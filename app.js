@@ -61,7 +61,7 @@ function aiExtras(g, A, H) {
   const r = aiRecap(g), rec = AI.moms?.games?.[g.id], commish = isCommish(), hidden = (D.league.momHide || {})[g.id] || [];
   const redo = (D.league.momRedo || {})[g.id], pending = redo && (!rec || redo > rec.at * 1000);
   const stars = r?.pl?.length ? `<h4 class="aistars-h">Standouts</h4><ul class="aistars">${r.pl.slice(0, 4).map(p => { const t = p.s === 'home' ? H : A;
-    return `<li><i class="sw" style="background:${esc(teamColor(t))}"></i><div><b>${esc(shortName(playerName(t.id, g.season, p.n)))}</b> <span class="muted small">${esc(t.abbr || t.name)}${p.pos && p.pos !== '?' ? ' · ' + esc(p.pos) : ''}</span>${p.l ? `<div class="muted small">${esc(p.l)}</div>` : ''}</div></li>`; }).join('')}</ul>` : '';
+    return `<li><i class="sw" style="background:${esc(teamColor(t))}"></i><div><a class="plink" href="#team/${esc(t.id)}"><b>${esc(shortName(playerName(t.id, g.season, p.n)))}</b></a> <span class="muted small">${esc(t.abbr || t.name)}${p.pos && p.pos !== '?' ? ' · ' + esc(p.pos) : ''}</span>${p.l ? `<div class="muted small">${esc(p.l)}</div>` : ''}</div></li>`; }).join('')}</ul>` : '';
   const ctl = commish && rec ? `<p class="muted small" style="margin:8px 0 0"><a href="javascript:void 0" data-act="momRedo" data-gid="${esc(g.id)}">${pending ? 'Redo requested' : 'Redo with AI'}</a>${rec.r ? ` · <a href="javascript:void 0" data-momhide="${esc(g.id)}|recap">${hidden.includes('recap') ? 'Show AI recap' : 'Hide AI recap'}</a>` : ''}</p>` : '';
   return stars + ctl;
 }
