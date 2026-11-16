@@ -820,7 +820,7 @@ function showFutureSlip(tid) {
   const me = auth.profile;
   if (!me) { location.hash = '#account'; return; }
   if (!me.teamId) return alert('Your account is not linked to a team yet.');
-  if (ownLeg({ market: 'future', pick: tid })) return alert(OWN_BET_MSG);
+  if (ownLeg({ market: 'future', pick: tid })) return;
   const r = futuresBoard().find(x => x.id === tid); if (!r || r.odds == null) return;
   UI.slip = { future: true, pick: tid, odds: r.odds, line: null, market: 'future' };
   const bal = bankroll(me.id).balance;
@@ -834,7 +834,7 @@ function showFutureSlip(tid) {
 const legGroup = l => l.market === 'future' ? 'future' : l.market === 'wins' ? 'wins:' + l.team : `${l.market}:${l.gameId}`;
 const legWeek = l => l.market === 'future' ? 'Title' : l.market === 'wins' ? 'Wins' : 'Wk ' + (D.games.find(x => x.id === l.gameId)?.week ?? '?');
 function legFor(gid, market, pick, tid) {
-  if (ownLeg({ gameId: gid, market, pick, team: tid })) { alert(OWN_BET_MSG); return null; }
+  if (ownLeg({ gameId: gid, market, pick, team: tid })) return null;
   if (market === 'wins') { const r = winsBoard().find(x => x.id === tid); return r && r.o ? { gameId: '', market, pick, team: tid, line: r.o.line, odds: pick === 'over' ? r.o.over : r.o.under } : null; }
   if (market === 'future') { const r = futuresBoard().find(x => x.id === pick); return r && r.odds != null ? { gameId: '', market, pick, line: null, odds: r.odds } : null; }
   const g = D.games.find(x => x.id === gid), l = g && lineOf(g); if (!l) return null;
@@ -868,7 +868,7 @@ function showParlaySlip() {
   const me = auth.profile;
   if (!me) { location.hash = '#account'; return; }
   if (!me.teamId) return alert('Your account is not linked to a team yet.');
-  if (UI.legs.some(ownLeg)) { UI.legs = UI.legs.filter(l => !ownLeg(l)); alert(OWN_BET_MSG + ' Those legs were removed.'); if (UI.legs.length < 2) { route(); return; } }
+  if (UI.legs.some(ownLeg)) { UI.legs = UI.legs.filter(l => !ownLeg(l)); if (UI.legs.length < 2) { route(); return; } }
   UI.legs = UI.legs.map(l => legFor(l.gameId, l.market, l.pick, l.team)).filter(Boolean);
   const odds = parlayOdds(UI.legs), bal = bankroll(me.id).balance, boost = boostFor(UI.legs);
   UI.slip = { parlay: true, odds, boost };
@@ -885,7 +885,7 @@ function showSlip(gid, market, pick) {
   if (!me) { location.hash = '#account'; return; }
   if (!me.teamId) return alert('Your account is not linked to a team yet.');
   const g = D.games.find(x => x.id === gid), l = lineOf(g);
-  if (ownGame(g)) return alert(OWN_BET_MSG);
+  if (ownGame(g)) return;
   const odds = market === 'ml' ? (pick === 'home' ? l.mlHome : l.mlAway) : juiceOf(l, market, pick);
   const line = market === 'spread' ? l.spread : market === 'total' ? l.total : null;
   const boost = boostFor([{ gameId: gid, market }]);
