@@ -942,8 +942,11 @@ async function drawCheat(C) {
     if (pbRow) { Y += 36; const pt = pbText(t === A ? pbA : pbH, ' / '); if (pt) { fit(pt, 24, colW, B, '600'); text(pt, X, Y, MUT, al); } }
     if (done) { Y += 72; font(76, F, '900'); text(g.forfeit ? '' : String(score), X, Y, TXT, al); }
   };
-  side(A, C.coachA, C.rk.a, `${rec(records(s)[A.id])} · ${C.rec.a}`, P + 6, 'left', g.awayScore);
-  side(H, C.coachH, C.rk.h, `${rec(records(s)[H.id])} · ${C.rec.h}`, W - P - 6, 'right', g.homeScore);
+  // Overall record + division record (the conference record is left off; everyone is in the MAC)
+  const divOnly = t => { t = String(t || ''); return t.includes(',') ? t.replace(/^[^,]+,\s*/, '') : /^\d+-\d+\s+\S/.test(t) ? '' : t; };
+  const recL = (t, r) => [rec(records(s)[t.id]), divOnly(r)].filter(Boolean).join(' · ');
+  side(A, C.coachA, C.rk.a, recL(A, C.rec.a), P + 6, 'left', g.awayScore);
+  side(H, C.coachH, C.rk.h, recL(H, C.rec.h), W - P - 6, 'right', g.homeScore);
   font(40, F, '900'); text(g.neutral ? 'VS' : '@', W / 2, tTop + 112, MUT, 'center');
   y = tTop + tH;
   // Venue + kickoff on one line
@@ -984,6 +987,22 @@ async function drawCheat(C) {
     y += 52; label('Last 3 games', y); const n = Math.max(la.length, lh.length), top = y + 16; card(top, n * 42 + 26); let fy = top + 44;
     for (let i = 0; i < n; i++) { font(27, B, '700'); if (la[i]) text(la[i].t, P + 18, fy, la[i].w ? GRN : BAD); if (lh[i]) text(lh[i].t, W - P - 18, fy, lh[i].w ? GRN : BAD, 'right'); fy += 42; }
     y = top + n * 42 + 26;
+  }
+  // Players to know: each team's top 3 from the AI's read of this season's broadcasts
+  await loadAI();
+  const pk = t => teamPlayers(t.id, s).slice(0, 3);
+  const pa = pk(A), ph = pk(H);
+  if (pa.length || ph.length) {
+    y += 52; label('Players to know', y); const n = Math.max(pa.length, ph.length), rH = 70, top = y + 16; card(top, n * rH + 22);
+    const half = IW / 2 - 24;
+    const cell = (q, X, Y, al) => {
+      if (!q) return;
+      const head = `${shortName(q.name)}${q.pos ? ' · ' + q.pos : ''}${q.grade ? ' · ' + q.grade.toFixed(1) : ''}`;
+      fit(head, 27, half, B, '800'); text(head, X, Y, TXT, al);
+      const ln = q.lines[0]?.l || ''; if (ln) { fit(ln, 21, half, B, '600'); text(ln, X, Y + 30, MUT, al); }
+    };
+    for (let i = 0; i < n; i++) { const Y = top + 46 + i * rH; if (i) { x.fillStyle = LINE; x.fillRect(P, Y - 38, IW, 1); } cell(pa[i], P + 18, Y, 'left'); cell(ph[i], W - P - 18, Y, 'right'); }
+    y = top + n * rH + 22;
   }
   // What's at stake: title odds with a win vs a loss, plus any clinch note
   const lines = [];
