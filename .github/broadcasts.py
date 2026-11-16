@@ -117,7 +117,7 @@ def run():
             print('broadcasts: YouTube fetch skipped:', repr(e)[:200])
 
     # 2) Match every video to a game
-    links, review, taken = {}, [], set()
+    links, review, when = {}, [], {}   # links: gameId -> [videoIds] (several when a stream had to restart)
     for v in sorted(vids.values(), key=lambda v: v['d']):
         title = v['t']
         found = mentions(title, teams)
@@ -127,8 +127,13 @@ def run():
         cands = [g for g in played if g['home'] in found and g['away'] in found]
         if sm: cands = [g for g in cands if g['season'] == lg_first + int(sm.group(1)) - 1]
         if wm: cands = [g for g in cands if g.get('week') == int(wm.group(1))]
-        cands = [g for g in cands if g['id'] not in taken]
         if not cands: continue
+        # A restarted stream: same matchup uploaded within ~36 hours of a video already on one of these games.
+        part = [g for g in cands if any(abs(v['d'] - d) < 36 * 3600e3 for d in when.get(g['id'], []))]
+        if part:
+            g = part[0]; links[g['id']].append(v['id']); when[g['id']].append(v['d']); continue
+        free = [g for g in cands if g['id'] not in links]
+        if free: cands = free
         how = 'title'
         if len(cands) > 1:
             dated = [g for g in cands if g.get('playedAt')]
@@ -139,7 +144,7 @@ def run():
             before = [g for g in cands if not g.get('playedAt') or g['playedAt'] <= v['d'] + 86400e3] or cands
             cands = [max(before, key=lambda g: (g['season'], g.get('week') or 0))]; how = 'guess'
         g = cands[0]
-        links[g['id']] = v['id']; taken.add(g['id'])
+        links.setdefault(g['id'], []).append(v['id']); when.setdefault(g['id'], []).append(v['d'])
         if how == 'guess': review.append(v['id'])
     out = {'uploads': state.get('uploads'), 'fetchedAt': state.get('fetchedAt', 0),
            'videos': sorted(vids.values(), key=lambda v: -v['d'])[:400], 'links': links, 'guessed': review}
