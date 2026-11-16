@@ -19,7 +19,7 @@ DAILY_HOURS = float(os.environ.get('MOMENTS_DAILY_HOURS') or 6)    # free tier a
 CHUNK = 15 * 60          # 15-minute pieces: each request comes back in a few minutes
 RUN_BUDGET = 17 * 60     # stop starting new pieces after this long; the next run picks up where this one left off
 REQ_TIMEOUT = 300       # a piece that takes longer than this is too big: it gets split
-MIN_CHUNK = 2 * 60
+MIN_CHUNK = 7 * 60       # smaller pieces don't help a slow Gemini and just use up the daily request limit faster
 THINK = {'on': True}
 SIMPLE = {'on': True}   # low resolution + fewer frames; dropped if a model refuses those settings     # ask for minimal "thinking" (faster); dropped automatically if the model doesn't take it
 START = time.time()
@@ -364,7 +364,7 @@ def run():
     part.setdefault('pos', {})
     parts[gid] = part
     used, used_model = 0, part.get('model') or MODELS[0]
-    size, good = int(state.get('size') or CHUNK), 0
+    size, good = CHUNK, 0   # every run starts at full-size pieces
     try:
         for i, v in enumerate(vl):
             L = lens.get(v) or 3 * 3600
@@ -393,7 +393,7 @@ def run():
                         err, slow = f'timed out after {time.time() - t0:.0f}s on a {size // 60}-min piece', True
                         print(f'  {model}: {err}'); break   # too much for one request: shrink it rather than try other models
                 if raw is None and not MODELS: raise RuntimeError(err or 'no model available')
-                if raw is None and size > MIN_CHUNK:
+                if raw is None and slow and size > MIN_CHUNK:   # only a timeout means "too big"; busy just means busy
                     size = max(MIN_CHUNK, size // 2); good = 0; state['size'] = size
                     print(f'  trying smaller pieces: {size // 60} min'); continue
                 if raw is None:
