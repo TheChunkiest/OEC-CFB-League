@@ -206,7 +206,9 @@ function broadcastCard() {
   const playedGames = D.games.filter(g => played(g)).sort((a, b) => b.season - a.season || b.week - a.week);
   const usedVid = new Set(playedGames.flatMap(vidsOfGame)), ignore = new Set(L().vidIgnore || []);
   const glabel = g => `S${seasonNum(g.season)} ${g.type === 'ccg' ? 'Title' : 'Wk ' + g.week}: ${team(g.away).abbr || team(g.away).name} @ ${team(g.home).abbr || team(g.home).name}`;
-  const gopts = playedGames.map(g => `<option value="${esc(g.id)}">${esc(glabel(g))}${isUserTeam(team(g.home)) && isUserTeam(team(g.away)) ? '' : ' (vs CPU)'}</option>`).join('');
+  // Who coached each side when the game was played (saved on the game), not who coaches the team today.
+  const who = g => { const ac = coachOf(g, 'away'), hc = coachOf(g, 'home'); return ac === 'CPU' && hc === 'CPU' ? ' (CPU game)' : ac === 'CPU' || hc === 'CPU' ? ` (${ac === 'CPU' ? hc : ac} vs CPU)` : ` (${ac} vs ${hc})`; };
+  const gopts = playedGames.map(g => `<option value="${esc(g.id)}">${esc(glabel(g) + who(g))}</option>`).join('');
   const guessed = (VIDS.guessed || []).map(id => [id, playedGames.find(g => !g.video && autoVids(g).includes(id))]).filter(([, g]) => g);
   const loose = vids.filter(v => !usedVid.has(v.id) && !ignore.has(v.id)).slice(0, 15);
   const linked = playedGames.filter(g => vidsOfGame(g).length).slice(0, 30);

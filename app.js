@@ -80,7 +80,9 @@ function gameCard(g, opts = {}) {
   }
   const sc = (side, won) => done ? `<b class="msc ${won ? 'w' : 'l'}">${g.forfeit ? (won ? 'FW' : 'FL') : g[side + 'Score']}</b>` : '';
   const status = `<b class="gstat">${done ? 'Final' : 'Week ' + g.week}</b>${done && videoOf(g) ? ' · <span class="vidtag">▶ Broadcast</span>' : ''}`;
-  const who = [a, h].filter(isUserTeam).length ? ` · ${isUserTeam(a) ? esc(a.coach) : 'CPU'} ${g.neutral ? 'vs' : '@'} ${isUserTeam(h) ? esc(h.coach) : 'CPU'}` : '';
+  // Finished games show who actually coached them (saved on the game); upcoming ones show today's coaches.
+  const ca = done ? coachOf(g, 'away') : isUserTeam(a) ? a.coach : 'CPU', ch = done ? coachOf(g, 'home') : isUserTeam(h) ? h.coach : 'CPU';
+  const who = ca !== 'CPU' || ch !== 'CPU' ? ` · ${esc(ca)} ${g.neutral ? 'vs' : '@'} ${esc(ch)}` : '';
   return `<div class="card game clickable${opts.gotw ? ' gotw' : ''}" data-game="${esc(g.id)}">${opts.gotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}<span class="go" aria-hidden="true">›</span><div class="teams">
       <div class="matchup"><span class="mt ${done ? (aw ? 'w' : 'l') : ''}">${chip(a.id, { season: g.season, week: g.week, href: '#game/' + g.id })}${sc('away', aw)}</span><span class="at">${g.neutral ? 'vs' : '@'}</span><span class="mt ${done ? (hw ? 'w' : 'l') : ''}">${chip(h.id, { season: g.season, week: g.week, href: '#game/' + g.id })}${sc('home', hw)}</span>${tags.join('')}</div>
       <div class="meta">${status}${who}${!done && kickoffOf(g) ? ` · ${esc(fmtKick(kickoffOf(g), true))}` : ''}</div>
