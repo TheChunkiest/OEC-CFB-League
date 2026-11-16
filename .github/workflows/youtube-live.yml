@@ -45,10 +45,12 @@ jobs:
               items = api("playlistItems", part="contentDetails", playlistId=uploads, maxResults=10)["items"]
               ids = [i["contentDetails"]["videoId"] for i in items]
               vids = api("videos", part="snippet", id=",".join(ids))["items"] if ids else []
-              for v in vids:
-                  if v["snippet"].get("liveBroadcastContent") == "live":
-                      return {"live": True, "videoId": v["id"], "url": "https://www.youtube.com/watch?v=" + v["id"], "title": v["snippet"]["title"]}
-              return {"live": False}
+              # Every stream that's live right now (two games can stream at once), oldest first.
+              on = sorted([v for v in vids if v["snippet"].get("liveBroadcastContent") == "live"], key=lambda v: v["snippet"].get("publishedAt", ""))
+              if not on:
+                  return {"live": False}
+              streams = [{"videoId": v["id"], "url": "https://www.youtube.com/watch?v=" + v["id"], "title": v["snippet"]["title"]} for v in on]
+              return {"live": True, **streams[0], "streams": streams}
 
           def via_page():
               req = urllib.request.Request("https://www.youtube.com/" + HANDLE + "/live", headers={
@@ -62,8 +64,9 @@ jobs:
               if not live:
                   return {"live": False}
               title = re.search(r'<meta name="title" content="([^"]*)"', html)
-              return {"live": True, "videoId": vid.group(1), "url": "https://www.youtube.com/watch?v=" + vid.group(1),
-                      "title": (title.group(1) if title else "Live on YouTube").replace("&amp;", "&").replace("&#39;", "'").replace("&quot;", '"')}
+              one = {"videoId": vid.group(1), "url": "https://www.youtube.com/watch?v=" + vid.group(1),
+                     "title": (title.group(1) if title else "Live on YouTube").replace("&amp;", "&").replace("&#39;", "'").replace("&quot;", '"')}
+              return {"live": True, **one, "streams": [one]}
 
           import subprocess
           def git(*a): return subprocess.run(["git", *a], check=False, capture_output=True, text=True)
@@ -80,7 +83,7 @@ jobs:
               print("Push failed")
 
           # Phone notification when a stream starts (free Firebase Cloud Messaging; reads the device list only then).
-          def notify_live(v):
+          def notify_live(v, another=False):
               if not os.environ.get("SA"): return
               try:
                   from google.oauth2 import service_account
@@ -106,7 +109,7 @@ jobs:
                       if not prefs.get("live", {}).get("booleanValue", True): continue   # on unless turned off
                       token = f.get("token", {}).get("stringValue")
                       if not token: continue
-                      msg = {"message": {"token": token, "data": {"title": "🔴 OEC is live on YouTube", "body": v.get("title") or "Tap to watch.", "link": v.get("url") or "https://youtube.com/@originalentertainingcrackers", "tag": "live"},
+                      msg = {"message": {"token": token, "data": {"title": "🔴 Another OEC stream is live" if another else "🔴 OEC is live on YouTube", "body": v.get("title") or "Tap to watch.", "link": v.get("url") or "https://youtube.com/@originalentertainingcrackers", "tag": "live-" + (v.get("videoId") or "")},
                              "webpush": {"headers": {"Urgency": "high", "TTL": "3600"}}}}
                       try: call(f"https://fcm.googleapis.com/v1/projects/{pid}/messages:send", msg); sent += 1
                       except urllib.error.HTTPError as e:
@@ -132,18 +135,26 @@ jobs:
                       try: old = json.load(open("live.json"))
                       except Exception: pass
                   now = int(time.time() * 1000)
+                  # One notification per stream, even with two streams going at once (notifiedIds remembers them).
+                  done_ids = list(old.get("notifiedIds") or ([old["notified"]] if old.get("notified") else []))
+                  ids = lambda d: [x["videoId"] for x in (d.get("streams") or ([d] if d.get("videoId") else []))]
                   if new["live"]:
-                      # Commit when going live (or the video changes); while still live, re-stamp
+                      # Commit when going live (or the set of streams changes); while still live, re-stamp
                       # checkedAt about every 5 minutes so the site knows it's fresh (it ignores a
                       # "live" status not confirmed in 25 minutes) without a commit every minute.
-                      if not old.get("live") or old.get("videoId") != new.get("videoId"):
-                          new["checkedAt"] = now; new["notified"] = old.get("notified"); save(new, "live")
-                          if old.get("notified") != new.get("videoId"):   # one notification per stream
-                              notify_live(new); new["notified"] = new.get("videoId"); save(new, "notified")
+                      new["notified"], new["notifiedIds"] = old.get("notified"), done_ids
+                      if not old.get("live") or sorted(ids(old)) != sorted(ids(new)):
+                          new["checkedAt"] = now; save(new, "live" if len(ids(new)) == 1 else f"{len(ids(new))} streams live")
+                          fresh = [x for x in new["streams"] if x["videoId"] not in done_ids]
+                          for k, x in enumerate(fresh):
+                              notify_live(x, another=bool(old.get("live")) or k > 0)
+                              done_ids.append(x["videoId"]); new["notified"] = x["videoId"]
+                          if fresh:
+                              new["notifiedIds"] = done_ids[-10:]; save(new, "notified")
                       elif now - int(old.get("checkedAt") or 0) > 4.5 * 60e3:
-                          new["checkedAt"] = now; new["notified"] = old.get("notified"); save(new, "still live")
+                          new["checkedAt"] = now; save(new, "still live")
                       else: print(f"[{i+1}/{CHECKS}] still live")
                   elif old.get("live") or "live" not in old:
-                      save({"live": False, "notified": old.get("notified")}, "offline")
+                      save({"live": False, "notified": old.get("notified"), "notifiedIds": done_ids[-10:]}, "offline")
                   else: print(f"[{i+1}/{CHECKS}] not live")
               if i < CHECKS - 1: time.sleep(max(0, GAP - (time.time() - t0)))
