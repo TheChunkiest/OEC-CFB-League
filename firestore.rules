@@ -36,12 +36,15 @@ service cloud.firestore {
         && d.stake is int && d.stake >= 1 && d.stake <= 100000
         && L.bettingOpen == true && d.season == L.season && d.week == L.week;
     }
+    // Missing fields are read with defaults (an unplayed game may have no score field at all, and older lines
+    // have no juice fields, which the site prices at -110), so a missing field never blocks a valid bet.
     function validGameWager(d, t) {
       let g = gameOf(d.gameId);
-      return g.home != t && g.away != t && g.season == league().season && g.week >= league().week && g.homeScore == null
-        && ((d.market == 'ml' && ((d.pick == 'home' && d.odds == g.lines.mlHome) || (d.pick == 'away' && d.odds == g.lines.mlAway)))
-          || (d.market == 'spread' && d.line == g.lines.spread && ((d.pick == 'home' && d.odds == g.lines.spreadOddsHome) || (d.pick == 'away' && d.odds == g.lines.spreadOddsAway)))
-          || (d.market == 'total' && d.line == g.lines.total && ((d.pick == 'over' && d.odds == g.lines.overOdds) || (d.pick == 'under' && d.odds == g.lines.underOdds))));
+      let ln = g.get('lines', {});
+      return g.home != t && g.away != t && g.season == league().season && g.week >= league().week && g.get('homeScore', null) == null
+        && ((d.market == 'ml' && ((d.pick == 'home' && d.odds == ln.get('mlHome', null)) || (d.pick == 'away' && d.odds == ln.get('mlAway', null))))
+          || (d.market == 'spread' && d.line == ln.get('spread', null) && ((d.pick == 'home' && d.odds == ln.get('spreadOddsHome', -110)) || (d.pick == 'away' && d.odds == ln.get('spreadOddsAway', -110))))
+          || (d.market == 'total' && d.line == ln.get('total', null) && ((d.pick == 'over' && d.odds == ln.get('overOdds', -110)) || (d.pick == 'under' && d.odds == ln.get('underOdds', -110)))));
     }
     function validFuture(d, L, t) {
       return d.pick != t && L.phase == 'Regular Season' && L.futures.season == L.season && L.futures.open == true
@@ -112,7 +115,7 @@ service cloud.firestore {
         && n.diff(o).affectedKeys().hasOnly(['deleted', 'upd']) && n.deleted == true
         && league().bettingOpen == true
         && (((o.market == 'future' || o.market == 'wins') && league().phase == 'Regular Season')
-          || (o.market != 'future' && o.market != 'wins' && o.market != 'parlay' && gameOf(o.gameId).homeScore == null));
+          || (o.market != 'future' && o.market != 'wins' && o.market != 'parlay' && gameOf(o.gameId).get('homeScore', null) == null));
     }
     match /wagers/{id} {
       allow read: if true;
@@ -121,7 +124,7 @@ service cloud.firestore {
       allow delete: if isCommish() || (signedIn() && resource.data.uid == request.auth.uid && resource.data.status == 'open'
         && league().bettingOpen == true
         && (((resource.data.market == 'future' || resource.data.market == 'wins') && league().phase == 'Regular Season')
-          || (resource.data.market != 'future' && resource.data.market != 'wins' && resource.data.market != 'parlay' && gameOf(resource.data.gameId).homeScore == null)));
+          || (resource.data.market != 'future' && resource.data.market != 'wins' && resource.data.market != 'parlay' && gameOf(resource.data.gameId).get('homeScore', null) == null)));
     }
 
     // Kickoff invites: a coach in a user game proposes 1-3 future times for a game this week or next;

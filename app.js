@@ -2,8 +2,8 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, batch, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout, PUSH_PREFS, pushDefaults, pushLocal, pushSupported, pushEnable, pushPrefs, pushDisable,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, raceSim, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
-} from './core.js?v=57';
+  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
+} from './core.js?v=58';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -1074,11 +1074,16 @@ async function lineMoved(e) {
   if (e && (e.code === 'permission-denied' || /permission/i.test(e.message || ''))) {
     const sl = UI.slip || {};
     const before = (sl.parlay ? UI.legs : [{ gameId: sl.g?.id || '', market: sl.market, pick: sl.pick, team: sl.team, odds: sl.odds, line: sl.line }]).map(l => ({ ...l }));
-    await reload();
-    const moved = before.some(b => { const n = legFor(b.gameId, b.market, b.pick, b.team); return !n || n.odds !== b.odds || (n.line ?? null) !== (b.line ?? null); });
-    if (moved) { $('#modal').innerHTML = ''; alert('A line in this bet just changed. Check the new price and place it again.'); return; }
+    await freshGames(before.map(b => b.gameId).filter(Boolean));   // check the database itself, not our copy
+    const changed = before.filter(b => { const n = legFor(b.gameId, b.market, b.pick, b.team); return !n || n.odds !== b.odds || (n.line ?? null) !== (b.line ?? null); });
+    if (changed.length) {
+      if (sl.parlay) UI.legs = UI.legs.map(l => legFor(l.gameId, l.market, l.pick, l.team)).filter(Boolean);
+      $('#modal').innerHTML = ''; route();
+      alert(`${changed.length === 1 ? 'A line' : changed.length + ' lines'} in this bet changed: ${changed.map(b => wagerLabel(b).replace(/\s*\(.*\)$/, '')).join(', ')}. The board now shows the current prices. Place it again.`);
+      return;
+    }
     const sm = $('#smsg');
-    if (sm) sm.innerHTML = 'The sportsbook turned this bet down even though the lines haven\'t changed. This usually means your browser has an old copy of the site: <a href="#" data-act="hardReload">tap here to refresh</a> and try again.';
+    if (sm) sm.innerHTML = 'The sportsbook turned this bet down, but every line still matches. Tell the commissioner; the database rules may need updating. (' + esc(e.code || 'permission-denied') + ')';
     return;
   }
   $('#smsg').textContent = 'Could not place this bet. ' + friendlyError(e);

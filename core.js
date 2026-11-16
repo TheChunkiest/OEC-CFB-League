@@ -1303,3 +1303,14 @@ export async function pushDisable() {
   if (!DEMO) { try { const { app, base } = await fbInit(); const m = await import(base + 'firebase-messaging.js'); await m.deleteToken(m.getMessaging(app)); } catch (e) { } }
   pushSave(null);
 }
+
+// Read games straight from the database (bypassing the local copy). Used only after a bet is refused, to see
+// whether a posted line really changed. A few reads, only when that happens.
+export async function freshGames(ids) {
+  if (DEMO || !ids.length) return [];
+  const { fs, db } = await fbInit();
+  const out = await Promise.all([...new Set(ids)].map(async id => { try { const d = await fs.getDocFromServer(fs.doc(db, 'games', id)); return d.exists() ? { ...d.data(), id } : null; } catch (e) { return null; } }));
+  out.filter(Boolean).forEach(g => { const i = D.games.findIndex(x => x.id === g.id); if (i >= 0) D.games[i] = g; else D.games.push(g); });
+  clearCache();
+  return out.filter(Boolean);
+}
