@@ -379,8 +379,11 @@ export function ratings(season, upto) {
     D.games.filter(g => g.season === season && played(g) && !g.forfeit && g.week < upto).sort((a, b) => a.week - b.week).forEach(g => {
       const H = R[g.home], A = R[g.away]; if (!H || !A) return;
       const e = expect(H, A, g.neutral);
-      const eh = clamp(g.homeScore - e.h, -17, 17), ea = clamp(g.awayScore - e.a, -17, 17);
-      const mv = (g.homeScore - g.awayScore) - (e.h - e.a);
+      // Scores as the game was actually played: if the broadcast showed the margin was flattered (garbage time,
+      // a fluky return TD...), half of that is taken back. The total stays the same.
+      const lk = aiLuck(g) / 2, hs = +g.homeScore - lk, as = +g.awayScore + lk;
+      const eh = clamp(hs - e.h, -17, 17), ea = clamp(as - e.a, -17, 17);
+      const mv = (hs - as) - (e.h - e.a);
       H.perf.push({ week: g.week, v: mv }); A.perf.push({ week: g.week, v: -mv });
       const tv = (+g.homeScore + +g.awayScore) - (e.h + e.a); H.perfT.push({ week: g.week, v: tv }); A.perfT.push({ week: g.week, v: tv });
       H.o += K * eh; A.d -= K * eh; A.o += K * ea; H.d -= K * ea;
@@ -1140,10 +1143,38 @@ export function awardGame(h, a) {
 
 /* ---------------- Storylines ---------------- */
 /* ---------- AI game recaps (moments.json from the Game moments workflow; loaded by app.js) ---------- */
-export const AI = { moms: null };
+export const AI = { moms: null, loading: null };
+// moments.json is a static file from GitHub (no database reads). Loading it re-runs the model, because the
+// broadcast scouting nudges team ratings a little (see ratings()).
+export function loadAI() {
+  if (AI.moms) return Promise.resolve(AI.moms);
+  return AI.loading ||= fetch('moments.json?t=' + Math.floor(Date.now() / 600000), { cache: 'no-cache' })
+    .then(r => r.ok ? r.json() : null).catch(() => null).then(j => { AI.moms = j && j.games ? j : { games: {} }; clearCache(); return AI.moms; });
+}
 const aiHidden = (gid, k) => ((D.league.momHide || {})[gid] || []).includes(k);
 // The written recap for a final, unless the commissioner hid it.
 export const aiRecap = g => (g && !aiHidden(g.id, 'recap') && AI.moms?.games?.[g.id]?.r) || null;
+// How many points the final margin flattered the home team (garbage time, flukes), as judged from the broadcast.
+const aiLuck = g => { const r = aiRecap(g), x = r && typeof r.lk === 'number' ? r.lk : 0; return clamp(x, -7, 7); };
+// Players seen in a team's broadcasts this season (merged by first initial + last name), best first.
+const pkey = n => { const w = String(n).replace(/[^A-Za-z' .-]/g, '').trim().split(/\s+/); return w.length > 1 ? (w[0][0] + ' ' + w[w.length - 1]).toLowerCase() : w[0].toLowerCase(); };
+export function teamPlayers(tid, season = D.league.season) {
+  const by = {}, gs = D.games.filter(g => g.season === season && (g.home === tid || g.away === tid) && played(g)).sort((a, b) => b.week - a.week);
+  gs.forEach(g => (aiRecap(g)?.pl || []).forEach(p => {
+    if (g[p.s] !== tid) return;
+    const k = pkey(p.n), x = by[k] ||= { name: p.n, pos: {}, games: 0, grades: [], lines: [] };
+    if (p.n.length > x.name.length) x.name = p.n;
+    if (p.pos && p.pos !== '?') x.pos[p.pos] = (x.pos[p.pos] || 0) + 1;
+    x.games++; if (p.g) x.grades.push(p.g); if (p.l && x.lines.length < 3) x.lines.push({ w: g.week, l: p.l, gid: g.id });
+  }));
+  return Object.values(by).map(x => ({ ...x, pos: Object.entries(x.pos).sort((a, b) => b[1] - a[1])[0]?.[0] || '', grade: x.grades.length ? x.grades.reduce((a, b) => a + b, 0) / x.grades.length : null }))
+    .sort((a, b) => (b.grade ?? 0) * Math.min(b.games, 3) - (a.grade ?? 0) * Math.min(a.games, 3) || b.games - a.games);
+}
+// Scouting notes for a team from its most recent broadcasts: what's been working and where it struggles.
+export function teamScouting(tid, season = D.league.season, n = 3) {
+  return D.games.filter(g => g.season === season && (g.home === tid || g.away === tid) && played(g) && aiRecap(g)?.tn)
+    .sort((a, b) => b.week - a.week).slice(0, n).map(g => ({ g, ...(aiRecap(g).tn[g.home === tid ? 'home' : 'away'] || {}) })).filter(x => x.good || x.bad);
+}
 
 export function storylines() {
   const L = D.league, s = L.season, out = [], pool = [];

@@ -100,8 +100,10 @@ Reply with JSON only, shaped like:
 {{"moments": [{{"t": <seconds from the very start of the stream>, "kind": "td|fg|safety|turnover|big|stop|twopt|final|other",
 "team": "home|away|null", "q": <quarter 1-4, 5 for OT, or null>, "score": "<away>-<home> after the play, or null",
 "text": "<one short sentence, under 14 words, e.g. 'Smith 45-yard TD pass to Jones'>"}}],
-"notes": "<2-4 sentences on how this part of the game went: momentum, standout players, anything the streamers made a big deal of>"}}
-If nothing from this game happens in this part, reply {{"moments": [], "notes": ""}}."""
+"notes": "<2-4 sentences on how this part of the game went: momentum, standout players, anything the streamers made a big deal of>",
+"players": [{{"name": "<player name as shown on screen or said by the streamers>", "team": "home|away", "pos": "QB|RB|WR|TE|OL|DL|LB|CB|S|K|P|?", "did": "<what they did in this part, e.g. '2 TD passes, 1 INT' or 'sacked the QB twice'>"}}]}}
+Only list players who actually made plays in this part. Spell names exactly as shown on screen.
+If nothing from this game happens in this part, reply {{"moments": [], "notes": "", "players": []}}."""
     body = {'contents': [{'parts': [
         {'file_data': {'file_uri': url, 'mime_type': 'video/*'},
          'video_metadata': {'start_offset': f'{start}s', 'end_offset': f'{end}s', 'fps': 0.25}},
@@ -122,7 +124,8 @@ If nothing from this game happens in this part, reply {{"moments": [], "notes": 
     txt = ''.join(p.get('text', '') for c in r.get('candidates', []) for p in (c.get('content') or {}).get('parts', []))
     m = re.search(r'\{.*\}', txt, re.S)
     out = json.loads(m.group(0)) if m else {}
-    return out.get('moments') or [], str(out.get('notes') or '').strip()
+    pl = [p for p in (out.get('players') or []) if isinstance(p, dict) and p.get('name')][:20]
+    return out.get('moments') or [], str(out.get('notes') or '').strip(), pl
 
 
 def text_call(prompt):
@@ -142,28 +145,54 @@ def text_call(prompt):
     raise RuntimeError(err or 'no model available')
 
 
-def write_recap(ctx, moments, notes):
-    """Turns the moments (and the notes from watching each part) into the game story the site shows on a final."""
+def write_recap(ctx, moments, notes, players=(), known=''):
+    """Turns what was seen in the broadcast into (1) the recap the site shows on a final, (2) who played well for each
+    team and (3) a scouting note per team. Those build up into the league's picture of its players over a season,
+    and the "how much did the score flatter the winner" number feeds the betting model a little."""
     plays = '\n'.join(f"- {m['x']} ({m['k']}{', Q' + str(m['q']) if m.get('q') else ''}{', score away-home ' + m['sc'] if m.get('sc') else ''})" for m in moments)
+    seen = '\n'.join(f"- {p.get('name')} ({p.get('team')}, {p.get('pos') or '?'}): {p.get('did') or ''}" for p in players)
     prompt = f"""You write game recaps for an online College Football 27 video game dynasty league's website.
 {ctx}
 Key plays, in order:
 {plays or '(none found)'}
+Players seen making plays:
+{seen or '(none listed)'}
 Notes from watching the broadcast:
 {chr(10).join('- ' + n for n in notes if n) or '(none)'}
-Write it like a sports site recap: confident and fun, no made-up stats or player names beyond what's above, never
-mention AI, streams or video. Use the coaches' names and the schools. Reply with JSON only:
+Players already known on these teams from earlier games (use these spellings when it's clearly the same person):
+{known or '(none yet)'}
+Write a short sports-site recap: 2-3 paragraphs that tell the story of the game and mention only the few moments
+that decided it. Confident and fun. No made-up stats or player names beyond what's above. Never mention AI, streams
+or video. Use the coaches' names and the schools. Reply with JSON only:
 {{"headline": "<under 70 characters, names the winner>",
-"recap": ["<paragraph 1: the result and the story of the game>", "<paragraph 2: the turning point and key plays>", "<optional short paragraph 3: what it means>"],
+"recap": ["<paragraph>", "<paragraph>", "<optional short paragraph>"],
 "oneliner": "<one sentence recap of the game, under 30 words>",
-"potg_title": "<the single best play, under 45 characters, e.g. 'Smith's 99-yard pick-six'>",
-"potg": "<one sentence describing the play of the game and why it mattered, under 35 words>"}}"""
+"potg_title": "<the single best play, under 45 characters>",
+"potg": "<one sentence describing the play of the game and why it mattered, under 35 words>",
+"players": [{{"name": "<full name if known>", "team": "home|away", "pos": "QB|RB|WR|TE|OL|DL|LB|CB|S|K|P|?", "line": "<their game in under 12 words, e.g. '3 TD passes, 1 INT, 40-yard TD run'>", "grade": <1-10, how well they played>}}],
+"teams": {{"home": {{"good": "<what worked for them, under 20 words>", "bad": "<where they struggled, under 20 words>"}}, "away": {{"good": "...", "bad": "..."}}}},
+"luck": <number from -10 to 10: how many points the final margin FLATTERED the home team compared with how the game was
+actually played (garbage-time scores, fluky tips, return TDs, a missed kick). Positive = home looked better on the
+scoreboard than on the field, negative = away did. 0 if the score was fair.>}}
+List the 3-8 players who mattered most, best first."""
     out = text_call(prompt)
     clip = lambda v, n: re.sub(r'\s+', ' ', str(v or '')).strip()[:n]
     paras = [clip(x, 900) for x in (out.get('recap') or []) if clip(x, 900)][:3]
     if not out.get('headline') or not paras: raise RuntimeError('recap came back empty')
-    return {'h': clip(out.get('headline'), 90), 'p': paras, 'o': clip(out.get('oneliner'), 260),
-            'pt': clip(out.get('potg_title'), 60), 'pp': clip(out.get('potg'), 300)}
+    pl = []
+    for p in (out.get('players') or [])[:10]:
+        if not isinstance(p, dict) or not clip(p.get('name'), 40) or p.get('team') not in ('home', 'away'): continue
+        try: gr = max(1, min(10, int(round(float(p.get('grade'))))))
+        except Exception: gr = None
+        pl.append({'n': clip(p.get('name'), 40), 's': p['team'], 'pos': clip(p.get('pos'), 3).upper() or '?', 'l': clip(p.get('line'), 90), 'g': gr})
+    tn = {}
+    for side in ('home', 'away'):
+        x = (out.get('teams') or {}).get(side) or {}
+        if isinstance(x, dict): tn[side] = {'good': clip(x.get('good'), 140), 'bad': clip(x.get('bad'), 140)}
+    try: lk = max(-10.0, min(10.0, float(out.get('luck') or 0)))
+    except Exception: lk = 0.0
+    return {'v': 2, 'h': clip(out.get('headline'), 90), 'p': paras, 'o': clip(out.get('oneliner'), 260),
+            'pt': clip(out.get('potg_title'), 60), 'pp': clip(out.get('potg'), 300), 'pl': pl, 'tn': tn, 'lk': round(lk, 1)}
 
 
 def clean(raw, vid, start, end, part_len):
@@ -234,12 +263,29 @@ def run():
                 f"{nm(H, g['home'])} ({H.get('abbr', '')}, coached by {coach('home', H)}) is the HOME team"
                 f"{' (neutral site)' if g.get('neutral') else ''}. Final score: away {g['awayScore']}, home {g['homeScore']}.{kind}")
 
-    # Games that have moments but no written recap yet (text only, so no video budget): up to 3 a run.
+    def known(g):
+        """Players already on record for these two teams (this season and last), so names stay consistent."""
+        out = []
+        for side in ('away', 'home'):
+            tid, names = g[side], {}
+            for ogid, orec in done.items():
+                og = games.get(ogid); rr = orec.get('r') or {}
+                if not og or ogid == g['id'] or og['season'] < g['season'] - 1 or tid not in (og['home'], og['away']): continue
+                for p in rr.get('pl') or []:
+                    if og[p.get('s')] == tid: names.setdefault(p['n'], p.get('pos') or '?')
+            if names: out.append(f"{nm(teams.get(tid, {}), tid)} ({side}): " + ', '.join(f'{n} ({ps})' for n, ps in list(names.items())[:25]))
+        return '\n'.join(out)
+
+    def recap_for(gid, rec):
+        g = games[gid]
+        return write_recap(make_ctx(g), rec.get('m') or [], rec.get('n') or [], rec.get('p') or [], known(g))
+
+    # Games that have moments but no recap in the current format yet (text only, so no video budget): up to 3 a run.
     wrote = 0
     for gid, rec in sorted(done.items(), key=lambda kv: -kv[1].get('at', 0)):
-        if wrote >= 3 or rec.get('r') or gid not in games or rec.get('rfail', 0) >= 3: continue
+        if wrote >= 3 or (rec.get('r') or {}).get('v', 1) >= 2 or gid not in games or rec.get('rfail', 0) >= 3: continue
         try:
-            rec['r'] = write_recap(make_ctx(games[gid]), rec.get('m') or [], rec.get('n') or []); wrote += 1
+            rec['r'] = recap_for(gid, rec); wrote += 1
             print(f'moments: wrote the recap for {gid}')
         except Exception as x:
             rec['rfail'] = rec.get('rfail', 0) + 1; print('moments: recap failed:', str(x)[:200])
@@ -296,7 +342,7 @@ def run():
                 raw, err, note, t0, slow = None, None, '', time.time(), False
                 for model in list(MODELS):
                     try:
-                        raw, note = ask(model, url, pos, e, ctx); used_model = model
+                        raw, note, plays_by = ask(model, url, pos, e, ctx); used_model = model
                         if MODELS[0] != model: MODELS.remove(model); MODELS.insert(0, model)   # it works: use it first for the rest of the run
                         break
                     except ApiErr as x:
@@ -321,7 +367,7 @@ def run():
                         except Exception:
                             err = f'{(err or "")[:3]} every model busy right now; trying again next run'
                     raise RuntimeError(err or 'no model available')
-                part['chunks'][f'{v}@{pos}'] = {'i': i, 'm': clean(raw, v, pos, e, L), 'n': note[:600]}
+                part['chunks'][f'{v}@{pos}'] = {'i': i, 'm': clean(raw, v, pos, e, L), 'n': note[:600], 'p': plays_by}
                 part['model'] = used_model
                 used += e - pos
                 print(f'  part {i + 1} {pos // 60}-{e // 60} min: {len(raw)} moment(s) in {time.time() - t0:.0f}s ({used_model})')
@@ -343,12 +389,13 @@ def run():
     chunks = sorted(part['chunks'].values(), key=lambda c: c['i'])
     found = [dict(m, v_i=c['i']) for c in chunks for m in c['m']]
     notes = [c['n'] for c in chunks if c.get('n')]
+    seen = [p for c in chunks for p in (c.get('p') or [])]
     state.pop('partial', None)
     q['sec'] += used
     fails.pop(gid, None)
-    done[gid] = {'vids': vl, 'at': int(NOW), 'model': used_model, 'm': pick(found), 'n': notes}
+    done[gid] = {'vids': vl, 'at': int(NOW), 'model': used_model, 'm': pick(found), 'n': notes, 'p': seen[:60]}
     try:
-        done[gid]['r'] = write_recap(ctx, done[gid]['m'], notes)
+        done[gid]['r'] = recap_for(gid, done[gid])
     except Exception as x:
         print('moments: recap not written yet:', str(x)[:200])
     json.dump(state, open('moments.json', 'w'), separators=(',', ':'))

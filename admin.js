@@ -2,7 +2,10 @@ import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum, playbookOf, pbSeason, pbOpen, pbLocked
-} from './core.js?v=60';
+, loadAI
+} from './core.js?v=61';
+// Broadcast scouting nudges the ratings a little, so load it before any lines get posted from here.
+loadAI();
 import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
 
 // Tabs: the weekly job lives on "This Week"; everything else is occasional. Awards only shows when it matters.

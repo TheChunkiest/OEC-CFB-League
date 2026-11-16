@@ -2,9 +2,9 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, batch, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout, PUSH_PREFS, pushDefaults, pushLocal, pushSupported, pushEnable, pushPrefs, pushDisable,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, raceSim, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, AI, aiRecap, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
+  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, AI, aiRecap, loadAI, teamPlayers, teamScouting, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
 , playbookOf, pbSeason, pbText
-} from './core.js?v=60';
+} from './core.js?v=61';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -52,27 +52,27 @@ const videoOf = g => videosOf(g)[0]?.id || null;
 // Key moments the Game moments workflow pulled out of each broadcast with Gemini (moments.json, loaded the first
 // time a finished game is opened). The commissioner can hide a wrong one or ask for a redo (saved on the league doc).
 let momsLoading = false;
-async function loadMoments() {
+function loadMoments() {
   if (AI.moms || momsLoading) return; momsLoading = true;
-  try { const r = await fetch('moments.json?t=' + Math.floor(Date.now() / 600000), { cache: 'no-cache' }); AI.moms = r.ok ? await r.json() : { games: {} }; } catch (e) { AI.moms = { games: {} }; }
-  if (/^#(game\/|home|$)/.test(location.hash || '#home')) route();
+  loadAI().then(() => { if (/^#(game\/|team\/|home|$)/.test(location.hash || '#home')) route(); });
 }
-const MOM_ICON = { td: '🏈', fg: '🥅', safety: '🛡️', turnover: '🔄', big: '💥', stop: '🧱', twopt: '✌️', final: '🏁', other: '⭐' };
-const momKey = m => m.v + '@' + m.t;
-const fmtStamp = t => { const h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), sec = String(t % 60).padStart(2, '0'); return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`; };
-function momentsCard(g, A, H) {
-  if (!videosOf(g).length) return '';
-  if (!AI.moms) { loadMoments(); return ''; }
-  const rec = AI.moms.games?.[g.id], commish = isCommish(), hidden = (D.league.momHide || {})[g.id] || [];
+// What the AI saw in the broadcast, under the recap: the standout players, and the commissioner's controls.
+function aiExtras(g, A, H) {
+  const r = aiRecap(g), rec = AI.moms?.games?.[g.id], commish = isCommish(), hidden = (D.league.momHide || {})[g.id] || [];
   const redo = (D.league.momRedo || {})[g.id], pending = redo && (!rec || redo > rec.at * 1000);
-  if (!rec) return commish ? `<div class="card"><h3 style="margin-top:0">Key moments</h3><p class="muted small" style="margin:0">${pending ? 'Redo requested.' : 'Not pulled from the broadcast yet.'} The Game moments workflow does one game about every 30 minutes, newest first.</p></div>` : '';
-  const parts = rec.vids || [], ms = (rec.m || []).filter(m => commish || !hidden.includes(momKey(m)));
-  if (!ms.length && !commish) return '';
-  const tag = m => { const t = m.s === 'home' ? H : m.s === 'away' ? A : null; return t ? `<i class="sw" style="background:${esc(teamColor(t))}"></i>${esc(t.abbr || t.name)}` : ''; };
-  return `<div class="card moments"><h3 style="margin-top:0">Key moments</h3>
-    ${ms.map(m => { const off = hidden.includes(momKey(m)); return `<div class="mom${off ? ' off' : ''}"><a href="https://youtu.be/${esc(m.v)}?t=${m.t}" target="_blank" rel="noopener">
-      <span class="mi">${MOM_ICON[m.k] || '⭐'}</span><span class="mt"><b>${esc(m.x)}</b><span class="muted small">${[tag(m), m.q ? (m.q > 4 ? 'OT' : 'Q' + m.q) : '', m.sc ? `${esc(A.abbr || A.name)} ${m.sc.split('-')[0]}, ${esc(H.abbr || H.name)} ${m.sc.split('-')[1]}` : '', (parts.length > 1 ? `Part ${parts.indexOf(m.v) + 1} · ` : '') + '▶ ' + fmtStamp(m.t)].filter(Boolean).join(' · ')}</span></span></a>${commish ? `<button class="sm ghost" data-momhide="${esc(g.id)}|${esc(momKey(m))}" title="${off ? 'Show' : 'Hide'}">${off ? '↩' : '✕'}</button>` : ''}</div>`; }).join('')}
-    <p class="muted small" style="margin:10px 0 0">Picked out of the broadcast by AI, so a play can be off. Tap one to jump to it.${commish ? ` <a href="javascript:void 0" data-act="momRedo" data-gid="${esc(g.id)}">${pending ? 'Redo requested' : 'Redo this game'}</a>${rec.r ? ` · <a href="javascript:void 0" data-momhide="${esc(g.id)}|recap">${hidden.includes('recap') ? 'Show AI recap' : 'Hide AI recap'}</a>` : ''}` : ''}</p></div>`;
+  const stars = r?.pl?.length ? `<p class="small" style="margin-bottom:0"><b>Standouts:</b> ${r.pl.slice(0, 4).map(p => { const t = p.s === 'home' ? H : A; return `${esc(p.n)} <span class="muted">(${esc(t.abbr || t.name)}${p.pos && p.pos !== '?' ? ' ' + esc(p.pos) : ''})</span>${p.l ? ' ' + esc(p.l) : ''}`; }).join(' · ')}</p>` : '';
+  const ctl = commish && rec ? `<p class="muted small" style="margin:8px 0 0"><a href="javascript:void 0" data-act="momRedo" data-gid="${esc(g.id)}">${pending ? 'Redo requested' : 'Redo with AI'}</a>${rec.r ? ` · <a href="javascript:void 0" data-momhide="${esc(g.id)}|recap">${hidden.includes('recap') ? 'Show AI recap' : 'Hide AI recap'}</a>` : ''}</p>` : '';
+  return stars + ctl;
+}
+// Team page: the players the AI has seen this season, and what's been working / where the team struggles.
+function scoutCard(t, s = D.league.season) {
+  if (!AI.moms) { loadMoments(); return ''; }
+  const ps = teamPlayers(t.id, s).slice(0, 8), sc = teamScouting(t.id, s);
+  if (!ps.length && !sc.length) return '';
+  return `<div class="card"><h3 style="margin-top:0">Players to know</h3>
+    ${ps.length ? `<div class="tablewrap"><table><tr><th>Player</th><th class="num">Games</th><th class="num">Grade</th></tr>${ps.map(p => `<tr><td class="wrap"><b>${esc(p.name)}</b>${p.pos ? ` <span class="muted small">${esc(p.pos)}</span>` : ''}${p.lines[0] ? `<div class="muted small">Wk ${p.lines[0].w}: ${esc(p.lines[0].l)}</div>` : ''}</td><td class="num">${p.games}</td><td class="num">${p.grade ? p.grade.toFixed(1) : '–'}</td></tr>`).join('')}</table></div>` : ''}
+    ${sc.length ? `<h4 style="margin:14px 0 6px">Scouting report</h4><ul class="clean small">${sc.map(x => `<li><span class="muted">Wk ${x.g.week}:</span> ${x.good ? `<span class="win">+</span> ${esc(x.good)}` : ''}${x.good && x.bad ? ' ' : ''}${x.bad ? `<span class="loss">−</span> ${esc(x.bad)}` : ''}</li>`).join('')}</ul>` : ''}
+    <p class="muted small" style="margin:10px 0 0">From the AI's read of this season's broadcasts. Grades are 1-10 per game, averaged.</p></div>`;
 }
 // Broadcasts the commissioner filed as "User vs CPU" (games against teams outside the league), on the team's page.
 function cpuBroadcasts(tid) {
@@ -407,6 +407,7 @@ const PAGES = {
         <div class="stat" style="margin-top:10px"><div><span>Record</span><b>${rec(r)}</b></div><div><span>Conf</span><b>${r.cw}-${r.cl}</b></div><div><span>PF / PA</span><b>${r.pf} / ${r.pa}</b></div><div><span>Streak</span><b>${streak(r)}</b></div>
           <div><span>OVR / OFF / DEF</span><b>${t.ovr || '–'} / ${t.off || '–'} / ${t.def || '–'}</b></div>${pb ? `<div><span>Offense playbook</span><b>${esc(pb.off || '–')}</b></div><div><span>Defense playbook</span><b>${esc(pb.def || '–')}</b></div>` : ''}${sim ? `<div><span>Likely record</span><b>${sim.likely}</b></div><div><span>Title odds</span><b>${pctStr(sim.titlePct)}</b></div>` : ''}</div></div>
       ${teamStatsCard(id, s)}
+      ${scoutCard(t, s)}
       ${cpuBroadcasts(id)}
       <div class="card"><h3 style="margin-top:0">${s} Schedule</h3><div class="tablewrap"><table><tr><th>Wk</th><th>Opponent</th><th>Line</th><th class="num">Result</th></tr>
       ${games.map(g => {
@@ -1701,9 +1702,11 @@ PAGES.game = function (id) {
     ${done ? broadcastCard(g) : ''}
     ${l && !g.forfeit ? winChart(g, A, H) : ''}
     ${(() => { const air = done ? aiRecap(g) : null; if (done && !AI.moms && videosOf(g).length) loadMoments();
-      return air ? `<div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(air.h)}</h2>${air.p.map(t => `<p>${esc(t)}</p>`).join('')}<p class="muted small" style="margin-bottom:0">Recap written by AI from the broadcast.</p></div>`
+      const showCtl = !air && isCommish() && AI.moms?.games?.[g.id]?.r;   // recap hidden: keep the Show link reachable
+      if (showCtl) return `<div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(title)}</h2>${(() => { const vs = {}; return paras.map(t => `<p>${esc(vary(t, vs))}</p>`).join(''); })()}${aiExtras(g, A, H)}</div>`;
+      return air ? `<div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(air.h)}</h2>${air.p.map(t => `<p>${esc(t)}</p>`).join('')}${aiExtras(g, A, H)}<p class="muted small" style="margin-bottom:0">Recap written by AI from the broadcast.</p></div>`
         : `<div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(title)}</h2>${(() => { const vs = {}; return paras.map(t => `<p>${esc(vary(t, vs))}</p>`).join(''); })()}</div>`; })()}
-    ${done ? momentsCard(g, A, H) : ''}
+
     ${trends.length ? `<div class="card"><h3 style="margin-top:0">${done ? 'Trends going in' : 'Trends to watch'}</h3><ul class="clean gp-trends">${trends.slice(0, 6).map(t => `<li>${t}</li>`).join('')}</ul></div>` : ''}
     <div class="card"><h3 style="margin-top:0">Tale of the tape</h3><p class="muted small" style="margin-top:0">${done ? 'How the teams stacked up going in. ' : ''}<span class="tb">✓ Green</span> = the edge in that category, <span class="tw">red</span> = behind.</p><div class="tablewrap"><table class="gp-tape">
       <tr><td class="num"><b>${esc(A.abbr || A.name)}</b></td><th></th><td><b>${esc(H.abbr || H.name)}</b></td></tr>
