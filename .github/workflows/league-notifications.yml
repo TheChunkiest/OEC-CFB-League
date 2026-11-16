@@ -290,10 +290,16 @@ jobs:
                       if i.get('status') != 'pending': continue
                       g = game(i['gameId']); m = f"{ab(g.get('away'))} @ {ab(g.get('home'))}" if g else 'your game'
                       to('invites', f"📅 Coach {i.get('fromName') or ''} sent kickoff times", f'Pick a time for {m}.', f"{link}#game/{i['gameId']}", uids={i.get('to')}, tag='i' + i['gameId'])
+                  accepted_now = {i['gameId'] for i in resp if i.get('status') == 'accepted'}
                   for i in resp:
                       g = game(i['gameId']); m = f"{ab(g.get('away'))} @ {ab(g.get('home'))}" if g else 'your game'
                       if i.get('status') == 'accepted':
                           to('invites', '✅ Kickoff time set', f"Coach {i.get('toName') or ''} picked a time for {m}.", f"{link}#game/{i['gameId']}", uids={i.get('from')}, tag='i' + i['gameId'])
+                      elif i.get('status') == 'cancelled' and i.get('time') and i['gameId'] not in accepted_now:
+                          # An agreed time was cleared (Reschedule): tell both coaches.
+                          to('invites', '🔄 Kickoff time cleared', f'The time for {m} was cleared. Set a new one on the game page.', f"{link}#game/{i['gameId']}", uids={i.get('from'), i.get('to')}, tag='i' + i['gameId'])
+                      elif i.get('status') == 'declined' and i['gameId'] in accepted_now:
+                          pass   # auto-declined because another invite for the same game was just accepted
                       elif i.get('status') == 'declined' and (i['gameId'], i.get('to')) not in countered:
                           to('invites', 'Kickoff times declined', f"Coach {i.get('toName') or ''} couldn't make those times for {m}. Send new ones.", f"{link}#game/{i['gameId']}", uids={i.get('from')}, tag='i' + i['gameId'])
                   if new: st['inv'] = max(int(i.get('ts') or 0) for i in new)
