@@ -60,7 +60,8 @@ function loadMoments() {
 function aiExtras(g, A, H) {
   const r = aiRecap(g), rec = AI.moms?.games?.[g.id], commish = isCommish(), hidden = (D.league.momHide || {})[g.id] || [];
   const redo = (D.league.momRedo || {})[g.id], pending = redo && (!rec || redo > rec.at * 1000);
-  const stars = r?.pl?.length ? `<p class="small" style="margin-bottom:0"><b>Standouts:</b> ${r.pl.slice(0, 4).map(p => { const t = p.s === 'home' ? H : A; return `${esc(p.n)} <span class="muted">(${esc(t.abbr || t.name)}${p.pos && p.pos !== '?' ? ' ' + esc(p.pos) : ''})</span>${p.l ? ' ' + esc(p.l) : ''}`; }).join(' · ')}</p>` : '';
+  const stars = r?.pl?.length ? `<h4 class="aistars-h">Standouts</h4><ul class="aistars">${r.pl.slice(0, 4).map(p => { const t = p.s === 'home' ? H : A;
+    return `<li><i class="sw" style="background:${esc(teamColor(t))}"></i><div><b>${esc(p.n)}</b> <span class="muted small">${esc(t.abbr || t.name)}${p.pos && p.pos !== '?' ? ' · ' + esc(p.pos) : ''}</span>${p.l ? `<div class="muted small">${esc(p.l)}</div>` : ''}</div></li>`; }).join('')}</ul>` : '';
   const ctl = commish && rec ? `<p class="muted small" style="margin:8px 0 0"><a href="javascript:void 0" data-act="momRedo" data-gid="${esc(g.id)}">${pending ? 'Redo requested' : 'Redo with AI'}</a>${rec.r ? ` · <a href="javascript:void 0" data-momhide="${esc(g.id)}|recap">${hidden.includes('recap') ? 'Show AI recap' : 'Hide AI recap'}</a>` : ''}</p>` : '';
   return stars + ctl;
 }
@@ -1704,7 +1705,7 @@ PAGES.game = function (id) {
     ${(() => { const air = done ? aiRecap(g) : null; if (done && !AI.moms && videosOf(g).length) loadMoments();
       const showCtl = !air && isCommish() && AI.moms?.games?.[g.id]?.r;   // recap hidden: keep the Show link reachable
       if (showCtl) return `<div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(title)}</h2>${(() => { const vs = {}; return paras.map(t => `<p>${esc(vary(t, vs))}</p>`).join(''); })()}${aiExtras(g, A, H)}</div>`;
-      return air ? `<div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(air.h)}</h2>${air.p.map(t => `<p>${esc(t)}</p>`).join('')}${aiExtras(g, A, H)}<p class="muted small" style="margin-bottom:0">Recap written by AI from the broadcast.</p></div>`
+      return air ? `<div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(air.h)}</h2>${air.p.map(t => `<p>${esc(t)}</p>`).join('')}${aiExtras(g, A, H)}<p class="aifoot">Recap written by AI from the broadcast.</p></div>`
         : `<div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(title)}</h2>${(() => { const vs = {}; return paras.map(t => `<p>${esc(vary(t, vs))}</p>`).join(''); })()}</div>`; })()}
 
     ${trends.length ? `<div class="card"><h3 style="margin-top:0">${done ? 'Trends going in' : 'Trends to watch'}</h3><ul class="clean gp-trends">${trends.slice(0, 6).map(t => `<li>${t}</li>`).join('')}</ul></div>` : ''}

@@ -723,3 +723,11 @@ h3{margin-bottom:10px}
 .moments .mt .sw{margin-right:4px}
 .moments .mom.off{opacity:.4}
 .moments .mom.off b{text-decoration:line-through}
+/* AI recap: standouts list + small footnote */
+.aistars-h{margin:14px 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+.aistars{list-style:none;margin:0;padding:0}
+.aistars li{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-top:1px solid var(--line)}
+.aistars li:first-child{border-top:0;padding-top:2px}
+.aistars .sw{flex:none;margin-top:5px}
+.aifoot,.gp-story p.aifoot{margin:10px 0 0;font-size:11px;line-height:1.4;color:var(--muted)}
+.gp-story p.small{font-size:13px;line-height:1.5}
