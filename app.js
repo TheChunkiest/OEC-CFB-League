@@ -3,7 +3,8 @@ import {
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, raceSim, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
   gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
-} from './core.js?v=58';
+, playbookOf, pbSeason, pbText
+} from './core.js?v=59';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -373,11 +374,13 @@ const PAGES = {
     if (!r) return '<div class="card empty">Team not found.</div>';
     const games = D.games.filter(g => g.season === s && (g.home === id || g.away === id)).sort((a, b) => a.week - b.week);
     const pr = currentPower().find(x => x.id === id), sim = t.conf === D.league.conference ? simulate(s, nowUpto())[id] : null;
+    const sc = s === D.league.season ? t.coach : (games.map(g => g.home === id ? g.homeCoach : g.awayCoach).find(Boolean) || t.coach);
+    const pb = isUserTeam(t) || sc ? playbookOf(t, s === D.league.season ? pbSeason() : s, sc) : null;
     return `<p><a href="#teams">← All teams</a></p>
       <div class="card" style="border-left:6px solid ${esc(teamColor(t))}"><h2>${pr ? '#' + pr.rank + ' ' : ''}${esc(t.name)}</h2>
         <div class="muted">${esc(t.conf)}${t.div ? ' ' + esc(t.div) : ''} · ${isUserTeam(t) ? `Coach <a href="#coach/${slug(t.coach)}">${esc(t.coach)}</a>` : 'CPU'}</div>
         <div class="stat" style="margin-top:10px"><div><span>Record</span><b>${rec(r)}</b></div><div><span>Conf</span><b>${r.cw}-${r.cl}</b></div><div><span>PF / PA</span><b>${r.pf} / ${r.pa}</b></div><div><span>Streak</span><b>${streak(r)}</b></div>
-          <div><span>OVR / OFF / DEF</span><b>${t.ovr || '–'} / ${t.off || '–'} / ${t.def || '–'}</b></div>${sim ? `<div><span>Likely record</span><b>${sim.likely}</b></div><div><span>Title odds</span><b>${pctStr(sim.titlePct)}</b></div>` : ''}</div></div>
+          <div><span>OVR / OFF / DEF</span><b>${t.ovr || '–'} / ${t.off || '–'} / ${t.def || '–'}</b></div>${pb ? `<div><span>Offense playbook</span><b>${esc(pb.off || '–')}</b></div><div><span>Defense playbook</span><b>${esc(pb.def || '–')}</b></div>` : ''}${sim ? `<div><span>Likely record</span><b>${sim.likely}</b></div><div><span>Title odds</span><b>${pctStr(sim.titlePct)}</b></div>` : ''}</div></div>
       ${teamStatsCard(id, s)}
       ${cpuBroadcasts(id)}
       <div class="card"><h3 style="margin-top:0">${s} Schedule</h3><div class="tablewrap"><table><tr><th>Wk</th><th>Opponent</th><th>Line</th><th class="num">Result</th></tr>
@@ -411,7 +414,7 @@ const PAGES = {
     html += `<div class="card"><h3 style="margin-top:0">Season by season</h3>${seasons.length ? `<div class="tablewrap"><table class="cseason">
       <tr><th>Season</th><th>Team</th><th class="num">W-L</th><th class="num hide-sm">vs Coaches</th><th class="num hide-sm">PF / G</th><th class="num hide-sm">PA / G</th><th>Finish</th></tr>
       ${seasons.slice().reverse().map(x => `<tr><td><b>S${seasonNum(x.season)}</b><div class="muted small">${x.season}${x.season === cur && D.league.phase !== PHASES.PRE && !x.finish ? ' · in progress' : ''}</div></td>
-        <td>${x.teams.map(id => chip(id, { abbr: innerWidth < 640, rank: false })).join(' ')}</td><td class="num"><b>${x.w}-${x.l}</b></td><td class="num hide-sm">${x.uw}-${x.ul}</td>
+        <td>${x.teams.map(id => chip(id, { abbr: innerWidth < 640, rank: false })).join(' ')}${(() => { const p = x.teams.map(id => pbText(playbookOf(team(id), x.season, name))).filter(Boolean); return p.length ? `<div class="muted small">${esc(p.join(' · '))}</div>` : ''; })()}</td><td class="num"><b>${x.w}-${x.l}</b></td><td class="num hide-sm">${x.uw}-${x.ul}</td>
         <td class="num hide-sm">${x.gp ? (x.pf / x.gp).toFixed(1) : '–'}</td><td class="num hide-sm">${x.gp ? (x.pa / x.gp).toFixed(1) : '–'}</td>
         <td>${x.ccg ? `<a href="#game/${esc(x.ccg.g.id)}">${finishTag(x.finish)}</a>` : placeTag(x)}</td></tr>`).join('')}
       </table></div>` : '<div class="muted">No games on record yet.</div>'}</div>`;
@@ -878,7 +881,8 @@ async function drawCheat(C) {
   font(24, B, '600'); text(`Season ${seasonNum(s)} · ${g.type === 'ccg' ? 'Championship' : g.type === 'bowl' ? 'Postseason' : 'Week ' + g.week}${C.isGotw ? ' · ★ GOTW' : ''}`, W - P, 98, MUT, 'right');
   y = 168; fit(C.title, 40, IW); text(C.title, P, y);
   // Teams
-  y += 30; const tTop = y, tH = done ? 300 : 230; card(tTop, tH);
+  const pbA = playbookOf(A, s, C.coachA), pbH = playbookOf(H, s, C.coachH), pbRow = pbA || pbH ? 36 : 0;
+  y += 30; const tTop = y, tH = (done ? 300 : 230) + pbRow; card(tTop, tH);
   const colW = (IW - 90) / 2;
   const side = (t, coach, rkN, recLine, X, al, score) => {
     let Y = tTop + 34;
@@ -886,6 +890,7 @@ async function drawCheat(C) {
     Y += 62; fit((rkN ? '#' + rkN + ' ' : '') + t.name, 46, colW); text((rkN ? '#' + rkN + ' ' : '') + t.name, X, Y, TXT, al);
     Y += 38; fit(recLine, 26, colW, B, '700'); text(recLine, X, Y, TXT, al);
     Y += 36; font(25, B, '600'); text((coach && coach !== 'CPU' ? 'Coach ' + coach : 'CPU') + (mascotOf(t) ? ' · ' + mascotOf(t) : ''), X, Y, GOLD, al);
+    if (pbRow) { Y += 36; const pt = pbText(t === A ? pbA : pbH, ' / '); if (pt) { fit(pt, 24, colW, B, '600'); text(pt, X, Y, MUT, al); } }
     if (done) { Y += 72; font(76, F, '900'); text(g.forfeit ? '' : String(score), X, Y, TXT, al); }
   };
   side(A, C.coachA, C.rk.a, `${rec(records(s)[A.id])} · ${C.rec.a}`, P + 6, 'left', g.awayScore);
@@ -1519,6 +1524,7 @@ PAGES.game = function (id) {
   const recs = records(s), ra = recs[A.id], rh = recs[H.id];
   const ca = isUserTeam(A) ? A.coach : (g.awayCoach || 'CPU'), ch = isUserTeam(H) ? H.coach : (g.homeCoach || 'CPU');
   const coachA = done ? coachOf(g, 'away') : ca, coachH = done ? coachOf(g, 'home') : ch;
+  const pbA = playbookOf(A, s, coachA), pbH = playbookOf(H, s, coachH);
   const PA = teamProfile(A.id, s), PH = teamProfile(H.id, s);
   const R = ratings(s, nowUpto()), formOf = t => { const r = R[t.id]; if (!r || !r.perf.length) return null; const x = r.perf.slice(-3); return x.reduce((a, b) => a + b.v, 0) / x.length; };
   const fav = l ? (l.spread <= 0 ? H : A) : null, dog = fav ? (fav === H ? A : H) : null;
@@ -1654,7 +1660,7 @@ PAGES.game = function (id) {
       ${row('Record', rec(recs[A.id]), rec(recs[H.id]), wpct(recs[A.id]), wpct(recs[H.id]), 1)}${row('Points / game', ppg(PA), ppg(PH), num(PA, 'pf'), num(PH, 'pf'), 1)}${row('Allowed / game', papg(PA), papg(PH), num(PA, 'pa'), num(PH, 'pa'), -1)}
       ${row('Against the spread', rec3(PA.ats), rec3(PH.ats), ap(PA.ats), ap(PH.ats), 1)}${row('Over-Under', rec3(PA.ou), rec3(PH.ou))}${row('Streak', streak(recs[A.id]), streak(recs[H.id]), stv(recs[A.id]), stv(recs[H.id]), 1)}
       ${row('Top 25', rk(A) ? '#' + rk(A) : '–', rk(H) ? '#' + rk(H) : '–', rk(A) || rk(H) ? rkv(rk(A)) : null, rkv(rk(H)), -1)}${row('Power rank', prOf(A) ? '#' + prOf(A) : '–', prOf(H) ? '#' + prOf(H) : '–', prOf(A), prOf(H), -1)}
-      ${row('Overall', A.ovr || '–', H.ovr || '–', nz(A.ovr), nz(H.ovr), 1)}${row('Offense', A.off || '–', H.off || '–', nz(A.off), nz(H.off), 1)}${row('Defense', A.def || '–', H.def || '–', nz(A.def), nz(H.def), 1)}
+      ${row('Overall', A.ovr || '–', H.ovr || '–', nz(A.ovr), nz(H.ovr), 1)}${row('Offense', A.off || '–', H.off || '–', nz(A.off), nz(H.off), 1)}${row('Defense', A.def || '–', H.def || '–', nz(A.def), nz(H.def), 1)}${pbA || pbH ? row('Offense playbook', esc(pbA?.off || '–'), esc(pbH?.off || '–')) + row('Defense playbook', esc(pbA?.def || '–'), esc(pbH?.def || '–')) : ''}
       ${sim && sim[A.id] && sim[H.id] ? row('Title odds', pctStr(sim[A.id].titlePct), pctStr(sim[H.id].titlePct), sim[A.id].titlePct, sim[H.id].titlePct, 1) : ''}
     </table></div></div>
     ${coachA !== 'CPU' && coachH !== 'CPU' ? `<div class="card"><h3 style="margin-top:0">Past meetings: ${esc(coachA)} vs. ${esc(coachH)}</h3>${meets.length ? `<p class="muted small" style="margin-top:0">${mw[coachA] || 0}-${mw[coachH] || 0} all-time${done ? ' before this game' : ''}. Coaches' records follow them from team to team.</p><div class="tablewrap"><table>

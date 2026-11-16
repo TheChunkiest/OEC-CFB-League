@@ -1,8 +1,8 @@
 import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
-  orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum
-} from './core.js?v=58';
+  orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum, playbookOf, pbSeason, pbOpen, pbLocked
+} from './core.js?v=59';
 import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
 
 // Tabs: the weekly job lives on "This Week"; everything else is occasional. Awards only shows when it matters.
@@ -304,7 +304,7 @@ const views = {
   },
 
   teams() {
-    return views.coaches() + views.ratings() + `<details class="card"><summary><b>Fix this week's Top 25</b> <span class="muted small">(normally set during the weekly advance)</span></summary>${views.top25()}</details>`;
+    return views.coaches() + views.ratings() + views.playbooks() + `<details class="card"><summary><b>Fix this week's Top 25</b> <span class="muted small">(normally set during the weekly advance)</span></summary>${views.top25()}</details>`;
   },
   ratings() {
     const ts = leagueTeams().slice().sort((a, b) => a.name.localeCompare(b.name));
@@ -313,6 +313,20 @@ const views = {
         <div style="flex:1 1 100%"><i class="sw" style="background:${esc(teamColor(t))};margin-right:6px"></i><b>${esc(t.name)}</b> <span class="muted small">${esc(t.coach || 'CPU')}</span></div>
         ${['ovr', 'off', 'def'].map(k => `<label style="margin:0;font-size:11px;text-align:center">${k.toUpperCase()}<br><input class="score" type="number" inputmode="numeric" min="40" max="99" data-k="${k}" value="${t[k] ?? ''}" style="width:64px"></label>`).join('')}</div>`).join('')}
       <div class="row" style="margin-top:12px"><button data-act="saveRatings">Save ratings</button></div></div>`;
+  },
+
+  playbooks() {
+    const lg = L(), ks = pbSeason(lg), open = pbOpen(lg), ts = D.teams.filter(isUserTeam).sort((a, b) => a.name.localeCompare(b.name));
+    const used = k => [...new Set(D.teams.flatMap(t => Object.values(t.pb || {}).map(p => p && p[k]).filter(Boolean)))].sort();
+    return `<details class="card" id="pbCard"><summary><b>Playbooks</b> <span class="muted small">(S${seasonNum(ks)})</span></summary>
+      <p class="muted small">${open ? `Playbook changes are open (${esc(lg.phase)}). Saves count for Season ${seasonNum(ks)}.` : 'Playbooks are locked during the season. They open again in the Postseason. A team with no playbook on record can still be filled in.'} Each season's playbook is kept for team pages and coach history.</p>
+      <datalist id="pbOffL">${used('off').map(v => `<option value="${esc(v)}">`).join('')}</datalist><datalist id="pbDefL">${used('def').map(v => `<option value="${esc(v)}">`).join('')}</datalist>
+      ${ts.map(t => { const p = playbookOf(t, ks, t.coach) || {}, lock = pbLocked(t, lg); return `<div class="row" data-pb="${esc(t.id)}" style="padding:8px 0;border-bottom:1px solid var(--line)">
+        <div style="flex:1 1 100%"><i class="sw" style="background:${esc(teamColor(t))};margin-right:6px"></i><b>${esc(t.name)}</b> <span class="muted small">${esc(t.coach)}${lock ? ' · 🔒 locked' : ''}</span></div>
+        <label style="margin:0;flex:1 1 140px;font-size:11px;display:block">OFFENSE<input style="width:100%;margin-top:3px" data-k="off" list="pbOffL" value="${esc(p.off || '')}" ${lock ? 'disabled' : ''}></label>
+        <label style="margin:0;flex:1 1 140px;font-size:11px;display:block">DEFENSE<input style="width:100%;margin-top:3px" data-k="def" list="pbDefL" value="${esc(p.def || '')}" ${lock ? 'disabled' : ''}></label></div>`; }).join('')}
+      <label style="margin-top:12px">Paste a list (optional), one per line: <code>coach or team: offense / defense</code></label><textarea id="pbBulk" rows="4" placeholder="Chunky: Air Raid / 4-2-5&#10;Beech: Multiple / 3-4"></textarea>
+      <div class="row" style="margin-top:6px"><button class="ghost sm" data-act="pbFill">Fill in from list</button><button data-act="savePlaybooks">Save playbooks</button><span id="pbMsg" class="muted small"></span></div></details>`;
   },
 
   top25() {
@@ -571,6 +585,7 @@ const ACT = {
       const uid = v('uid'), u = D.users.find(x => x.id === uid);
       const data = { name: v('name').trim(), abbr: v('abbr').trim().toUpperCase(), conf: v('conf') === 'Non-Conf' ? 'Non-Conf' : conf, div: v('div').trim(), coach: v('coach').trim() || (u ? u.name : ''), uid, color: v('color'), ovr: +v('ovr') || null, off: +v('off') || null, def: +v('def') || null };
       if (!data.name) return alert('Every team needs a name.');
+      const old = D.teams.find(x => x.id === id); if (old && old.pb) data.pb = old.pb;   // keep playbook history
       ops.push({ op: 'set', col: 'teams', id, data, merge: false });
       if (uid) userOps[uid] = id;
     }
@@ -723,6 +738,33 @@ const ACT = {
     await batch(ops);
     if (L().phase !== PHASES.PRE) await batch(lineOps(L().week));
     flash(`Saved ratings for ${ops.length} teams.${L().phase !== PHASES.PRE ? ' This week\'s lines were re-posted.' : ''}`);
+  },
+  pbFill(btn) {
+    btn.disabled = false; const bad = [], rows = $$('[data-pb]');
+    $('#pbBulk').value.split('\n').map(x => x.trim()).filter(Boolean).forEach(line => {
+      let name, rest;
+      if (line.includes(':')) [name, rest] = [line.slice(0, line.indexOf(':')), line.slice(line.indexOf(':') + 1)];
+      else { const p = line.split(/\t|,/); name = p.shift(); rest = p.join('/'); }
+      const [off, def] = rest.split(/\/|\t|,|\s[|·]\s/).map(x => x.trim());
+      const n = name.trim().toLowerCase(), t = D.teams.filter(isUserTeam).find(x => [x.coach, x.name, x.abbr].some(v => String(v || '').toLowerCase() === n));
+      const r = t && rows.find(x => x.dataset.pb === t.id);
+      if (!r || !off) { bad.push(line); return; }
+      const set = (k, v) => { const i = r.querySelector(`[data-k="${k}"]`); if (v && !i.disabled) i.value = v; };
+      set('off', off); set('def', def);
+    });
+    $('#pbMsg').textContent = bad.length ? `Couldn't match: ${bad.join(' | ')}` : 'Filled in. Check them, then Save.';
+  },
+  async savePlaybooks() {
+    const ks = String(pbSeason()), ops = [];
+    $$('[data-pb]').forEach(r => {
+      const t = team(r.dataset.pb), v = k => r.querySelector(`[data-k="${k}"]`), off = v('off').value.trim(), def = v('def').value.trim();
+      if (v('off').disabled || (!off && !def)) return;
+      const cur = playbookOf(t, +ks, t.coach) || {};
+      if (cur.off === off && cur.def === def) return;
+      ops.push({ op: 'set', col: 'teams', id: t.id, data: { pb: { ...(t.pb || {}), [ks]: { off, def, coach: t.coach } } } });
+    });
+    if (!ops.length) return flash('No playbook changes to save.');
+    await batch(ops); flash(`Saved playbooks for ${ops.length} team${ops.length === 1 ? '' : 's'}.`);
   },
   async seedRatings() {
     const r = await fetch('league-data.json?v=' + Date.now()); if (!r.ok) return alert('league-data.json not found on the site.');

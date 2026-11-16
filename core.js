@@ -296,6 +296,36 @@ export const played = g => g.homeScore != null && g.awayScore != null && g.homeS
 export const seasonGames = (s = D.league.season) => D.games.filter(g => g.season === s);
 export const isConfGame = g => team(g.home).conf === D.league.conference && team(g.away).conf === D.league.conference;
 export const coachOf = (g, side) => g[side + 'Coach'] || team(g[side]).coach || 'CPU';
+/* ---------- Playbooks ---------- */
+// team.pb = { "<season>": { off, def, coach } }. A playbook carries into later seasons until it's changed,
+// as long as the same coach still runs the team. Changes are only allowed in the Postseason or Offseason
+// (or in-season to fill in a team that has nothing on record yet).
+// Starting playbooks (Season 3, by coach). Built in, so they show without a database write; anything saved in
+// Commissioner Tools takes over from these.
+const PB_SEED = { season: 2028, by: {
+  boss: ['Spread Option', 'Multiple'], chunky: ['Multiple', '4-2-5'], kahuna: ['Spread', '4-3 Multiple'], nut: ['Air Raid', 'Base 4-3'],
+  beech: ['Spread Option', '3-4 Multiple'], angel: ['Power Spread', '3-3-5 Tite'], skippa: ['Multiple', '4-2-5'], ethan: ['Multiple', '4-2-5'],
+  dayce: ['Spread Option', '4-2-5'], clay: ['Spread', '4-2-5'], winders: ['Pro Style', '4-2-5'], matt: ['Spread Option', '4-2-5'] } };
+export function playbookOf(t, season = pbSeason(), coach) {
+  if (!t) return null;
+  const who = String(coach || t.coach || '').trim(), pb = t.pb || {};
+  const ks = Object.keys(pb).map(Number).filter(s => s <= season).sort((a, b) => b - a);
+  for (const s of ks) {
+    const p = pb[s]; if (!p || (!p.off && !p.def)) continue;
+    if (s >= PB_SEED.season || !PB_SEED.by[who.toLowerCase()] || season < PB_SEED.season)
+      return who && p.coach && who !== 'CPU' && p.coach.toLowerCase() !== who.toLowerCase() ? null : p;
+    break;   // an older saved entry is outranked by the Season 3 starting playbooks
+  }
+  const sd = season >= PB_SEED.season && PB_SEED.by[who.toLowerCase()];
+  return sd ? { off: sd[0], def: sd[1], coach: who } : null;
+}
+// Season a playbook edit is saved under: next season once this one is in the books, otherwise this one.
+export function pbSeason(L = D.league) {
+  return L.phase === PHASES.PRE && D.history.some(h => h.season === L.season) ? L.season + 1 : L.season;
+}
+export const pbOpen = (L = D.league) => L.phase === PHASES.PRE || L.phase === PHASES.POST;
+export const pbLocked = (t, L = D.league) => !pbOpen(L) && !!playbookOf(t, pbSeason(L), t.coach);
+export const pbText = (p, sep = ' · ') => p ? [p.off, p.def].filter(Boolean).join(sep) : '';
 export const slug = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 export const fmtOdds = o => o == null ? '–' : (o > 0 ? '+' + o : String(o));
 export const fmtLine = l => l == null ? '–' : (l === 0 ? 'PK' : (l > 0 ? '+' + l : String(l)));
