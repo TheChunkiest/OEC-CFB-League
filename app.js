@@ -101,7 +101,8 @@ function scoutCard(t, s = D.league.season) {
 function cpuBroadcasts(tid) {
   const list = Array.isArray(D.league.vidCpu) ? D.league.vidCpu : [], vs = list.filter(x => (x.t || []).includes(tid)).map(x => vidInfo(x.v)).sort((a, b) => b.d - a.d);
   if (!vs.length) return '';
-  return `<div class="card"><h3 style="margin-top:0">▶ Broadcasts vs CPU teams</h3>${vs.slice(0, 12).map(v => `<a class="vidpart" href="https://youtu.be/${esc(v.id)}" target="_blank" rel="noopener">${YT_BTN}<span class="vcol"><b>${esc(v.t || 'OEC on YouTube')}</b><span class="muted small">${v.d ? new Date(v.d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</span></span></a>`).join('')}</div>`;
+  const short = t => String(t || 'OEC on YouTube').replace(/^OEC\s+CFB\s+League\s*/i, '').trim();   // the channel name is on every title
+  return `<div class="card"><h3 style="margin-top:0">Broadcasts vs CPU teams</h3><div class="cpulinks">${vs.slice(0, 12).map(v => `<a href="https://youtu.be/${esc(v.id)}" target="_blank" rel="noopener">▶ ${esc(short(v.t))}</a>`).join('')}</div></div>`;
 }
 // YouTube-style red play button (used instead of video thumbnails, which vary too much in look)
 const YT_BTN = '<svg class="ytbtn" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="#fff"/></svg>';
