@@ -4,7 +4,7 @@ import {
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, raceSim, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
   gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
 , playbookOf, pbSeason, pbText
-} from './core.js?v=63';
+} from './core.js?v=64';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -106,6 +106,8 @@ function cpuBroadcasts(tid) {
 }
 // YouTube-style red play button (used instead of video thumbnails, which vary too much in look)
 const YT_BTN = '<svg class="ytbtn" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="#fff"/></svg>';
+// The league title game gets the Game of the Week treatment: gold border and its own label.
+const champRibbon = () => `🏆 ${esc(D.league.conference ? D.league.conference + ' ' : '')}Championship`;
 function broadcastCard(g) {
   const vs = videosOf(g); if (!vs.length) return '';
   const one = vs.length === 1, v = vs[0];
@@ -125,7 +127,7 @@ function gameCard(g, opts = {}) {
   const hw = done && +g.homeScore > +g.awayScore, aw = done && !hw;
   const tags = [];
   const gt = gameTags(g); if (gt) tags.push(gt);
-  if (g.type === 'ccg') tags.push('<span class="tag gold">League Championship</span>');
+  // (the title game is marked by its gold ribbon instead of a tag)
   if (g.type === 'bowl') tags.push('<span class="tag">Postseason</span>');
   const l = lineOf(g);
   let odds = '';
@@ -141,7 +143,8 @@ function gameCard(g, opts = {}) {
   // Finished games show who actually coached them (saved on the game); upcoming ones show today's coaches.
   const ca = done ? coachOf(g, 'away') : isUserTeam(a) ? a.coach : 'CPU', ch = done ? coachOf(g, 'home') : isUserTeam(h) ? h.coach : 'CPU';
   const who = ca !== 'CPU' || ch !== 'CPU' ? ` · ${esc(ca)} ${g.neutral ? 'vs' : '@'} ${esc(ch)}` : '';
-  return `<div class="card game clickable${opts.gotw ? ' gotw' : ''}" data-game="${esc(g.id)}">${opts.gotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}<span class="go" aria-hidden="true">›</span><div class="teams">
+  const champ = g.type === 'ccg';
+  return `<div class="card game clickable${opts.gotw || champ ? ' gotw' : ''}" data-game="${esc(g.id)}">${champ ? `<span class="ribbon">${champRibbon()}</span>` : opts.gotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}<span class="go" aria-hidden="true">›</span><div class="teams">
       <div class="matchup"><span class="mt ${done ? (aw ? 'w' : 'l') : ''}">${chip(a.id, { season: g.season, week: g.week, href: '#game/' + g.id })}${sc('away', aw)}</span><span class="at">${g.neutral ? 'vs' : '@'}</span><span class="mt ${done ? (hw ? 'w' : 'l') : ''}">${chip(h.id, { season: g.season, week: g.week, href: '#game/' + g.id })}${sc('home', hw)}</span>${tags.join('')}</div>
       <div class="meta">${status}${who}${!done && kickoffOf(g) ? ` · ${esc(fmtKick(kickoffOf(g), true))}` : ''}</div>
       ${done || g.forfeit ? '' : probBar(g, l, done)}${!done && odds ? `<div class="meta">${odds}</div>` : ''}${opts.extra || ''}</div></div>`;
@@ -574,8 +577,8 @@ function betRows(g) {
   const a = team(g.away), h = team(g.home);
   const own = ownGame(g);
   const b = (market, pick, top, odds) => own ? `<span class="pick off">${top} <b>${fmtOdds(odds)}</b></span>` : `<button class="pick${UI.mode === 'parlay' && UI.legs.some(x => x.gameId === g.id && x.market === market && x.pick === pick) ? ' sel' : ''}" data-bet="${esc(g.id)}|${market}|${pick}">${top} <b>${fmtOdds(odds)}</b></button>`;
-  const isG = gotwGameId() === g.id;
-  return `<div class="betgame${isG ? ' gotw' : ''}${own ? ' own' : ''}">${isG ? `<span class="ribbon">★ Game of the Week · +${Math.round((GOTW_BOOST - 1) * 100)}% profit boost</span>` : ''}<div class="tm matchup">${chip(a.id, { season: g.season, week: g.week, href: '#game/' + g.id })}<span class="at">${g.neutral ? 'vs' : '@'}</span>${chip(h.id, { season: g.season, week: g.week, href: '#game/' + g.id })}${gameTags(g)}</div>${own ? '<span class="ownnote">Your game · no betting</span>' : ''}${probBar(g, l, false, 'tm')}
+  const isG = gotwGameId() === g.id, champ = g.type === 'ccg';
+  return `<div class="betgame${isG || champ ? ' gotw' : ''}${own ? ' own' : ''}">${isG ? `<span class="ribbon">★ Game of the Week · +${Math.round((GOTW_BOOST - 1) * 100)}% profit boost</span>` : champ ? `<span class="ribbon">${champRibbon()}</span>` : ''}<div class="tm matchup">${chip(a.id, { season: g.season, week: g.week, href: '#game/' + g.id })}<span class="at">${g.neutral ? 'vs' : '@'}</span>${chip(h.id, { season: g.season, week: g.week, href: '#game/' + g.id })}${gameTags(g)}</div>${own ? '<span class="ownnote">Your game · no betting</span>' : ''}${probBar(g, l, false, 'tm')}
     <div style="display:grid;gap:4px">${b('spread', 'away', esc(a.abbr) + ' ' + fmtLine(-l.spread), juiceOf(l, 'spread', 'away'))}${b('spread', 'home', esc(h.abbr) + ' ' + fmtLine(l.spread), juiceOf(l, 'spread', 'home'))}</div>
     <div style="display:grid;gap:4px">${b('ml', 'away', esc(a.abbr), l.mlAway)}${b('ml', 'home', esc(h.abbr), l.mlHome)}</div>
     <div style="display:grid;gap:4px">${b('total', 'over', 'O ' + l.total, juiceOf(l, 'total', 'over'))}${b('total', 'under', 'U ' + l.total, juiceOf(l, 'total', 'under'))}</div></div>`;
@@ -1746,7 +1749,7 @@ PAGES.game = function (id) {
     trends: trends.slice(0, 6).map(t => t.replace(/<[^>]+>/g, '')),
     series: coachA !== 'CPU' && coachH !== 'CPU' && meets.length ? `${coachA} vs. ${coachH}: ${mw[coachA] || 0}-${mw[coachH] || 0} all-time` + (() => { const w = meetingWinner(meets[0]); return `. Last: S${seasonNum(meets[0].season)} ${meets[0].type === 'ccg' ? 'title game' : 'Wk ' + meets[0].week}, ${w.coach} won ${w.ws}-${w.ls}.`; })() : (coachA !== 'CPU' && coachH !== 'CPU' ? `First-ever meeting between ${coachA} and ${coachH}.` : '') };
   return `<p><a href="#schedule/${g.week}">← Week ${g.week} schedule</a></p>
-    <div class="card gp-head${isGotw ? ' gotw' : ''}">${isGotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}
+    <div class="card gp-head${isGotw || g.type === 'ccg' ? ' gotw' : ''}">${g.type === 'ccg' ? `<span class="ribbon">${champRibbon()}</span>` : isGotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}
       <div class="muted small" style="text-transform:uppercase;letter-spacing:.8px;font-weight:800">Season ${seasonNum(s)} · ${g.type === 'ccg' ? 'League Championship' : g.type === 'bowl' ? 'Postseason' : 'Week ' + g.week}${done ? ' · Final' : ''}${gameTags(g) ? ' · ' + gameTags(g) : ''}</div>
       <div class="gp-vs">${side(A, coachA, g.awayScore, !hw)}<div class="gp-at">${g.neutral ? 'vs' : '@'}</div>${side(H, coachH, g.homeScore, hw)}</div>
       ${ko.meta}

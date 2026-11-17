@@ -877,8 +877,10 @@ export function kickoffOf(g) {
 }
 export function kickoffInvite(g) { return (D.invites || []).filter(i => i.gameId === g.id && i.status === 'accepted').sort((x, y) => (y.respondedAt || 0) - (x.respondedAt || 0))[0] || null; }
 export function canSchedule(g, L = D.league) {
-  return !!g && L.phase === PHASES.REG && g.season === L.season && !played(g) && (g.type || 'reg') === 'reg'
-    && (g.week === L.week || g.week === L.week + 1) && isUserTeam(team(g.home)) && isUserTeam(team(g.away));
+  // Regular season: this week's and next week's games. Championship week: the title game.
+  const when = (L.phase === PHASES.REG && (g.type || 'reg') === 'reg' && (g.week === L.week || g.week === L.week + 1))
+    || (L.phase === PHASES.CCG && g.type === 'ccg' && g.week === L.week);
+  return !!g && when && g.season === L.season && !played(g) && isUserTeam(team(g.home)) && isUserTeam(team(g.away));
 }
 export const pendingInvites = g => (D.invites || []).filter(i => i.gameId === g.id && i.status === 'pending').sort((a, b) => b.ts - a.ts);
 export function invitesFor(uid) {

@@ -145,8 +145,9 @@ service cloud.firestore {
         && d.times[0] is number && d.times[0] > now
         && (d.times.size() < 2 || (d.times[1] is number && d.times[1] > now))
         && (d.times.size() < 3 || (d.times[2] is number && d.times[2] > now))
-        && L.phase == 'Regular Season' && g.season == L.season && g.get('homeScore', null) == null
-        && (g.week == L.week || g.week == L.week + 1) && d.week == g.week && d.season == g.season
+        && g.season == L.season && g.get('homeScore', null) == null && d.week == g.week && d.season == g.season
+        && ((L.phase == 'Regular Season' && (g.week == L.week || g.week == L.week + 1))
+          || (L.phase == 'Conference Championship' && g.get('type', 'reg') == 'ccg' && g.week == L.week))
         && (me.teamId == g.home || me.teamId == g.away)
         && d.to != '' && d.to == get(/databases/$(database)/documents/teams/$(oppTeam)).data.uid;
     }
