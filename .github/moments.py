@@ -15,7 +15,7 @@ NOW = time.time()
 KEY = os.environ.get('GEMINI_API_KEY', '').strip()
 MODELS = list(dict.fromkeys(m for m in [os.environ.get('GEMINI_MODEL', '').strip(), 'gemini-flash-latest', 'gemini-flash-lite-latest', 'gemini-3.1-flash-lite', 'gemini-3-flash-preview'] if m))
 BUSY = (429, 500, 502, 503, 504)   # Google's "busy / try again later" answers: never count against a game
-DAILY_HOURS = float(os.environ.get('MOMENTS_DAILY_HOURS') or 6)    # free tier allows about 8 hours of YouTube a day
+DAILY_HOURS = float(os.environ.get('MOMENTS_DAILY_HOURS') or 0)    # 0 = no cap of our own: on a free key Google just refuses (429) past its limits, it never bills
 CHUNK = 15 * 60          # 15-minute pieces: each request comes back in a few minutes
 RUN_BUDGET = 17 * 60     # stop starting new pieces after this long; the next run picks up where this one left off
 REQ_TIMEOUT = 300       # a piece that takes longer than this is too big: it gets split
@@ -347,7 +347,7 @@ def run():
     g = games[gid]
     lens = durations(vl)
     total = sum(lens.get(v) or 3 * 3600 for v in vl)
-    if q['sec'] + total > DAILY_HOURS * 3600:
+    if DAILY_HOURS and q['sec'] + total > DAILY_HOURS * 3600:
         print(f'moments: daily video budget used ({q["sec"] / 3600:.1f}h); {len(todo)} game(s) waiting')
         json.dump(state, open('moments.json', 'w'), separators=(',', ':')); return
     A, H = teams.get(g['away'], {}), teams.get(g['home'], {})
