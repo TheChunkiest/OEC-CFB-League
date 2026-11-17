@@ -996,15 +996,17 @@ async function drawCheat(C) {
   const pk = t => teamPlayers(t.id, s).slice(0, 3);
   const pa = pk(A), ph = pk(H);
   if (pa.length || ph.length) {
-    y += 52; label('Players to know', y); const n = Math.max(pa.length, ph.length), rH = 70, top = y + 16; card(top, n * rH + 22);
+    y += 52; label('Players to know', y); const n = Math.max(pa.length, ph.length), rH = 82, top = y + 16; card(top, n * rH + 22);
     const half = IW / 2 - 24;
     const cell = (q, X, Y, al) => {
       if (!q) return;
       const head = `${shortName(q.name)}${q.pos ? ' · ' + q.pos : ''}${q.grade ? ' · ' + q.grade.toFixed(1) : ''}`;
-      fit(head, 27, half, B, '800'); text(head, X, Y, TXT, al);
-      const ln = q.lines[0]?.l ? `Wk ${q.lines[0].w}: ${q.lines[0].l}` : ''; if (ln) { fit(ln, 21, half, B, '600'); text(ln, X, Y + 30, MUT, al); }
+      let hd = head; font(Math.max(20, fit(hd, 27, half, B, '800')), B, '800'); while (hd.length > 4 && x.measureText(hd).width > half) hd = hd.slice(0, -2) + '…'; text(hd, X, Y, TXT, al);
+      // Stat line: shrink a little, then cut it off with "…" so the two columns never run into each other
+      let ln = q.lines[0]?.l ? `Wk ${q.lines[0].w}: ${q.lines[0].l.replace(/\.$/, '')}` : '';
+      if (ln) { font(Math.max(18, fit(ln, 21, half, B, '600')), B, '600'); if (x.measureText(ln).width > half) { while (ln.length > 4 && x.measureText(ln + '…').width > half) ln = ln.slice(0, -1); ln = ln.trimEnd() + '…'; } text(ln, X, Y + 30, MUT, al); }
     };
-    for (let i = 0; i < n; i++) { const Y = top + 46 + i * rH; if (i) { x.fillStyle = LINE; x.fillRect(P, Y - 38, IW, 1); } cell(pa[i], P + 18, Y, 'left'); cell(ph[i], W - P - 18, Y, 'right'); }
+    for (let i = 0; i < n; i++) { const Y = top + 46 + i * rH; if (i) { x.fillStyle = LINE; x.fillRect(P, Y - 40, IW, 1); } cell(pa[i], P + 18, Y, 'left'); cell(ph[i], W - P - 18, Y, 'right'); }
     y = top + n * rH + 22;
   }
   // What's at stake: title odds with a win vs a loss, plus any clinch note
