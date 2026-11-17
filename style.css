@@ -733,3 +733,13 @@ h3{margin-bottom:10px}
 .gp-story p.small{font-size:13px;line-height:1.5}
 .livepop .lp-multi{display:block;margin-top:8px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .plink{color:inherit;text-decoration:none}.plink:hover b,.plink:active b{text-decoration:underline}
+/* "Watch the broadcast": a solid YouTube-red button with a white play arrow */
+.vidcard,.vidcard.card{background:#e00;border-color:#e00;justify-content:center;gap:10px;padding:14px 16px}
+.vidcard:hover,.vidcard:active{background:#c00}
+.vidcard b,.vidcard .small,.vidcard .muted{color:#fff}
+.vidcard>span{flex-direction:row;align-items:baseline;gap:8px}
+.ytbtn{width:26px;height:26px;flex:none}
+.vidpart{background:#e00;border:0;border-radius:10px;padding:12px 14px;margin-top:8px;gap:10px}
+.vidpart b,.vidpart .small,.vidpart .muted{color:#fff}
+.vidpart>span{flex-direction:row;align-items:baseline;gap:10px}
+.vidpart>span.vcol{flex-direction:column;align-items:flex-start;gap:2px;min-width:0}.vidpart .vcol b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}

@@ -101,12 +101,14 @@ function scoutCard(t, s = D.league.season) {
 function cpuBroadcasts(tid) {
   const list = Array.isArray(D.league.vidCpu) ? D.league.vidCpu : [], vs = list.filter(x => (x.t || []).includes(tid)).map(x => vidInfo(x.v)).sort((a, b) => b.d - a.d);
   if (!vs.length) return '';
-  return `<div class="card"><h3 style="margin-top:0">▶ Broadcasts vs CPU teams</h3>${vs.slice(0, 12).map(v => `<a class="vidpart" href="https://youtu.be/${esc(v.id)}" target="_blank" rel="noopener"><img src="https://i.ytimg.com/vi/${esc(v.id)}/mqdefault.jpg" alt="" loading="lazy"><span><b>${esc(v.t || 'OEC on YouTube')}</b><span class="muted small">${v.d ? new Date(v.d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</span></span></a>`).join('')}</div>`;
+  return `<div class="card"><h3 style="margin-top:0">▶ Broadcasts vs CPU teams</h3>${vs.slice(0, 12).map(v => `<a class="vidpart" href="https://youtu.be/${esc(v.id)}" target="_blank" rel="noopener">${YT_BTN}<span class="vcol"><b>${esc(v.t || 'OEC on YouTube')}</b><span class="muted small">${v.d ? new Date(v.d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</span></span></a>`).join('')}</div>`;
 }
+// YouTube-style red play button (used instead of video thumbnails, which vary too much in look)
+const YT_BTN = '<svg class="ytbtn" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="#fff"/></svg>';
 function broadcastCard(g) {
   const vs = videosOf(g); if (!vs.length) return '';
   const one = vs.length === 1, v = vs[0];
-  const inner = `<img src="https://i.ytimg.com/vi/${esc(v.id)}/mqdefault.jpg" alt="" loading="lazy"><span><b>▶ Watch the broadcast</b>${one ? '' : `<span class="muted small">${vs.length} parts</span>`}</span>`;
+  const inner = `${YT_BTN}<span><b>Watch the broadcast</b>${one ? '' : `<span class="muted small">${vs.length} parts</span>`}</span>`;
   return one ? `<a class="card vidcard" href="https://youtu.be/${esc(v.id)}" target="_blank" rel="noopener">${inner}</a>`
     : `<a class="card vidcard" href="#" data-vidlist="${esc(g.id)}">${inner}</a>`;
 }
@@ -114,7 +116,7 @@ function showVideoList(gid) {
   const g = D.games.find(x => x.id === gid), vs = videosOf(g); if (!vs.length) return;
   $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card"><h2>Watch the broadcast</h2>
     <p class="muted small" style="margin-top:0">${esc(team(g.away).name)} ${g.neutral ? 'vs' : '@'} ${esc(team(g.home).name)} was streamed in ${vs.length} parts.</p>
-    ${vs.map((v, i) => `<a class="vidpart" href="https://youtu.be/${esc(v.id)}" target="_blank" rel="noopener"><img src="https://i.ytimg.com/vi/${esc(v.id)}/mqdefault.jpg" alt="" loading="lazy"><span><b>Part ${i + 1}</b>${v.d ? `<span class="muted small">${new Date(v.d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>` : ''}</span></a>`).join('')}
+    ${vs.map((v, i) => `<a class="vidpart" href="https://youtu.be/${esc(v.id)}" target="_blank" rel="noopener">${YT_BTN}<span><b>Part ${i + 1}</b>${v.d ? `<span class="muted small">${new Date(v.d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>` : ''}</span></a>`).join('')}
     <div class="row" style="margin-top:12px"><button class="ghost" data-close="1">Close</button></div></div></div>`;
 }
 function gameCard(g, opts = {}) {
