@@ -23,7 +23,7 @@ MIN_CHUNK = 7 * 60       # smaller pieces don't help a slow Gemini and just use 
 THINK = {'on': True}
 SIMPLE = {'on': True}   # low resolution + fewer frames; dropped if a model refuses those settings     # ask for minimal "thinking" (faster); dropped automatically if the model doesn't take it
 START = time.time()
-SCRIPT_VERSION = 4       # bump when the way games are processed changes: failed games then get fresh retries
+SCRIPT_VERSION = 5       # bump when the way games are processed changes: failed games then get fresh retries
 MAX_MOMENTS = 14
 KINDS = {'td': '🏈', 'fg': '🥅', 'safety': '🛡️', 'turnover': '🔄', 'big': '💥', 'stop': '🧱', 'twopt': '✌️', 'final': '🏁', 'other': '⭐'}
 
@@ -33,6 +33,13 @@ def load(path, default):
         return json.load(open(path))
     except Exception:
         return default
+
+
+class NotWatched(Exception):
+    """The model answered without the video (so anything it said is made up)."""
+
+
+WATCHED = {'tokens': 0}
 
 
 class ApiErr(Exception):
@@ -106,7 +113,9 @@ Reply with JSON only, shaped like:
 "text": "<one short sentence, under 14 words, e.g. 'Smith 45-yard TD pass to Jones'>"}}],
 "notes": "<2-4 sentences on how this part of the game went: momentum, standout players, anything the streamers made a big deal of>",
 "players": [{{"name": "<player name as shown on screen or said by the streamers>", "team": "home|away", "pos": "QB|RB|WR|TE|OL|DL|LB|CB|S|K|P|?", "did": "<what they did in this part, e.g. '2 TD passes, 1 INT' or 'sacked the QB twice'>"}}]}}
-Only list players who actually made plays in this part. Spell names exactly as shown on screen.
+Only list players who actually made plays in this part. Spell names exactly as shown on screen or said by the streamers.
+IMPORTANT: this is a video game dynasty several seasons in; the rosters are made-up players, NOT the real-life college
+players at these schools. Never use a real-life player's name you know. If you can't read a name, leave the player out.
 If nothing from this game happens in this part, reply {{"moments": [], "notes": "", "players": []}}."""
     body = {'contents': [{'parts': [
         {'file_data': {'file_uri': url, 'mime_type': 'video/*'},
@@ -125,9 +134,19 @@ If nothing from this game happens in this part, reply {{"moments": [], "notes": 
             SIMPLE['on'] = False; THINK['on'] = False
             return ask(model, url, start, end, ctx)
         raise
+    # Proof it actually watched: Google reports how many tokens of the request were video/audio. If the video
+    # never reached the model (it answers from the team names alone and invents real-life players), that's ~0.
+    um = r.get('usageMetadata') or {}
+    det = um.get('promptTokensDetails') or []
+    media = sum(int(d.get('tokenCount') or 0) for d in det if d.get('modality') in ('VIDEO', 'AUDIO', 'IMAGE')) if det \
+        else max(0, int(um.get('promptTokenCount') or 0) - 2500)
+    need = max(800, (end - start) * 8)   # even low-res video + audio is far above this per second
+    if media < need:
+        raise NotWatched(f'{model} did not receive the video ({media} video/audio tokens for a {(end - start) // 60}-min piece)')
     txt = ''.join(p.get('text', '') for c in r.get('candidates', []) for p in (c.get('content') or {}).get('parts', []))
     out = parse_json(txt)
     pl = [p for p in (out.get('players') or []) if isinstance(p, dict) and p.get('name')][:20]
+    WATCHED['tokens'] = media
     return out.get('moments') or [], str(out.get('notes') or '').strip(), pl
 
 
@@ -185,7 +204,8 @@ Players already known on these teams from earlier games (use these spellings whe
 {known or '(none yet)'}
 Write a short sports-site recap: 2-3 paragraphs that tell the story of the game and mention only the few moments
 that decided it. Confident and fun. No made-up stats or player names beyond what's above. Never mention AI, streams
-or video. Use the coaches' names and the schools. Reply with JSON only:
+or video. Use the coaches' names and the schools. The players are fictional video game players: use ONLY the player
+names listed above, never real-life college players you know from these schools. Reply with JSON only:
 {{"headline": "<under 70 characters, names the winner>",
 "recap": ["<paragraph>", "<paragraph>", "<optional short paragraph>"],
 "oneliner": "<one sentence recap of the game, under 30 words>",
@@ -207,6 +227,9 @@ List the 3-8 players who mattered most, best first."""
         try: gr = max(1, min(10, int(round(float(p.get('grade'))))))
         except Exception: gr = None
         pl.append({'n': clip(p.get('name'), 40), 's': p['team'], 'pos': clip(p.get('pos'), 3).upper() or '?', 'l': clip(p.get('line'), 90), 'g': gr})
+    # Only keep players that actually came out of the broadcast (never names the model knows from real life).
+    corpus = ' '.join([str(p.get('name') or '') for p in players] + [m.get('x', '') for m in moments] + list(notes)).lower()
+    pl = [p for p in pl if p['n'].split()[-1].lower().strip('.') in corpus]
     tn = {}
     for side in ('home', 'away'):
         x = (out.get('teams') or {}).get(side) or {}
@@ -303,7 +326,7 @@ def run():
             tid, names = g[side], {}
             for ogid, orec in done.items():
                 og = games.get(ogid); rr = orec.get('r') or {}
-                if not og or ogid == g['id'] or og['season'] < g['season'] - 1 or tid not in (og['home'], og['away']): continue
+                if not og or not orec.get('ok') or ogid == g['id'] or og['season'] < g['season'] - 1 or tid not in (og['home'], og['away']): continue
                 for p in rr.get('pl') or []:
                     if og[p.get('s')] == tid: names.setdefault(fix_name(tid, p['n']), p.get('pos') or '?')
             if names: out.append(f"{nm(teams.get(tid, {}), tid)} ({side}): " + ', '.join(f'{n} ({ps})' for n, ps in list(names.items())[:25]))
@@ -316,7 +339,7 @@ def run():
     # Games that have moments but no recap in the current format yet (text only, so no video budget): up to 3 a run.
     wrote = 0
     for gid, rec in sorted(done.items(), key=lambda kv: -kv[1].get('at', 0)):
-        if wrote >= 3 or (rec.get('r') or {}).get('v', 1) >= 2 or gid not in games or rec.get('rfail', 0) >= 3: continue
+        if wrote >= 3 or not rec.get('ok') or (rec.get('r') or {}).get('v', 1) >= 2 or gid not in games or rec.get('rfail', 0) >= 3: continue
         try:
             rec['r'] = recap_for(gid, rec); wrote += 1
             print(f'moments: wrote the recap for {gid}')
@@ -333,7 +356,7 @@ def run():
     def unfinished(gid, g):
         if g.get('homeScore') is None or g.get('awayScore') is None or g.get('forfeit'): return False
         vl = vlist(g); have = done.get(gid)
-        return bool(vl) and not (have and have.get('vids') == vl and not redo.get(gid, 0) > have.get('at', 0) * 1000)
+        return bool(vl) and not (have and have.get('ok') and have.get('vids') == vl and not redo.get(gid, 0) > have.get('at', 0) * 1000)
     newest = max((g for gid, g in games.items() if unfinished(gid, g)),
                  key=lambda g: (g.get('playedAt') or 0, g.get('season', 0), g.get('week') or 0), default=None)
     newest = newest and newest['id']
@@ -344,7 +367,7 @@ def run():
         if not vl: continue
         have = done.get(gid)
         want_redo = redo.get(gid, 0) > (have or {}).get('at', 0) * 1000
-        if have and have.get('vids') == vl and not want_redo: continue
+        if have and have.get('ok') and have.get('vids') == vl and not want_redo: continue   # (no 'ok' = from before video checks: redo)
         f = fails.get(gid) or {}
         fresh = bool(f) and (f.get('tries', 0) < 2 or gid == newest)   # still in its quick retries (newest: always)
         if f.get('n', 0) >= 3 and not want_redo and not fresh: continue
@@ -403,6 +426,8 @@ def run():
                         if x.code in BUSY: print(f'  {model}: busy ({x.code}) on a {size // 60}-min piece: {x.body[:100]}'); time.sleep(5); continue
                         # Anything else (400 bad request, 403 key problem...): say exactly what Google said, then try the next model.
                         print(f'  {model}: error {x.code}: {x.body}'); MODELS.remove(model); continue
+                    except NotWatched as x:
+                        err = str(x); print(f'  {err}: not using that answer'); continue
                     except (TimeoutError, OSError, urllib.error.URLError) as x:
                         err, slow = f'timed out after {time.time() - t0:.0f}s on a {size // 60}-min piece', True
                         print(f'  {model}: {err}'); break   # too much for one request: shrink it rather than try other models
@@ -418,10 +443,10 @@ def run():
                         except Exception:
                             err = f'{(err or "")[:3]} every model busy right now; trying again next run'
                     raise RuntimeError(err or 'no model available')
-                part['chunks'][f'{v}@{pos}'] = {'i': i, 'm': clean(raw, v, pos, e, L), 'n': note[:600], 'p': plays_by}
+                part['chunks'][f'{v}@{pos}'] = {'i': i, 'm': clean(raw, v, pos, e, L), 'n': note[:600], 'p': plays_by, 'vt': WATCHED['tokens']}
                 part['model'] = used_model
                 used += e - pos
-                print(f'  part {i + 1} {pos // 60}-{e // 60} min: {len(raw)} moment(s) in {time.time() - t0:.0f}s ({used_model})')
+                print(f'  part {i + 1} {pos // 60}-{e // 60} min: {len(raw)} moment(s) in {time.time() - t0:.0f}s ({used_model}, saw {WATCHED["tokens"]:,} video/audio tokens)')
                 pos = e if e >= L else e - 30
                 part['pos'][v] = pos if e < L else L
                 good += 1
@@ -444,7 +469,7 @@ def run():
     parts.pop(gid, None)
     q['sec'] += used
     fails.pop(gid, None)
-    done[gid] = {'vids': vl, 'at': int(NOW), 'model': used_model, 'm': pick(found), 'n': notes, 'p': seen[:60]}
+    done[gid] = {'vids': vl, 'at': int(NOW), 'model': used_model, 'm': pick(found), 'n': notes, 'p': seen[:60], 'ok': 1}
     try:
         done[gid]['r'] = recap_for(gid, done[gid])
     except Exception as x:
