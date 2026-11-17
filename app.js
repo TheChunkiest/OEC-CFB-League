@@ -4,7 +4,7 @@ import {
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, raceSim, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
   gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
 , playbookOf, pbSeason, pbText
-} from './core.js?v=62';
+} from './core.js?v=63';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -93,7 +93,7 @@ function scoutCard(t, s = D.league.season) {
   const ps = teamPlayers(t.id, s).slice(0, 6), sc = teamScouting(t.id, s);
   if (!ps.length && !sc.length) return '';
   return `<div class="card"><h3 style="margin-top:0">Players to know</h3>
-    ${ps.length ? `<div class="tablewrap"><table><tr><th>Player</th><th class="num">Games</th><th class="num">Grade</th></tr>${ps.map(p => `<tr><td class="wrap"><b>${esc(shortName(p.name))}</b>${p.pos ? ` <span class="muted small">${esc(p.pos)}</span>` : ''}${p.lines[0] ? `<div class="muted small">Wk ${p.lines[0].w}: ${esc(p.lines[0].l)}</div>` : ''}</td><td class="num">${p.games}</td><td class="num">${p.grade ? p.grade.toFixed(1) : '–'}</td></tr>`).join('')}</table></div>` : ''}
+    ${ps.length ? `<div class="tablewrap"><table><tr><th>Player</th><th class="num">Games</th><th class="num">Grade</th></tr>${ps.map(p => `<tr><td class="wrap"><b>${esc(shortName(p.name))}</b>${isCommish() ? ` <a href="javascript:void 0" class="pedit" data-pname="${esc(t.id)}|${esc(p.name)}" title="Fix this name">✎</a>` : ''}${p.pos ? ` <span class="muted small">${esc(p.pos)}</span>` : ''}${p.lines[0] ? `<div class="muted small">Wk ${p.lines[0].w}: ${esc(p.lines[0].l)}</div>` : ''}</td><td class="num">${p.games}</td><td class="num">${p.grade ? p.grade.toFixed(1) : '–'}</td></tr>`).join('')}</table></div>` : ''}
     ${sc.length ? `<h4 style="margin:14px 0 6px">Scouting report</h4><ul class="clean small">${sc.map(x => `<li><span class="muted">Wk ${x.g.week}:</span> ${x.good ? `<span class="win">+</span> ${esc(x.good)}` : ''}${x.good && x.bad ? ' ' : ''}${x.bad ? `<span class="loss">−</span> ${esc(x.bad)}` : ''}</li>`).join('')}</ul>` : ''}
     <p class="muted small" style="margin:10px 0 0">From the AI's read of this season's broadcasts. Grades are 1-10 per game, averaged.</p></div>`;
 }
@@ -1851,7 +1851,7 @@ document.addEventListener('click', async e => {
   if (lx) { try { localStorage.setItem('oecLiveDismissed', lx.dataset.livex); } catch (err) { /* ignore */ } showLive(); return; }
   const tf = e.target.closest('[data-tsflip]'); if (tf) { UI.tsFlip = !UI.tsFlip; route(); return; }
   const tr = e.target.closest('tr[data-team]'); if (tr && !e.target.closest('a')) { location.hash = '#team/' + tr.dataset.team; return; }
-  const t = e.target.closest('[data-momhide],[data-sort],[data-metric],[data-trend],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-slip],[data-popular],[data-res],[data-act],[data-close],[data-stake],[data-acct],[data-cancel],[data-cashout],[data-value],[data-kinv],[data-kacc],[data-kdec],[data-kcan]');
+  const t = e.target.closest('[data-pname],[data-momhide],[data-sort],[data-metric],[data-trend],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-slip],[data-popular],[data-res],[data-act],[data-close],[data-stake],[data-acct],[data-cancel],[data-cashout],[data-value],[data-kinv],[data-kacc],[data-kdec],[data-kcan]');
   if (!t) return;
   const page = (location.hash.slice(1) || 'home').split('/')[0];
   if (t.dataset.sort) {
@@ -1885,6 +1885,14 @@ document.addEventListener('click', async e => {
   else if (t.dataset.act === 'saveSlip') saveSlip();
   else if (t.dataset.act === 'hardReload') { sessionStorage.removeItem('oecReloaded'); location.reload(); }
   else if (t.dataset.act === 'cheat') showCheat();
+  else if (t.dataset.pname) {
+    const [tid, cur] = t.dataset.pname.split('|');
+    const nv = prompt(`Correct name for ${cur} (${team(tid).name}). Leave it blank to undo a fix.`, cur);
+    if (nv == null) return;
+    const F = { ...((D.league.pnames || {})[tid] || {}) }, orig = Object.keys(F).find(k => F[k] === cur) || cur.toLowerCase();
+    F[orig] = nv.trim() === cur && !F[orig] ? '' : nv.trim();   // '' = no fix (saved merges can't remove a key)
+    await put('meta', 'league', { pnames: { ...(D.league.pnames || {}), [tid]: F } }); route();
+  }
   else if (t.dataset.act === 'momRedo') { if (confirm('Run this game through the AI again? It will be redone within about an hour.')) { await put('meta', 'league', { momRedo: { [t.dataset.gid]: Date.now() } }); route(); } }
   else if (t.dataset.momhide) {
     const [gid, k] = t.dataset.momhide.split('|'), cur = (D.league.momHide || {})[gid] || [];

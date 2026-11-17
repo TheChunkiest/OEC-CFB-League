@@ -1153,17 +1153,47 @@ export function loadAI() {
 }
 const aiHidden = (gid, k) => ((D.league.momHide || {})[gid] || []).includes(k);
 // The written recap for a final, unless the commissioner hid it.
-export const aiRecap = g => (g && !aiHidden(g.id, 'recap') && AI.moms?.games?.[g.id]?.r) || null;
+export const aiRecap = g => {
+  const r = (g && !aiHidden(g.id, 'recap') && AI.moms?.games?.[g.id]?.r) || null;
+  if (!r || !(D.league.pnames && (D.league.pnames[g.home] || D.league.pnames[g.away]))) return r;
+  const f = t => fixText(t, [g.home, g.away]);   // commissioner name fixes, applied to the written text too
+  return { ...r, h: f(r.h), p: (r.p || []).map(f), o: f(r.o), pt: f(r.pt), pp: f(r.pp) };
+};
 // How many points the final margin flattered the home team (garbage time, flukes), as judged from the broadcast.
 const aiLuck = g => { const r = aiRecap(g), x = r && typeof r.lk === 'number' ? r.lk : 0; return clamp(x, -7, 7); };
 // Players seen in a team's broadcasts this season (merged by first initial + last name), best first.
 const pkey = n => { const w = String(n).replace(/[^A-Za-z' .-]/g, '').trim().split(/\s+/); return w.length > 1 ? (w[0][0] + ' ' + w[w.length - 1]).toLowerCase() : w[0].toLowerCase(); };
+// Commissioner name fixes: league.pnames = { teamId: { "wrong full name (lowercase)": "Right Name" } }.
+// A fix also covers the same player seen as "T. Coleman" or just "Coleman" (same last name and first initial).
+export function fixName(tid, n) {
+  const F = (D.league.pnames || {})[tid]; n = String(n || '').trim(); if (!F || !n) return n;
+  const lo = n.toLowerCase(); if (F[lo]) return F[lo];
+  const w = lo.split(/\s+/), last = w[w.length - 1].replace(/\.$/, '');
+  for (const [orig, fixed] of Object.entries(F)) {
+    if (!fixed) continue;
+    const ow = orig.split(/\s+/);
+    if (ow[ow.length - 1] === last && (w.length === 1 || ow[0][0] === w[0][0])) return fixed;
+  }
+  return n;
+}
+// Swap any fixed names into a recap's text (full names as they were written).
+export function fixText(t, tids) {
+  let out = String(t || '');
+  tids.forEach(tid => Object.entries((D.league.pnames || {})[tid] || {}).forEach(([orig, fixed]) => {
+    if (!fixed || orig.split(/\s+/).length < 2) return;
+    out = out.replace(new RegExp('\\b' + orig.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi'), fixed);
+  }));
+  return out;
+}
 export function teamPlayers(tid, season = D.league.season) {
   const by = {}, gs = D.games.filter(g => g.season === season && (g.home === tid || g.away === tid) && played(g)).sort((a, b) => b.week - a.week);
-  gs.forEach(g => (aiRecap(g)?.pl || []).forEach(p => {
-    if (g[p.s] !== tid) return;
+  gs.forEach(g => (aiRecap(g)?.pl || []).forEach(p0 => {
+    if (g[p0.s] !== tid) return;
+    const p = { ...p0, n: fixName(tid, p0.n) }, fixedName = p.n !== p0.n;
     const k = pkey(p.n), x = by[k] ||= { name: p.n, pos: {}, games: 0, grades: [], lines: [] };
-    if (p.n.length > x.name.length) x.name = p.n;
+    if (fixedName) x.fixed = true;
+    if (p.n.length > x.name.length && !x.fixed) x.name = p.n;
+    if (fixedName) x.name = p.n;
     if (p.pos && p.pos !== '?') x.pos[p.pos] = (x.pos[p.pos] || 0) + 1;
     x.games++; if (p.g) x.grades.push(p.g); if (p.l && x.lines.length < 3) x.lines.push({ w: g.week, l: p.l, gid: g.id });
   }));
@@ -1183,6 +1213,7 @@ export function teamPlayers(tid, season = D.league.season) {
 }
 // The fullest name on record for a player on this team ("Battles" -> "Jim Battles"), for older recaps.
 export function playerName(tid, season, n) {
+  n = fixName(tid, n);
   const k = pkey(n), ps = teamPlayers(tid, season);
   const hit = ps.find(p => pkey(p.name) === k) || (!k.includes(' ') ? ps.find(p => pkey(p.name).split(' ').pop() === k) : null);
   return hit && hit.name.length > n.length ? hit.name : n;

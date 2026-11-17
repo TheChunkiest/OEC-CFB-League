@@ -81,9 +81,12 @@ def league_doc():
         cfg = open('firebase-config.js').read()
         api = re.search(r'apiKey\s*:\s*["\']([^"\']+)', cfg).group(1); pid = re.search(r'projectId\s*:\s*["\']([^"\']+)', cfg).group(1)
         if 'PASTE' in api or not pid: return {}
-        d = http(f'https://firestore.googleapis.com/v1/projects/{pid}/databases/(default)/documents/meta/league?key={api}&mask.fieldPaths=momRedo', timeout=30)
-        f = (d.get('fields') or {}).get('momRedo', {}).get('mapValue', {}).get('fields', {})
-        return {'momRedo': {k: int(v.get('integerValue') or float(v.get('doubleValue') or 0)) for k, v in f.items()}}
+        d = http(f'https://firestore.googleapis.com/v1/projects/{pid}/databases/(default)/documents/meta/league?key={api}&mask.fieldPaths=momRedo&mask.fieldPaths=pnames', timeout=30)
+        F = d.get('fields') or {}
+        f = F.get('momRedo', {}).get('mapValue', {}).get('fields', {})
+        pn = {tid: {k: (x.get('stringValue') or '') for k, x in (v.get('mapValue', {}).get('fields') or {}).items()}
+              for tid, v in (F.get('pnames', {}).get('mapValue', {}).get('fields') or {}).items()}
+        return {'momRedo': {k: int(v.get('integerValue') or float(v.get('doubleValue') or 0)) for k, v in f.items()}, 'pnames': pn}
     except Exception as e:
         print('moments: league doc skipped:', repr(e)[:150])
         return {}
@@ -261,7 +264,18 @@ def run():
     q = state.get('quota') or {}
     if q.get('day') != day: q = {'day': day, 'sec': 0}
     state['quota'] = q
-    redo = league_doc().get('momRedo', {})
+    LD = league_doc()
+    redo, PN = LD.get('momRedo', {}), LD.get('pnames', {})
+
+    def fix_name(tid, n):
+        """Commissioner name fixes (same rules as the site): exact name, or same last name + first initial."""
+        F, lo = PN.get(tid) or {}, str(n).strip().lower()
+        if F.get(lo): return F[lo]
+        w = lo.split(); last = w[-1].rstrip('.') if w else ''
+        for orig, fixed in F.items():
+            ow = orig.split()
+            if fixed and ow and ow[-1] == last and (len(w) == 1 or ow[0][0] == w[0][0]): return fixed
+        return n
 
     def vlist(g):
         v = g.get('video')
@@ -291,7 +305,7 @@ def run():
                 og = games.get(ogid); rr = orec.get('r') or {}
                 if not og or ogid == g['id'] or og['season'] < g['season'] - 1 or tid not in (og['home'], og['away']): continue
                 for p in rr.get('pl') or []:
-                    if og[p.get('s')] == tid: names.setdefault(p['n'], p.get('pos') or '?')
+                    if og[p.get('s')] == tid: names.setdefault(fix_name(tid, p['n']), p.get('pos') or '?')
             if names: out.append(f"{nm(teams.get(tid, {}), tid)} ({side}): " + ', '.join(f'{n} ({ps})' for n, ps in list(names.items())[:25]))
         return '\n'.join(out)
 
