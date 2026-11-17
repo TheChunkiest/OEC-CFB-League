@@ -1156,7 +1156,7 @@ export function loadAI() {
 const aiHidden = (gid, k) => ((D.league.momHide || {})[gid] || []).includes(k);
 // The written recap for a final, unless the commissioner hid it.
 export const aiRecap = g => {
-  const r = (g && !aiHidden(g.id, 'recap') && AI.moms?.games?.[g.id]?.r) || null;
+  const rec = g && AI.moms?.games?.[g.id], r = (rec && rec.ok && !aiHidden(g.id, 'recap') && rec.r) || null;   // ok = the bot confirmed it got the video
   if (!r || !(D.league.pnames && (D.league.pnames[g.home] || D.league.pnames[g.away]))) return r;
   const f = t => fixText(t, [g.home, g.away]);   // commissioner name fixes, applied to the written text too
   return { ...r, h: f(r.h), p: (r.p || []).map(f), o: f(r.o), pt: f(r.pt), pp: f(r.pp) };
