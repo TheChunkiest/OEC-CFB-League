@@ -1,4 +1,18 @@
 {
- "live": false,
- "notified": "qwkTlJND-FM"
+ "live": true,
+ "videoId": "ed5hjhcJqaA",
+ "url": "https://www.youtube.com/watch?v=ed5hjhcJqaA",
+ "title": "OEC CFB League S3, W12 - #3 KENN (10-0) @ #12 PUR (9-1)",
+ "streams": [
+  {
+   "videoId": "ed5hjhcJqaA",
+   "url": "https://www.youtube.com/watch?v=ed5hjhcJqaA",
+   "title": "OEC CFB League S3, W12 - #3 KENN (10-0) @ #12 PUR (9-1)"
+  }
+ ],
+ "notified": "qwkTlJND-FM",
+ "notifiedIds": [
+  "qwkTlJND-FM"
+ ],
+ "checkedAt": 1794886115668
 }
