@@ -495,6 +495,7 @@ const PAGES = {
         ${stops.length ? `<div class="cpath">${stops.map(p => `<span class="cstop">${chip(p.team, { abbr: true, rank: false, season: p.to })}<em>${seasonNum(p.from) === seasonNum(p.to) ? 'S' + seasonNum(p.from) : `S${seasonNum(p.from)}–${seasonNum(p.to)}`}</em></span>`).join('<span class="carr">→</span>')}</div>` : ''}
         <div class="stat" style="margin-top:12px"><div><span>Career</span><b>${c ? c.w + '-' + c.l : '0-0'}</b></div><div><span>Win %</span><b>${c ? pct(c.w, c.l) : '–'}</b></div>
         <div><span>League titles</span><b>${titles}</b></div><div><span>Title game apps</span><b>${apps}</b></div><div><span>Seasons</span><b>${seasons.length || (c ? c.seasons.size : 0)}</b></div></div></div>`;
+    html += coachStatsCard(name);
     html += `<div class="card"><h3 style="margin-top:0">Season by season</h3>${seasons.length ? `<div class="tablewrap"><table class="cseason">
       <tr><th>Season</th><th>Team</th><th class="num">W-L</th><th class="num hide-sm">vs Coaches</th><th class="num hide-sm">PF / G</th><th class="num hide-sm">PA / G</th><th>Finish</th></tr>
       ${seasons.slice().reverse().map(x => `<tr><td><b>S${seasonNum(x.season)}</b><div class="muted small">${x.season}${x.season === cur && D.league.phase !== PHASES.PRE && !x.finish ? ' · in progress' : ''}</div></td>
@@ -1640,6 +1641,56 @@ function teamStatsCard(tid, s) {
   return `<div class="card"><div class="row spread"><h3 style="margin:0">${s} Season Stats</h3>${inL ? `<span class="muted small">Rank among ${n} ${esc(D.league.conference)} teams${past ? ` that season` : ''}</span>` : ''}</div>
     <div class="tstats">${TEAM_STATS.map(([grp, rows]) => [grp, past ? rows.filter(([k]) => !['ovr', 'off', 'def', 'expW', 'title'].includes(k)) : rows]).filter(([, rows]) => rows.length).map(([grp, rows]) => `<div class="tsg"><div class="tsh">${past && grp === 'Team' ? 'Final' : grp}</div><table>${rows.map(([k, label, dir, tip]) => `<tr${tip ? ` title="${esc(tip)}"` : ''}><td>${label}${tip ? ' <span class="muted small">ⓘ</span>' : ''}</td><td class="num"><b>${me[k].f}</b></td><td class="num">${pill(k, dir)}</td></tr>`).join('')}</table></div>`).join('')}</div>
     <p class="muted small" style="margin:8px 0 0"><span class="srk top">Green</span> = top quarter of the league, <span class="srk bot">red</span> = bottom quarter. One-score games are decided by 8 or fewer. Schedule strength is the average model rating of opponents played (1st = toughest).</p></div>`;
+}
+// Coach page: career stats across every team a coach has run (each game counts for whoever coached that side).
+function coachCareerLine(name) {
+  const o = { w: 0, l: 0, hw: 0, hl: 0, aw: 0, al: 0, cl: [0, 0], gp: 0, pf: 0, pa: 0, ats: [0, 0, 0], ou: [0, 0, 0], fav: [0, 0], dog: [0, 0], cw: 0, cll: 0, big: 0, sho: 0, tg: [0, 0] };
+  D.games.filter(g => played(g) && !g.forfeit).forEach(g => ['home', 'away'].forEach(side => {
+    if (coachOf(g, side) !== name) return;
+    const home = side === 'home', my = home ? +g.homeScore : +g.awayScore, th = home ? +g.awayScore : +g.homeScore, won = my > th, other = coachOf(g, home ? 'away' : 'home'), l = lineOf(g);
+    won ? o.w++ : o.l++; o.gp++; o.pf += my; o.pa += th;
+    if (!g.neutral) { if (home) won ? o.hw++ : o.hl++; else won ? o.aw++ : o.al++; }
+    if (Math.abs(my - th) <= 8) won ? o.cl[0]++ : o.cl[1]++;
+    if (other && other !== 'CPU') won ? o.cw++ : o.cll++;
+    if (won && my - th >= 21) o.big++;
+    if (won && th === 0) o.sho++;
+    if (g.type === 'ccg') won ? o.tg[0]++ : o.tg[1]++;
+    if (!l) return;
+    const myLine = home ? l.spread : -l.spread, cov = my - th + myLine, tot = my + th - l.total, pw = home ? l.pHome : 1 - l.pHome;
+    o.ats[cov > 0 ? 0 : cov < 0 ? 1 : 2]++; o.ou[tot > 0 ? 0 : tot < 0 ? 1 : 2]++;
+    if (pw < 0.5) o.dog[won ? 0 : 1]++; else o.fav[won ? 0 : 1]++;
+  }));
+  const pct = (w, l) => w + l ? w / (w + l) : null, r2 = (w, l, p) => `${w}-${l}${p ? '-' + p : ''}`;
+  return {
+    gp: o.gp,
+    rec: { v: pct(o.w, o.l), f: r2(o.w, o.l) }, vsc: { v: pct(o.cw, o.cll), f: r2(o.cw, o.cll) },
+    home: { v: pct(o.hw, o.hl), f: r2(o.hw, o.hl) }, away: { v: pct(o.aw, o.al), f: r2(o.aw, o.al) }, close: { v: pct(o.cl[0], o.cl[1]), f: r2(o.cl[0], o.cl[1]) },
+    tg: { v: o.tg[0] + o.tg[1] ? pct(o.tg[0], o.tg[1]) : null, f: o.tg[0] + o.tg[1] ? r2(o.tg[0], o.tg[1]) : '–' },
+    ppg: { v: o.gp ? o.pf / o.gp : null, f: o.gp ? (o.pf / o.gp).toFixed(1) : '–' }, papg: { v: o.gp ? o.pa / o.gp : null, f: o.gp ? (o.pa / o.gp).toFixed(1) : '–' },
+    diff: { v: o.gp ? (o.pf - o.pa) / o.gp : null, f: o.gp ? ((o.pf - o.pa) / o.gp > 0 ? '+' : '') + ((o.pf - o.pa) / o.gp).toFixed(1) : '–' },
+    big: { v: o.big, f: String(o.big) }, sho: { v: o.sho, f: String(o.sho) },
+    ats: { v: pct(o.ats[0], o.ats[1]), f: r2(...o.ats) }, ou: { v: null, f: r2(...o.ou) },
+    fav: { v: pct(o.fav[0], o.fav[1]), f: r2(o.fav[0], o.fav[1]) }, dog: { v: pct(o.dog[0], o.dog[1]), f: r2(o.dog[0], o.dog[1]) },
+  };
+}
+const COACH_STATS = [
+  ['Results', [['vsc', 'Career record', 1], ['home', 'Home', 1], ['away', 'Away', 1], ['close', 'One-score games', 1], ['tg', 'Title games', 1]]],
+  ['Scoring', [['ppg', 'Points / game', 1], ['papg', 'Allowed / game', -1], ['diff', 'Point diff / game', 1], ['big', 'Wins by 21+', 1], ['sho', 'Shutouts', 1]]],
+  ['Betting', [['ats', 'Against the spread', 1], ['ou', 'Over / under', 0], ['fav', 'As favorite', 1], ['dog', 'As underdog', 1]]],
+];
+function coachStatsCard(name) {
+  const names = [...new Set(D.games.filter(played).flatMap(g => [coachOf(g, 'home'), coachOf(g, 'away')]))].filter(c => c && c !== 'CPU');
+  const all = Object.fromEntries(names.map(n => [n, coachCareerLine(n)])), me = all[name];
+  if (!me || !me.gp) return '';
+  const n = names.length;
+  const pill = (k, dir) => {
+    const v = me[k].v; if (!dir || v == null) return '<span class="muted small">–</span>';
+    const vals = names.map(x => all[x][k].v).filter(x => x != null), better = vals.filter(x => (x - v) * dir > 1e-9).length, ties = vals.filter(x => Math.abs(x - v) <= 1e-9).length, q = Math.ceil(vals.length / 4), r = better + 1;
+    return `<span class="srk ${r <= q ? 'top' : r > vals.length - q ? 'bot' : ''}">${ties > 1 ? 'T-' : ''}${ordinal(r)}</span>`;
+  };
+  return `<div class="card"><div class="row spread"><h3 style="margin:0">Career stats</h3><span class="muted small">Every team, every season · rank among ${n} coaches</span></div>
+    <div class="tstats">${COACH_STATS.map(([grp, rows]) => `<div class="tsg"><div class="tsh">${grp}</div><table>${rows.map(([k, label, dir]) => `<tr><td>${label}</td><td class="num"><b>${me[k].f}</b></td><td class="num">${pill(k, dir)}</td></tr>`).join('')}</table></div>`).join('')}</div>
+    <p class="muted small" style="margin:8px 0 0"><span class="srk top">Green</span> = top quarter of league coaches, <span class="srk bot">red</span> = bottom quarter. Forfeits aren't counted.</p></div>`;
 }
 function coachMeetings(c1, c2, exceptId) {
   if (!c1 || !c2 || c1 === 'CPU' || c2 === 'CPU') return [];
