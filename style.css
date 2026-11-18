@@ -986,3 +986,6 @@ a.reclink .goty{color:var(--muted)}
 .card.banner{background:linear-gradient(135deg,rgba(190,22,34,.25) 0%,rgba(24,18,20,.97) 60%),#171214}
 .card.value{background:linear-gradient(135deg,rgba(30,110,170,.42) 0%,rgba(20,60,95,.25) 35%,rgba(24,18,20,.97) 75%),#171214}
 .card.feature{background:radial-gradient(120% 90% at 50% 0%,rgba(190,22,34,.50),rgba(24,18,20,.97) 70%),#171214}
+.card.feature .feat-tags{margin-bottom:0}
+.card.feature .gp-vs{margin:2px 0 4px;padding-bottom:10px}
+.card.feature .pbar{margin-top:10px}

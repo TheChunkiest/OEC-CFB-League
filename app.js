@@ -4,7 +4,7 @@ import {
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, raceSim, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
   gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
 , playbookOf, pbSeason, pbText
-} from './core.js?v=76';
+} from './core.js?v=77';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -131,11 +131,11 @@ function featureCard(g, { ribbon, note = '' } = {}) {
   const hw = +g.homeScore > +g.awayScore;
   const sideHtml = (t, side, won) => `<div class="gp-team ${done && !won ? 'l' : ''}"><i class="sw big" style="background:${esc(teamColor(t))}"></i><div><div class="gp-name">${rk(t) ? `<span class="rk">#${rk(t)}</span>` : ''}${esc(t.name)}</div>
     <div class="muted small">${rec(recs[t.id])} · ${esc(coach(side))}</div></div>${done ? `<div class="gp-score">${g.forfeit ? (won ? 'FW' : 'FL') : g[side + 'Score']}</div>` : ''}</div>`;
-  const v = venueOf(g), ko = kickoffOf(g);
+  const ko = kickoffOf(g);
   return `<div class="card gp-head gotw feature" data-game="${esc(g.id)}"><span class="ribbon">${ribbon}</span>
     ${gameTags(g) ? `<div class="feat-tags">${gameTags(g)}</div>` : ''}
     <div class="gp-vs">${sideHtml(A, 'away', !hw)}<div class="gp-at">${g.neutral ? 'vs' : '@'}</div>${sideHtml(H, 'home', hw)}</div>
-    ${ko || v ? `<div class="feat-meta">${ko ? `<span>🕗 <b>${esc(fmtKick(ko))}</b></span>` : ''}${v ? `<span>📍 <b>${esc(v.name)}</b></span>` : ''}</div>` : ''}
+    ${ko ? `<div class="feat-meta"><span>🕗 <b>${esc(fmtKick(ko))}</b></span></div>` : ''}
     ${l && !g.forfeit ? probBar(g, l, done) : ''}
     ${note ? `<div class="meta" style="text-align:center;margin-top:8px">${note}</div>` : ''}
     <div class="feat-act"><a class="btn ghost" href="#game/${esc(g.id)}">${done ? 'Recap' : 'Preview'} →</a></div></div>`;

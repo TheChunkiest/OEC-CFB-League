@@ -1292,6 +1292,10 @@ export function storylines() {
   const lw = lastPlayedWeek(s);
   const poss = n => /s$/i.test(n) ? n + "'" : n + "'s";
   const name = id => { const t = team(id); return isUserTeam(t) ? `${poss(t.coach)} ${t.name}` : t.name; };
+  // Wording picks: seeded by season and week, so the page reads the same all week and differently next week.
+  const vr = rng(s * 131 + (L.week || 0) * 17 + 3), pk = a => a[Math.floor(vr() * a.length)];
+  const nextOf = id => D.games.filter(g => g.season === s && !played(g) && (g.home === id || g.away === id)).sort((a, b) => a.week - b.week)[0];
+  const nextTxt = id => { const n = nextOf(id); if (!n) return ''; const o = team(n.home === id ? n.away : n.home); return n.type === 'ccg' ? ' Next up: the title game.' : ` Next up: ${n.home === id ? o.name + ' at home' : 'a trip to ' + o.name} in Week ${n.week}.`; };
   const nextGames = D.games.filter(g => g.season === s && g.week === L.week && !played(g));
   const upNext = () => {
     const g = gotwTally(s, L.week).game || nextGames.filter(x => isUserTeam(team(x.home)) && isUserTeam(team(x.away))).sort((a, b) => Math.abs(lineOf(a)?.spread ?? 99) - Math.abs(lineOf(b)?.spread ?? 99))[0];
@@ -1309,7 +1313,12 @@ export function storylines() {
       const ai = aiRecap(g);
       return { href: '#game/' + g.id, tag: 'Game of the Week', teams: [g.home, g.away], title: `Week ${g.week}: ${team(w).name} ${now} ${team(lo).name}, ${ws}-${ls}`, body: `${ai?.o || `${name(w)} ${past} ${name(lo)}.`}${ats}${ou}` };
     }
-    return { href: '#game/' + g.id, tag: isG ? 'Game of the Week' : 'Up Next', title: `Week ${L.week}: ${team(g.away).name} at ${team(g.home).name}`, body: `${name(g.away)} visits ${name(g.home)}. ${l.spread === 0 ? "Pick'em" : `${team(fav).name} ${fmtLine(-Math.abs(l.spread))}`}, total ${l.total}.` };
+    const A = team(g.away).name, Hn = team(g.home).name, close = Math.abs(l.spread) <= 3;
+    const title = pk(close ? [`Week ${L.week}: ${A} at ${Hn}`, `Coin flip: ${A} at ${Hn}`, `${A} vs. ${Hn} is too close to call`, `Circle this one: ${A} at ${Hn}`]
+      : [`Week ${L.week}: ${A} at ${Hn}`, `Circle this one: ${A} at ${Hn}`, `Can ${team(l.spread <= 0 ? g.away : g.home).name} pull it off?`, `${A} heads into ${poss(Hn)} house`]);
+    const hook = pk(close ? ['The model can barely separate them. See who it leans toward.', 'Matchups, trends and what\'s at stake are in the preview.', 'One of these teams leaves with a big win. The preview has the case for both.']
+      : ['Matchups, trends and what\'s at stake are in the preview.', `Can ${team(l.spread <= 0 ? g.away : g.home).name} keep it close? The preview has the numbers.`, 'The full preview has the form, the trends and the history.']);
+    return { href: '#game/' + g.id, tag: isG ? 'Game of the Week' : 'Up Next', title, body: `${name(g.away)} visits ${name(g.home)}. ${l.spread === 0 ? "Pick'em" : `${team(fav).name} ${fmtLine(-Math.abs(l.spread))}`}, total ${l.total}. ${hook}` };
   };
   // Preview until a week with a coach's game is in the books (Week 0 can be all CPU games).
   const userPlayed = D.games.some(g => g.season === s && (g.type || 'reg') === 'reg' && played(g) && (isUserTeam(team(g.home)) || isUserTeam(team(g.away))));
@@ -1372,7 +1381,7 @@ export function storylines() {
   if (beats.length) {
     const b = beats[0], g = D.games.find(x => x.id === b.leg.gameId), sc = `${team(g.away).abbr || team(g.away).name} ${g.awayScore}, ${team(g.home).abbr || team(g.home).name} ${g.homeScore}`;
     const by = b.leg.market === 'ml' ? `lost by ${b.m}` : `missed by ${b.m}`;
-    out.push({ href: '#game/' + g.id, tag: 'Bad Beat of the Week', title: b.w.market === 'parlay' ? `${poss(b.w.coach)} ${b.w.legs.length}-leg parlay dies on the last leg` : `${b.w.coach} gets burned by ${b.m} point${b.m === 1 ? '' : 's'}`,
+    out.push({ href: '#game/' + g.id, tag: 'Bad Beat of the Week', title: b.w.market === 'parlay' ? pk([`${poss(b.w.coach)} ${b.w.legs.length}-leg parlay dies on the last leg`, `So close: ${b.w.coach} misses a ${b.w.legs.length}-leg parlay by one leg`, `${b.w.coach} was one leg away from ${b.missed.toLocaleString()} Crackers`]) : pk([`${b.w.coach} gets burned by ${b.m} point${b.m === 1 ? '' : 's'}`, `Ouch: ${b.w.coach} loses by ${b.m}`, `${b.m} point${b.m === 1 ? '' : 's'} cost ${b.w.coach} ${b.missed.toLocaleString()} Crackers`]),
       body: b.w.market === 'parlay'
         ? `Every other leg hit, but ${wagerLabel(b.leg)} ${by} (${sc}). That ${fmtOdds(b.w.odds)} ticket would have paid ${b.missed.toLocaleString()} Crackers.`
         : `${wagerLabel(b.leg)} ${by} (${sc}). It would have paid ${b.missed.toLocaleString()} Crackers.` });
@@ -1422,7 +1431,7 @@ export function storylines() {
   userTeams().forEach(t => {
     const b = recBefore[t.id], n = recNow[t.id]; if (!b || !n || n.w + n.l === b.w + b.l) return;
     const st = streak(b), justLost = n.l > b.l, justWon = n.w > b.w;
-    if (justLost && /^W\d+$/.test(st) && +st.slice(1) >= 4) notes.push({ href: '#team/' + t.id, p: 70 + +st.slice(1), title: `${poss(t.name)} ${st.slice(1)}-game win streak is over`, body: `${t.coach} had won ${st.slice(1)} straight before last week's loss. Now ${rec(n)}.` });
+    if (justLost && /^W\d+$/.test(st) && +st.slice(1) >= 4) notes.push({ href: '#team/' + t.id, p: 70 + +st.slice(1), title: pk([`${poss(t.name)} ${st.slice(1)}-game win streak is over`, `The streak is dead: ${t.name} finally loses`, `${t.name} comes back to earth`]), body: `${t.coach} had won ${st.slice(1)} straight before last week's loss. Now ${rec(n)}.${nextTxt(t.id) || ''} ${pk(['Is it a blip or a slide?', 'Bounce-back week ahead?', ''])}`.trim() });
     if (justWon && b.w === 0 && b.l >= 3) notes.push({ href: '#team/' + t.id, p: 72, title: `${t.name} is in the win column`, body: `${t.coach} snaps an 0-${b.l} start with the first win of the season.` });
   });
   // Season-high score.
@@ -1446,26 +1455,38 @@ export function storylines() {
     const g = cands.find(x => aiRecap(x)?.pp); return g && { g, r: aiRecap(g) };
   })();
   if (potw) out.push({ href: '#game/' + potw.g.id, tag: 'Play of the Week', teams: [potw.g.home, potw.g.away], title: potw.r.pt || `${team(potw.g.away).name} at ${team(potw.g.home).name}`, body: potw.r.pp });
-  if (upset) out.push({ href: '#game/' + upset.g.id, tag: 'Upset of the Week', title: `${rankName(upset.w, s, lw)} stuns ${rankName(upset.lo, s, lw)}`, body: `${name(upset.w)} entered with a ${pctStr(upset.pw)} chance to win (${fmtOdds(upset.w === upset.g.home ? upset.l.mlHome : upset.l.mlAway)}) and won ${upset.ws}-${upset.ls}.` });
+  if (upset) out.push({ href: '#game/' + upset.g.id, tag: 'Upset of the Week', title: pk([`${rankName(upset.w, s, lw)} stuns ${rankName(upset.lo, s, lw)}`, `Nobody saw ${team(upset.w).name} coming`, `Stunner: ${team(upset.w).name} topples ${team(upset.lo).name}`, `${team(upset.w).name} wrecks the script against ${team(upset.lo).name}`]), body: `${name(upset.w)} entered with ${pctStr(upset.pw)} odds (${fmtOdds(upset.w === upset.g.home ? upset.l.mlHome : upset.l.mlAway)}) and won ${upset.ws}-${upset.ls}. ${pk(['How did it happen? The recap has it.', 'Read how the upset went down.', 'Anyone holding that moneyline is smiling.'])}` });
 
   // 4) Big Cash — the biggest winning bet that settled on last week's games.
   const lastWeekOf = w => w.market === 'parlay' ? Math.max(...(w.legs || []).map(l => D.games.find(x => x.id === l.gameId)?.week ?? -1)) : (D.games.find(x => x.id === w.gameId)?.week ?? -1);
   const cash = D.wagers.filter(w => w.season === s && w.status === 'won' && lastWeekOf(w) === lw).sort((a, b) => (b.payout || 0) - (a.payout || 0))[0];
-  if (cash) out.push({ href: cash.market === 'parlay' || !cash.gameId ? '#betting' : '#game/' + cash.gameId, tag: 'Big Cash', title: `${cash.coach} cashes for ${(cash.payout || 0).toLocaleString()} Crackers`, body: `${wagerLabel(cash)}${cash.market === 'parlay' ? ' hit every leg' : ' came through'}. ${cash.stake.toLocaleString()} risked, ${(cash.stake + (cash.payout || 0)).toLocaleString()} returned.` });
+  if (cash) out.push({ href: cash.market === 'parlay' || !cash.gameId ? '#betting' : '#game/' + cash.gameId, tag: 'Big Cash', title: pk([`${cash.coach} cashes for ${(cash.payout || 0).toLocaleString()} Crackers`, `Payday: ${cash.coach} hits for ${(cash.payout || 0).toLocaleString()}`, `${cash.coach} makes it rain (${(cash.payout || 0).toLocaleString()} Crackers)`]), body: `${wagerLabel(cash)}${cash.market === 'parlay' ? ' hit every leg' : ' came through'}. ${cash.stake.toLocaleString()} risked, ${(cash.stake + (cash.payout || 0)).toLocaleString()} returned.` });
 
   // 5) Up Next / Game of the Week (always included).
 
   // Fallbacks so there are always five.
   const before = simulate(s, lw), after = simulate(s, lw + 1);
   const mv = Object.keys(after).map(id => ({ id, d: after[id].titlePct - before[id].titlePct })).filter(x => isUserTeam(team(x.id))).sort((a, b) => b.d - a.d);
-  if (mv.length && mv[0].d >= 0.03) pool.push({ href: '#odds/' + mv[0].id, tag: 'Odds Movers', title: `${poss(team(mv[0].id).name)} title odds jump to ${pctStr(after[mv[0].id].titlePct)}`, body: `Up ${Math.round(mv[0].d * 100)} points this week.${mv[mv.length - 1].d <= -0.03 ? ` Biggest drop: ${name(mv[mv.length - 1].id)}, down ${Math.round(-mv[mv.length - 1].d * 100)} to ${pctStr(after[mv[mv.length - 1].id].titlePct)}.` : ''}` });
+  if (mv.length && mv[0].d >= 0.03) pool.push({ href: '#odds/' + mv[0].id, tag: 'Odds Movers', title: pk([`${poss(team(mv[0].id).name)} title odds jump to ${pctStr(after[mv[0].id].titlePct)}`, `${team(mv[0].id).name} is climbing the title board`, `Big week for ${team(mv[0].id).name}: title odds now ${pctStr(after[mv[0].id].titlePct)}`]), body: `Up ${Math.round(mv[0].d * 100)} points this week.${mv[mv.length - 1].d <= -0.03 ? ` Biggest drop: ${name(mv[mv.length - 1].id)}, down ${Math.round(-mv[mv.length - 1].d * 100)} to ${pctStr(after[mv[mv.length - 1].id].titlePct)}.` : ''}` });
   notes.slice(1, 3).forEach(n => pool.push({ href: n.href, tag: 'Worth Noting', title: n.title, body: n.body }));
   const recs = records(s);
   const hot = userTeams().map(t => ({ t, st: streak(recs[t.id]) })).filter(x => /^W\d+$/.test(x.st) && +x.st.slice(1) >= 3).sort((a, b) => b.st.slice(1) - a.st.slice(1))[0];
-  if (hot) pool.push({ href: '#team/' + hot.t.id, tag: 'Hot Streak', title: `${hot.t.name} has won ${hot.st.slice(1)} straight`, body: `${hot.t.coach} is ${rec(recs[hot.t.id])} and rolling into Week ${L.week}.` });
+  if (hot) pool.push({ href: '#team/' + hot.t.id, tag: 'Hot Streak', title: pk([`${hot.t.name} has won ${hot.st.slice(1)} straight`, `${hot.t.name} is on a heater: ${hot.st.slice(1)} in a row`, `Can anyone stop ${hot.t.name}?`, `${hot.st.slice(1)} straight and counting for ${hot.t.name}`]), body: `${hot.t.coach} is ${rec(recs[hot.t.id])} and rolling into Week ${L.week}.${nextTxt(hot.t.id)}` });
+  const cold = userTeams().map(t => ({ t, st: streak(recs[t.id]) })).filter(x => /^L\d+$/.test(x.st) && +x.st.slice(1) >= 3).sort((a, b) => b.st.slice(1) - a.st.slice(1))[0];
+  if (cold) pool.push({ href: '#team/' + cold.t.id, tag: 'Cold Streak', title: pk([`${cold.t.name} needs a win, badly`, `${cold.st.slice(1)} straight losses for ${cold.t.name}`, `Can ${cold.t.coach} stop the slide?`]), body: `${poss(cold.t.coach)} ${cold.t.name} has dropped ${cold.st.slice(1)} in a row and sits at ${rec(recs[cold.t.id])}.${nextTxt(cold.t.id)}` });
   const unbeaten = leagueTeams().filter(t => recs[t.id].l === 0 && recs[t.id].w >= 3);
-  if (unbeaten.length && unbeaten.length <= 3) pool.push({ href: unbeaten.length === 1 ? '#team/' + unbeaten[0].id : '#standings', tag: 'Unbeaten Watch', title: unbeaten.length === 1 ? `${unbeaten[0].name} is the last unbeaten team` : `${unbeaten.length} teams still unbeaten`, body: unbeaten.map(t => `${name(t.id)} (${rec(recs[t.id])})`).join(', ') + '.' });
-  wk.filter(g => isUserTeam(team(g.home)) && isUserTeam(team(g.away)) && '#game/' + g.id !== gotwHref).forEach(g => { const hw = +g.homeScore > +g.awayScore, w = hw ? g.home : g.away, l = hw ? g.away : g.home; pool.push({ href: '#game/' + g.id, tag: 'User Game', title: `${team(w).coach} over ${team(l).coach}`, body: g.forfeit ? `${name(w)} won by forfeit over ${name(l)}.` : aiRecap(g)?.o || `${name(w)} beat ${name(l)} ${Math.max(+g.homeScore, +g.awayScore)}-${Math.min(+g.homeScore, +g.awayScore)} in Week ${lw}.` }); });
+  if (unbeaten.length && unbeaten.length <= 3) pool.push({ href: unbeaten.length === 1 ? '#team/' + unbeaten[0].id : '#standings', tag: 'Unbeaten Watch', title: unbeaten.length === 1 ? pk([`${unbeaten[0].name} is the last unbeaten team`, `Still perfect: ${unbeaten[0].name}`, `Who can beat ${unbeaten[0].name}?`]) : pk([`${unbeaten.length} teams still unbeaten`, `Perfect-season watch: ${unbeaten.length} teams left`]), body: unbeaten.map(t => `${name(t.id)} (${rec(recs[t.id])})`).join(', ') + '.' + (unbeaten.length === 1 ? nextTxt(unbeaten[0].id) + ' ' + pk(['Somebody has to be first.', 'The target keeps getting bigger.', '']) : '') });
+  wk.filter(g => isUserTeam(team(g.home)) && isUserTeam(team(g.away)) && '#game/' + g.id !== gotwHref).forEach(g => {
+    const hw = +g.homeScore > +g.awayScore, w = hw ? g.home : g.away, l = hw ? g.away : g.home, wc = coachOf(g, hw ? 'home' : 'away'), lc = coachOf(g, hw ? 'away' : 'home');
+    if (g.forfeit) { pool.push({ href: '#game/' + g.id, tag: 'User Game', title: `${wc} over ${lc}`, body: `${name(w)} won by forfeit over ${name(l)}.` }); return; }
+    const ws = Math.max(+g.homeScore, +g.awayScore), ls = Math.min(+g.homeScore, +g.awayScore), mar = ws - ls, ln = lineAt(g), pw = ln ? (hw ? ln.pHome : 1 - ln.pHome) : 0.5;
+    const title = ls === 0 ? pk([`${wc} shuts out ${lc}`, `Zero for ${lc}: ${wc} pitches a shutout`]) : mar <= 3 ? pk([`${wc} edges ${lc} in a thriller`, `${wc} survives ${lc}`, `Down to the wire: ${wc} over ${lc}`]) : mar >= 28 ? pk([`${wc} rolls ${lc}`, `${wc} runs ${lc} off the field`, `No contest: ${wc} over ${lc}`]) : pw < 0.45 ? pk([`${wc} surprises ${lc}`, `${wc} flips the script on ${lc}`]) : pk([`${wc} over ${lc}`, `${wc} takes down ${lc}`, `${wc} gets the better of ${lc}`]);
+    const st = streak(records(s, lw + 1)[w]), extra = [];
+    if (/^W\d+$/.test(st) && +st.slice(1) >= 3) extra.push(`That's ${st.slice(1)} straight for ${team(w).name}.`);
+    if (ln && ln.spread != null) { const m = +g.homeScore - +g.awayScore + ln.spread; if (pw < 0.5) extra.push(`They were ${fmtLine(Math.abs(ln.spread))} underdogs.`); else if (m !== 0) extra.push((m > 0) === hw ? 'Covered, too.' : `Won, but didn't cover ${fmtLine(-Math.abs(ln.spread))}.`); }
+    extra.push(pk(['Full recap inside.', 'The recap has how it happened.', 'Read the recap.']));
+    pool.push({ href: '#game/' + g.id, tag: 'User Game', title, body: `${name(w)} beat ${name(l)} ${ws}-${ls} in Week ${lw}. ${extra.join(' ')}` });
+  });
   const r = rng(s * 97 + L.week * 13 + 7);
   shuffle(pool, r);
   while (out.length < (u ? 4 : 5) && pool.length) out.push(pool.shift());
