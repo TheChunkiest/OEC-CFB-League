@@ -873,3 +873,25 @@ nav .more{display:none}
 .chip .rk{font-size:max(11px,.78em)}
 @media (max-width:379px){nav{padding:8px 6px;gap:2px}nav a,nav .more{font-size:12.5px;padding:8px 7px}.bkmini span{font-size:11px;letter-spacing:0}.sbhead h2{font-size:14px}}
 nav .more{white-space:nowrap;flex:none}
+
+/* ---- Phone header: centered logo/title and info boxes; greeting centered beside the buttons ---- */
+@media (max-width:640px){
+  .hero-in{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px 10px}
+  .hero-in>a{flex:none}
+  .titleblock{flex:none;min-width:0;text-align:center}
+  .hdr-right{flex:1 1 100%;flex-direction:column;align-items:stretch;gap:10px}
+  .badges{justify-content:center}
+  .acct,.acct:has(.greet){width:100%;justify-content:space-between;align-items:center}
+  .greet{flex:1;text-align:center}
+  .gsub{justify-content:center}
+}
+
+/* ---- Warmth: OEC red glow back in, without the old clutter ---- */
+body{background:#0a0809 linear-gradient(180deg,#2a0a0e 0px,#160a0c 380px,#0d090a 900px,#0a0809 1400px) no-repeat}
+.hero{background:linear-gradient(180deg,#3a0b10 0%,#1d0b0d 70%,rgba(20,10,12,.6) 100%)}
+.logo{filter:drop-shadow(0 4px 14px rgba(211,18,28,.35))}
+nav{background:rgba(18,10,12,.92)}
+.card{background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,0) 60%),rgba(26,20,22,.92)}
+.gotw,.popular,.betgame.gotw{background:linear-gradient(135deg,rgba(120,14,20,.35),rgba(26,20,22,.92) 60%)}
+.banner{background:linear-gradient(135deg,rgba(120,14,20,.22),rgba(26,20,22,.92) 60%)}
+.badge,.badge.gold,.badge.adv{background:rgba(0,0,0,.28);border-color:rgba(255,255,255,.1)}
