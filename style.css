@@ -1060,3 +1060,11 @@ button.pill.tailpill{background:transparent;color:var(--gold);border:1px solid r
 button.pill.tailpill:hover{background:rgba(245,184,46,.12)}
 .show-xs{display:none}
 @media (max-width:400px){.show-xs{display:block;margin-top:4px}}
+/* Bet lists: a touch tighter so every column fits on phones without sideways scrolling */
+@media (max-width:640px){
+  table.bets th,table.bets td{padding:7px 4px;font-size:14px}
+  table.bets th{letter-spacing:.4px;font-size:11px}
+  table.bets td.wrap{min-width:0}
+  table.bets .pill,table.bets button.pill.tailpill{padding:2px 7px;font-size:11.5px}
+  table.bets td:first-child{max-width:64px;overflow-wrap:anywhere}
+}
