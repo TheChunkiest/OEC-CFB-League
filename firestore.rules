@@ -174,7 +174,7 @@ service cloud.firestore {
     }
     match /invites/{id} {
       allow read: if true;
-      allow create: if validInvite(request.resource.data);
+      allow create: if validInvite(request.resource.data) || isCommish();   // the commissioner can set a kickoff agreed elsewhere
       allow update: if isCommish() || inviteUpdate();
       allow delete: if isCommish();
     }

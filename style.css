@@ -1048,3 +1048,7 @@ table.compact td:first-child{line-height:1.25}
 .acchd span{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
 .acctrow{padding:6px 0;border-top:1px solid var(--line)}
 .acctrow input,.acctrow select{width:100%;min-width:0;padding:6px 8px;font-size:14px;min-height:36px!important}
+/* Commissioner: kickoff row on score cards */
+.kickrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)}
+.kickrow input[type=datetime-local]{flex:1 1 170px;min-width:0;padding:4px 8px;font-size:14px;min-height:34px!important}
+.kickrow button.sm{min-height:34px}

@@ -2,7 +2,7 @@ import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum, divOf, oneConference, playbookOf, pbSeason, pbOpen, pbLocked
-, loadAI
+, loadAI, kickoffOf, fmtKick
 } from './core.js?v=79';
 // Broadcast scouting nudges the ratings a little, so load it before any lines get posted from here.
 loadAI();
@@ -98,7 +98,11 @@ function scoreRows(games, dr) {
     const av = d ? d.a : (g.awayScore ?? ''), hv = d ? d.h : (g.homeScore ?? ''), ff = d ? d.ff : (g.forfeit ? (+g.awayScore > +g.homeScore ? 'away' : 'home') : '');
     const row = (side, v) => { const t = team(g[side]); return `<div class="sr"><span class="tn"><i class="sw" style="background:${esc(teamColor(t))}"></i><b>${esc(t.name)}</b> <span class="muted small">${isUserTeam(t) ? esc(t.coach) + ' · ' : ''}${side === 'home' ? (g.neutral ? 'neutral' : 'home') : 'away'}</span></span>
       <input class="score" type="number" inputmode="numeric" min="0" data-sc="${esc(g.id)}" data-side="${side}" value="${esc(v)}" placeholder="–"></div>`; };
-    return `<div class="card scorecard">${row('away', av)}${row('home', hv)}
+    // Kickoff: the commissioner can set one agreed outside the site (unplayed games only).
+    const ko = kickoffOf(g), dl = x => { const d = new Date(x - new Date(x).getTimezoneOffset() * 6e4); return d.toISOString().slice(0, 16); };
+    const kick = played(g) ? '' : `<div class="kickrow"><span class="muted small">🕗 Kickoff</span><input type="datetime-local" data-kick="${esc(g.id)}" value="${ko ? dl(ko) : ''}">
+      <button class="sm" data-act="setKick" data-g="${esc(g.id)}">${ko ? 'Update' : 'Set'}</button>${ko ? `<button class="sm ghost" data-act="clearKick" data-g="${esc(g.id)}">Clear</button>` : ''}</div>`;
+    return `<div class="card scorecard">${row('away', av)}${row('home', hv)}${kick}
       <div class="row spread" style="margin-top:6px"><span class="meta" style="margin:0">${g.week !== L().week ? `<b class="gstat">Week ${g.week}</b> · ` : ''}${l ? `${g.lines ? 'Line' : 'Projected'}: ${esc(team(g.home).abbr)} ${fmtLine(l.spread)} · O/U ${l.total}` : ''} ${g.type && g.type !== 'reg' ? '· <span class="tag gold">' + esc(g.type.toUpperCase()) + '</span>' : ''}</span>
       <select data-ff="${esc(g.id)}" style="font-size:13px;padding:4px 8px"><option value="">Played</option><option value="away" ${ff === 'away' ? 'selected' : ''}>Away forfeit win</option><option value="home" ${ff === 'home' ? 'selected' : ''}>Home forfeit win</option></select></div></div>`;
   }).join('');
@@ -769,6 +773,23 @@ const ACT = {
   },
   async vidRestore(t) { await put('meta', 'league', { vidIgnore: (L().vidIgnore || []).filter(x => x !== t.dataset.vid) }); stay('Back in the "Not linked" list.'); },
   wfilter(t) { ST.wf = t.dataset.f; render(); },
+  async setKick(t) {
+    const g = D.games.find(x => x.id === t.dataset.g), v = $(`[data-kick="${g.id}"]`)?.value;
+    if (!v) return alert('Pick a date and time first.');
+    const time = new Date(v).getTime(), now = Date.now(), H = team(g.home), A = team(g.away);
+    // Close any open invites for this game, then record the agreed time as an accepted invite (that's what the site reads).
+    const ops = D.invites.filter(i => i.gameId === g.id && (i.status === 'pending' || i.status === 'accepted'))
+      .map(i => ({ op: 'set', col: 'invites', id: i.id, data: { status: i.status === 'accepted' ? 'cancelled' : 'declined', respondedAt: now - 1, quiet: true } }));
+    ops.push({ op: 'set', col: 'invites', id: newId(), merge: false, data: { gameId: g.id, season: g.season, week: g.week, from: auth.user?.uid || '', to: '', fromName: 'Commissioner', toName: '',
+      homeUid: H.uid || '', awayUid: A.uid || '', times: [time], time, status: 'accepted', byCommish: true, ts: now, respondedAt: now } });
+    await batch(ops); stay(`Kickoff set: ${team(g.away).abbr} @ ${team(g.home).abbr}, ${fmtKick(time)}. Both coaches get a notification.`);
+  },
+  async clearKick(t) {
+    const g = D.games.find(x => x.id === t.dataset.g); if (!confirm('Clear the kickoff time for this game?')) return;
+    const now = Date.now();
+    await batch(D.invites.filter(i => i.gameId === g.id && i.status === 'accepted').map(i => ({ op: 'set', col: 'invites', id: i.id, data: { status: 'cancelled', respondedAt: now } })));
+    stay('Kickoff time cleared.');
+  },
   async vidIgnore(t) { await put('meta', 'league', { vidIgnore: [...(L().vidIgnore || []), t.dataset.vid].slice(-300) }); stay('Hidden from this list.'); },
   async savePush() {
     await put('meta', 'league', { pushKey: $('#stPush').value.trim() }); flash('Notification key saved.');
