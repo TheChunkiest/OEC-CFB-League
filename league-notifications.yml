@@ -334,22 +334,24 @@ jobs:
                                      if g.get('homeScore') is not None and g.get('awayScore') is not None and not g.get('deleted')],
                                     key=lambda g: int(g.get('playedAt') or 0))
                     def headline(g):
+                        # Titles use abbreviations so they fit on a lock screen; the body has the full names and score.
                         hs, as_ = int(g['homeScore']), int(g['awayScore']); hw = hs > as_
                         W, Lo = (g['home'], g['away']) if hw else (g['away'], g['home'])
                         ws, ls = max(hs, as_), min(hs, as_); mg, tot = ws - ls, hs + as_
-                        wn, ln = tname(W), tname(Lo)
+                        wn, ln, wa, la = tname(W), tname(Lo), ab(W), ab(Lo)
+                        matchup = f"{ab(g['away'])} {'vs' if g.get('neutral') else '@'} {ab(g['home'])}"
                         body = f"Final: {wn} {ws}, {ln} {ls}" + (f" · Week {g.get('week')}" if g.get('type', 'reg') == 'reg' else '')
-                        if g.get('forfeit'): return f'🏳️ {wn} wins by forfeit', f'{ln} forfeited.'
+                        if g.get('forfeit'): return f'🏳️ {wa} wins by forfeit', f'{ln} forfeited.'
                         lines = g.get('lines') or {}
                         dog = lines.get('mlHome' if hw else 'mlAway')
-                        if g.get('type') == 'ccg': return f"🏆 {wn} are {lg.get('conference') or 'League'} champions!", body
-                        if isinstance(dog, (int, float)) and dog >= 200: return f'🚨 UPSET ALERT: {wn} stuns {ln}', body
-                        if mg <= 3: return f'😬 Nail-biter: {wn} survives {ln}', body
-                        if isinstance(dog, (int, float)) and dog >= 120: return f'😮 Upset: {wn} knocks off {ln}', body
-                        if mg >= 28: return f'💥 Blowout: {wn} rolls {ln}', body
-                        if tot >= 85: return f'🔥 Shootout: {wn} outguns {ln}', body
-                        if tot <= 24: return f'🧱 Defensive battle: {wn} grinds past {ln}', body
-                        return f'🏈 Final: {wn} beats {ln}', body
+                        if g.get('type') == 'ccg': return f"🏆 {wa} wins the {lg.get('conference') or 'league'} title!", body
+                        if isinstance(dog, (int, float)) and dog >= 200: return f'🚨 UPSET ALERT: {wa} stuns {la}', body
+                        if mg <= 3: return f'😬 Nail-biter: {wa} edges {la}', body
+                        if isinstance(dog, (int, float)) and dog >= 120: return f'😮 Upset: {wa} knocks off {la}', body
+                        if mg >= 28: return f'💥 Blowout: {wa} rolls {la}', body
+                        if tot >= 85: return f'🔥 Shootout: {wa} outguns {la}', body
+                        if tot <= 24: return f'🧱 Defensive battle: {wa} wins', body
+                        return f'🏈 Final: {matchup}', body
                     for g in finals:
                         if g['id'] in fsent: continue
                         title, body = headline(g)
