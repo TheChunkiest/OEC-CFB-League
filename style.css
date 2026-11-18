@@ -1026,3 +1026,5 @@ table.compact td:first-child{line-height:1.25}
 .card.feature .feat-meta{margin-top:10px}
 /* Schedule: room between the Game of the Week ribbon and the team names */
 .card.game.gotw{padding-top:22px}
+.trlist,.trlist[style]{justify-content:space-evenly}
+@media (max-width:640px){.trlist,.trlist[style]{justify-content:space-evenly}}
