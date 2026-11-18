@@ -1052,3 +1052,6 @@ table.compact td:first-child{line-height:1.25}
 .kickrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px;padding-top:6px;border-top:1px dashed var(--line)}
 .kickrow input[type=datetime-local]{flex:1 1 170px;min-width:0;padding:4px 8px;font-size:14px;min-height:34px!important}
 .kickrow button.sm{min-height:34px}
+/* Tail link on the bet slip */
+.taillink{margin-top:10px;padding:8px 10px;border:1px dashed var(--line);border-radius:10px;background:rgba(0,0,0,.25)}
+.tailurl{font-size:13px;word-break:break-all;margin-top:2px}

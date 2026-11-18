@@ -2,7 +2,7 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, batch, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout, PUSH_PREFS, pushDefaults, pushLocal, pushSupported, pushEnable, pushPrefs, pushDisable,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, raceSim, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
+  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory, legLabel
 , playbookOf, pbSeason, pbText
 } from './core.js?v=79';
 import { lookupStadium } from './programs.js?v=3';
@@ -394,7 +394,7 @@ const PAGES = {
     else if (!me.teamId) html += `<div class="notice">You're a spectator: you can bet with your ${START_CREDITS.toLocaleString()} Crackers like everyone else. If you join the league, the commissioner will link you to your team.</div>`;
     html += !open ? `<div class="card empty">Betting is ${L.phase === PHASES.PRE ? 'closed until the season is published' : 'locked right now'}.</div>` :
       games.length ? `<div class="row" style="margin-bottom:10px"><div class="seg"><button data-mode="single" class="${UI.mode === 'single' ? 'on' : ''}">Single bets</button><button data-mode="parlay" class="${UI.mode === 'parlay' ? 'on' : ''}">Parlay</button></div>${UI.mb}
-        ${UI.mode === 'parlay' ? `<span class="muted small">Tap 2–${MAX_LEGS} picks from any upcoming week, plus League Champion and Win Total picks below. Per game: one spread, one moneyline and one O/U, but not the spread and moneyline on the same team, or a team total and the game total on the same side (both overs or both unders). All must hit; payouts multiply. Once more than half the legs have won, you can cash out early for your stake plus ${Math.round(CASHOUT_SHARE * 100)}% of what the winning legs would pay.</span>` : ''}</div>
+        ${UI.mode === 'parlay' ? `<span class="muted small">Tap 2–${MAX_LEGS} picks from any upcoming week, plus League Champion and Win Total picks below. Per game: one side (spread or moneyline) and one points pick (game total or a team total). Tapping another in the same group swaps it in. All must hit; payouts multiply. Once more than half the legs have won, you can cash out early for your stake plus ${Math.round(CASHOUT_SHARE * 100)}% of what the winning legs would pay.</span>` : ''}</div>
         <div class="row" style="margin-bottom:14px"><select data-betweek="1" aria-label="Week to bet on">${bwks.map(w => `<option value="${w}" ${w === bw ? 'selected' : ''}>Week ${w}${w === L.week ? ' (this week)' : ''}</option>`).join('')}</select>
         <span class="muted small">${bw === L.week ? '' : 'Early lines: they move after every advance, but your bet keeps the line you took.'}</span></div><div class="card"><div class="betgrid"><div class="hdr">Spread</div><div class="hdr">Moneyline</div><div class="hdr">Total</div>
         ${games.slice().sort((x, y) => (y.id === gotwGameId()) - (x.id === gotwGameId())).map(g => betRows(g)).join('')}</div></div>${bw === L.week ? `<div id="popular">${popularCard()}</div>` : ''}<div id="value">${valueCard(games)}</div>` : '<div class="card empty">No open games this week.</div>';
@@ -520,6 +520,16 @@ const PAGES = {
     return html;
   },
 
+  tail(id) {
+    const w = D.wagers.find(x => x.id === id);
+    if (!w || w.deleted) return `<p><a href="#betting">← Sportsbook</a></p><div class="card empty">That bet isn't available anymore.</div>`;
+    const legs = w.market === 'parlay' ? w.legs : [w], open = w.status === 'open' || !w.status;
+    return `<p><a href="#betting">← Sportsbook</a></p><h2>Tail ${esc(w.coach || 'this')}'s bet</h2>
+      <div class="card"><div class="row spread"><b>${esc(w.market === 'parlay' ? `${legs.length}-leg parlay (${fmtOdds(w.odds)})` : wagerLabel(w))}</b><span class="pill ${esc(w.status || 'open')}">${esc(w.status || 'open')}</span></div>
+        ${w.market === 'parlay' ? `<ul class="small" style="margin:8px 0 0;padding-left:18px">${legs.map(l => `<li>${esc(legLabel(l))}</li>`).join('')}</ul>` : ''}
+        <p class="muted small">Placed ${fmtTime(w.ts)}${w.week ? ` · Week ${w.week}` : ''}</p>
+        ${open ? `<button class="gold" data-tailgo="${esc(w.id)}">Tail this bet →</button><p class="muted small" style="margin-bottom:0">Loads the same picks into your slip at today's prices. You pick your own stake.</p>` : '<p class="muted">This bet is already settled.</p>'}</div>`;
+  },
   mybets() {
     const L = D.league, s = S(), me = auth.profile;
     const open = L.bettingOpen && L.phase !== PHASES.PRE && L.phase !== PHASES.POST;
@@ -927,10 +937,12 @@ async function drawSlip(w) {
 async function showSlipImage(w) {
   if (!w) return;
   const c = await drawSlip(w), url = c.toDataURL('image/png');
-  UI.slipCanvas = c;
+  UI.slipCanvas = c; UI.slipW = w;
+  const tailable = w.id && (w.status === 'open' || !w.status);
   $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card" style="max-width:460px;max-height:92vh;overflow:auto">
     <h2>${w.status === 'open' || !w.status ? 'Bet placed!' : w.status === 'won' ? '🎉 Winner!' : 'Bet slip'}</h2><img src="${url}" alt="Bet slip" style="width:100%;border-radius:10px;display:block">
-    <div class="row" style="margin-top:12px"><button class="gold" data-act="saveSlip">⬇ Save image</button><button class="ghost" data-close="1">Done</button></div>
+    ${tailable ? `<div class="taillink"><div class="muted small">Let the league tail it:</div><div class="tailurl">${esc(tailText(w))}</div></div>` : ''}
+    <div class="row" style="margin-top:12px"><button class="gold" data-act="saveSlip">${tailable ? '📤 Share slip + link' : '⬇ Save image'}</button>${tailable ? '<button class="ghost" data-act="copyTail">Copy link</button>' : ''}<button class="ghost" data-close="1">Done</button></div>
     <p class="muted small">On iPhone, you can also press and hold the image → <b>Save to Photos</b>.</p></div></div>`;
 }
 /* ---------- "You won!" results pop-up after an advance ---------- */
@@ -961,13 +973,37 @@ async function renderResult() {
     ${R.wins.length > 1 ? `<div class="row spread" style="margin-top:10px"><button class="sm ghost" data-res="-1" ${R.i === 0 ? 'disabled' : ''}>‹ Prev</button><span class="muted small">${R.i + 1} of ${R.wins.length}</span><button class="sm ghost" data-res="1" ${R.i === R.wins.length - 1 ? 'disabled' : ''}>Next ›</button></div>` : ''}
     <div class="row" style="margin-top:12px"><button class="gold" data-act="saveSlip">⬇ Save image</button><a class="btn ghost" style="padding:8px 14px;border-radius:8px" href="#betting" data-close="1">My bets</a><button class="ghost" data-close="1">Close</button></div></div></div>`;
 }
+// ---- Tailing: every open bet has a link that loads the same picks into the viewer's slip at today's prices. ----
+const tailUrl = w => `${location.origin}${location.pathname}#tail/${w.id}`;
+const tailText = w => `I just placed a bet. Check it out and tail it here: ${tailUrl(w)}`;
+async function copyTail() {
+  const w = UI.slipW; if (!w) return;
+  try { await navigator.clipboard.writeText(tailText(w)); alert('Link copied. Paste it with your slip.'); }
+  catch (e) { prompt('Copy this link:', tailText(w)); }
+}
+function tailBet(id) {
+  const w = D.wagers.find(x => x.id === id), me = auth.profile; if (!w) return;
+  const legs = (w.market === 'parlay' ? w.legs : [w]).map(l => legFor(l.gameId || '', l.market, l.pick, l.team)).filter(Boolean);
+  const ok = legs.filter(l => !ownLeg(l, me)), dropped = legs.length - ok.length;
+  if (!ok.length) return alert(dropped ? OWN_BET_MSG : 'This bet can\'t be tailed anymore: its games have started or its lines are off the board.');
+  location.hash = '#betting';
+  setTimeout(() => {
+    if (ok.length === 1 && w.market !== 'parlay') {
+      const l = ok[0]; UI.mode = 'single'; route();
+      if (l.market === 'future') showFutureSlip(l.pick); else if (l.market === 'wins') showWinsSlip(l.team, l.pick); else showSlip(l.gameId, l.market, l.pick);
+    } else { UI.mode = 'parlay'; UI.legs = ok.slice(0, MAX_LEGS); route(); }
+    const moved = (w.market === 'parlay' ? w.legs : [w]).some(o => { const n = ok.find(x => x.gameId === (o.gameId || '') && x.market === o.market && x.pick === o.pick); return n && (n.odds !== o.odds || (n.line ?? null) !== (o.line ?? null)); });
+    if (dropped || moved || ok.length < legs.length) setTimeout(() => alert([dropped ? `${dropped} pick${dropped === 1 ? '' : 's'} on your own team's games ${dropped === 1 ? 'was' : 'were'} left out.` : '', moved ? 'Some lines have moved since it was placed; your slip uses today\'s prices.' : ''].filter(Boolean).join(' ')), 300);
+  }, 50);
+}
 function showPlacedSlip() { const w = UI.placed; UI.placed = null; if (w) showSlipImage(w); }
 async function saveSlip() {
   const c = UI.slipCanvas; if (!c) return;
   const blob = await new Promise(r => c.toBlob(r, 'image/png')), name = 'oec-bet-slip.png';
   try {
     const file = new File([blob], name, { type: 'image/png' });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'OEC bet slip' }); return; }
+    const w = UI.slipW, text = w && w.id && (w.status === 'open' || !w.status) ? tailText(w) : '';
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'OEC bet slip', ...(text ? { text } : {}) }); return; }
   } catch (e) { if (e && e.name === 'AbortError') return; }
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
 }
@@ -1153,7 +1189,11 @@ function showFutureSlip(tid) {
   updToWin();
 }
 // One pick per market per game (spread, moneyline, O/U); one title pick; one win-total pick per team.
-const legGroup = l => l.market === 'future' ? 'future' : l.market === 'wins' ? 'wins:' + l.team : `${l.market}:${l.gameId}`;
+// Same-game parlay rules (how standard sportsbooks handle related outcomes without same-game pricing):
+// per game, at most ONE side pick (spread or moneyline, either team) and ONE points pick (game total or either
+// team total). Picking another in the same group swaps it in. Different games never conflict.
+const legGroup = l => l.market === 'future' ? 'future' : l.market === 'wins' ? 'wins:' + l.team
+  : `${l.market === 'ml' || l.market === 'spread' ? 'side' : 'pts'}:${l.gameId}`;
 const legWeek = l => l.market === 'future' ? 'Title' : l.market === 'wins' ? 'Wins' : 'Wk ' + (D.games.find(x => x.id === l.gameId)?.week ?? '?');
 function legFor(gid, market, pick, tid) {
   if (ownLeg({ gameId: gid, market, pick, team: tid })) return null;
@@ -1169,17 +1209,9 @@ function toggleLeg(gid, market, pick, tid) {
   const i = UI.legs.findIndex(x => legGroup(x) === grp);
   if (i >= 0 && UI.legs[i].market === market && UI.legs[i].pick === pick) { UI.legs.splice(i, 1); route(); return; }
   const leg = legFor(gid, market, pick, tid); if (!leg) return;
-  // A team total and the game total on the same side (both overs or both unders) of one game can't be combined.
-  const tt = m => m === 'tth' || m === 'tta';
-  const ouClash = (market === 'total' || tt(market)) && UI.legs.find(x => x.gameId === gid && x.pick === pick && x !== UI.legs[i] && ((market === 'total' && tt(x.market)) || (tt(market) && x.market === 'total')));
-  if (ouClash) return alert(`A team total ${pick} and the game total ${pick} from the same game can't be in one parlay. Mixing an over with an under is fine.`);
-  // Spread and moneyline on the SAME team can't be combined: the new pick replaces the old one.
-  const clash = (market === 'ml' || market === 'spread') ? UI.legs.findIndex(x => x.gameId === gid && x.market === (market === 'ml' ? 'spread' : 'ml') && x.pick === pick) : -1;
   if (i >= 0) UI.legs[i] = leg;
-  else if (clash >= 0) UI.legs[clash] = leg;
   else if (UI.legs.length >= MAX_LEGS) return alert(`Parlays max out at ${MAX_LEGS} legs.`);
   else UI.legs.push(leg);
-  if (i >= 0 && clash >= 0) UI.legs.splice(clash, 1);
   route();
 }
 function parlayBar() {
@@ -2085,7 +2117,7 @@ function acctHtml(p) {
 }
 function route() {
   const [page, arg] = (location.hash.slice(1) || 'home').split('/');
-  const active = page === 'mybets' ? 'betting' : page === 'team' ? 'teams' : page === 'coach' ? 'history' : page === 'game' ? 'schedule' : page;
+  const active = page === 'mybets' || page === 'tail' ? 'betting' : page === 'team' ? 'teams' : page === 'coach' ? 'history' : page === 'game' ? 'schedule' : page;
   $('#nav').innerHTML = NAV.map(([k, label]) => `<a href="#${k}" class="${k === active ? 'on' : ''}">${label}</a>`).join('');
   // Keep the selected tab in view when the tab bar scrolls sideways (phones).
   requestAnimationFrame(() => { const on = $('#nav a.on'), n = $('#nav'); if (on && n.scrollWidth > n.clientWidth) n.scrollLeft = Math.max(0, on.offsetLeft - (n.clientWidth - on.offsetWidth) / 2); });
@@ -2104,6 +2136,7 @@ async function reload() { await loadAll(); refreshProfile(); if (D.league.awards
 
 document.addEventListener('click', async e => {
   const vl = e.target.closest('[data-vidlist]'); if (vl) { e.preventDefault(); showVideoList(vl.dataset.vidlist); return; }
+  const tg = e.target.closest('[data-tailgo]'); if (tg) { if (!auth.profile) { location.hash = '#account'; return; } tailBet(tg.dataset.tailgo); return; }
   const bfl = e.target.closest('[data-bfilter]'); if (bfl) { UI.betFilter = bfl.dataset.bfilter; route(); return; }
   const rdv = e.target.closest('[data-racediv]');
   if (rdv) { UI.raceDiv = UI.raceDiv === rdv.dataset.racediv ? null : rdv.dataset.racediv; const box = $('#race'); if (box) box.innerHTML = raceSection(); return; }
@@ -2156,6 +2189,7 @@ document.addEventListener('click', async e => {
   else if (t.dataset.kinv || t.dataset.kacc || t.dataset.kdec || t.dataset.kcan) kickAction(t);
   else if (t.dataset.act === 'place') placeBet();
   else if (t.dataset.act === 'saveSlip') saveSlip();
+  else if (t.dataset.act === 'copyTail') copyTail();
   else if (t.dataset.act === 'hardReload') { sessionStorage.removeItem('oecReloaded'); location.reload(); }
   else if (t.dataset.act === 'cheat') showCheat();
   else if (t.dataset.pname) {

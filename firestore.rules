@@ -66,10 +66,10 @@ service cloud.firestore {
       return (leg.market == 'future' && validFuture(leg, L, t)) || (leg.market == 'wins' && validWins(leg, L, t))
         || (leg.market != 'future' && leg.market != 'wins' && validGameWager(leg, t, L));
     }
-    // A team total and the game total on the same side (over+over or under+under) of one game can't share a parlay.
+    // Same-game parlay rules: per game, one side pick (spread or moneyline) and one points pick (game total or a team total).
+    function grpOf(m) { return m in ['ml', 'spread'] ? 'side' : m in ['total', 'tth', 'tta'] ? 'pts' : m; }
     function ouClash(a, b) {
-      return a.get('gameId', '') == b.get('gameId', '') && a.get('gameId', '') != '' && a.pick == b.pick
-        && ((a.market == 'total' && b.market in ['tth', 'tta']) || (b.market == 'total' && a.market in ['tth', 'tta']));
+      return a.get('gameId', '') != '' && a.get('gameId', '') == b.get('gameId', '') && grpOf(a.market) == grpOf(b.market);
     }
     function pairOk(ls, i, j) { return ls.size() <= j || !ouClash(ls[i], ls[j]); }
     function noOUClash(ls) {
