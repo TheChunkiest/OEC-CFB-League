@@ -1036,3 +1036,15 @@ table.compact td:first-child{line-height:1.25}
 .place,.tag.gold,.cseason .tag,.pbar em{font-size:11px}
 @media (max-width:359px){.trlist,.trlist[style]{gap:4px 10px}.trlist li{font-size:12px;gap:4px}.trlist .ab{min-width:32px}}
 @media(max-width:440px){table.cseason .tag,table.cseason .place{font-size:11px}}
+/* Commissioner: compact score cards */
+.card.scorecard{padding:8px 12px;margin-bottom:8px}
+.scorecard .sr{padding:2px 0}
+.scorecard input.score{width:58px;font-size:16px;padding:4px 6px;min-height:36px!important}
+.scorecard .row.spread{margin-top:4px!important}
+.scorecard select[data-ff]{min-height:32px!important;padding:3px 8px!important}
+/* Commissioner: coach accounts as one compact list */
+.acctlist{display:grid;gap:6px}
+.acchd,.acctrow{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.3fr) minmax(0,.9fr);gap:6px;align-items:center}
+.acchd span{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+.acctrow{padding:6px 0;border-top:1px solid var(--line)}
+.acctrow input,.acctrow select{width:100%;min-width:0;padding:6px 8px;font-size:14px;min-height:36px!important}

@@ -125,7 +125,7 @@ async function startListeners() {
   // Past seasons: archive file first, then the database for anything it doesn't cover.
   first.push((async () => {
     let arch = null;
-    try { const r = await fetch('archive.json?d=' + new Date().toISOString().slice(0, 10), { cache: 'no-cache' }); if (r.ok) arch = await r.json(); } catch (e) { /* no archive yet */ }
+    try { const r = await fetch('archive.json?t=' + Math.floor(Date.now() / 600000), { cache: 'no-cache' }); if (r.ok) arch = await r.json(); } catch (e) { /* no archive yet */ }
     const have = new Set((arch && arch.seasons) || []);
     PAST.forEach(c => { past[c] = ((arch && arch[c]) || []).filter(x => x.season < season && live1(x)); });
     const firstS = D.league.firstSeason || 2026, missing = [];

@@ -111,27 +111,29 @@ jobs:
           except Exception: arch_age = 1e18
           try: arch_season = json.load(open('archive.json')).get('season')
           except Exception: arch_season = None
+          def rebuild_archive():
+            lg = LG; cur = int(lg.get('season') or 0); fs0 = int(lg.get('firstSeason') or 2026)
+            def past(col):
+                q = {'structuredQuery': {'from': [{'collectionId': col}], 'where': {'fieldFilter': {'field': {'fieldPath': 'season'}, 'op': 'LESS_THAN', 'value': {'integerValue': str(cur)}}}}}
+                rq = urllib.request.Request(f'{base}:runQuery?key={key}', data=json.dumps(q).encode(), headers={'Content-Type': 'application/json'})
+                with urllib.request.urlopen(rq, timeout=60) as r: res = json.load(r)
+                out = []
+                for row in res:
+                    x = row.get('document')
+                    if not x: continue
+                    f = {k: val(v) for k, v in x.get('fields', {}).items()}; f['id'] = x['name'].rsplit('/', 1)[1]; out.append(f)
+                return sorted((d for d in out if not d.get('deleted')), key=lambda d: d['id'])
+            if cur:
+                arch = {'generatedAt': int(now), 'season': cur, 'seasons': list(range(fs0, cur)), 'games': past('games'), 'wagers': past('wagers')}
+                old_arch = {}
+                try: old_arch = json.load(open('archive.json'))
+                except Exception: pass
+                same = {k: old_arch.get(k) for k in ('season', 'seasons', 'games', 'wagers')} == {k: arch[k] for k in ('season', 'seasons', 'games', 'wagers')}
+                if same and old_arch: arch['generatedAt'] = int(now)
+                json.dump(arch, open('archive.json', 'w'), separators=(',', ':'))
+                print(f"archive: {len(arch['games'])} games, {len(arch['wagers'])} bets from seasons {arch['seasons']}")
           if arch_age > 7 * 24 * 3600e3 or arch_season != int(LG.get('season') or 0):   # past seasons don't change
-              lg = LG; cur = int(lg.get('season') or 0); fs0 = int(lg.get('firstSeason') or 2026)
-              def past(col):
-                  q = {'structuredQuery': {'from': [{'collectionId': col}], 'where': {'fieldFilter': {'field': {'fieldPath': 'season'}, 'op': 'LESS_THAN', 'value': {'integerValue': str(cur)}}}}}
-                  rq = urllib.request.Request(f'{base}:runQuery?key={key}', data=json.dumps(q).encode(), headers={'Content-Type': 'application/json'})
-                  with urllib.request.urlopen(rq, timeout=60) as r: res = json.load(r)
-                  out = []
-                  for row in res:
-                      x = row.get('document')
-                      if not x: continue
-                      f = {k: val(v) for k, v in x.get('fields', {}).items()}; f['id'] = x['name'].rsplit('/', 1)[1]; out.append(f)
-                  return sorted((d for d in out if not d.get('deleted')), key=lambda d: d['id'])
-              if cur:
-                  arch = {'generatedAt': int(now), 'season': cur, 'seasons': list(range(fs0, cur)), 'games': past('games'), 'wagers': past('wagers')}
-                  old_arch = {}
-                  try: old_arch = json.load(open('archive.json'))
-                  except Exception: pass
-                  same = {k: old_arch.get(k) for k in ('season', 'seasons', 'games', 'wagers')} == {k: arch[k] for k in ('season', 'seasons', 'games', 'wagers')}
-                  if same and old_arch: arch['generatedAt'] = int(now)
-                  json.dump(arch, open('archive.json', 'w'), separators=(',', ':'))
-                  print(f"archive: {len(arch['games'])} games, {len(arch['wagers'])} bets from seasons {arch['seasons']}")
+              rebuild_archive()
 
           # ---------------- Current-season snapshot (season.json) ----------------
           # Visitors load this file (free, from GitHub) and only read documents changed since it was made.
@@ -170,6 +172,20 @@ jobs:
                   n = sum(changed_since(c, snapf['T']) for c in SNAPC)
                   rebuild = n >= 25 or (n > 0 and now - snapf.get('generatedAt', 0) > 6 * 3600e3)
                   print(f'season.json: {n} documents changed since it was built')
+              if rebuild and cur and snapf.get('T'):
+                  # Edits to past-season games or bets (a broadcast linked to an old game, a fixed score) only reach
+                  # visitors through the "changed since" listeners until the archive is rebuilt. Moving the snapshot
+                  # time forward would drop them, so put them in archive.json first.
+                  try:
+                      old_past = 0
+                      for c in ('games', 'wagers'):
+                          res = post(f'{base}:runQuery', {'structuredQuery': {'from': [{'collectionId': c}], 'where': {'fieldFilter': {'field': {'fieldPath': 'upd'}, 'op': 'GREATER_THAN', 'value': {'timestampValue': iso(snapf['T'])}}}}})
+                          old_past += sum(1 for row in res if row.get('document') and int(val(row['document'].get('fields', {}).get('season', {'integerValue': '0'})) or 0) < cur)
+                      if old_past:
+                          print(f'archive: {old_past} past-season change(s) since the last snapshot; rebuilding')
+                          rebuild_archive()
+                  except Exception as e:
+                      print('archive refresh skipped:', repr(e)[:200])
               if rebuild and cur:
                   T = int(now - 5 * 60e3)   # small overlap so nothing written during the build is missed
                   out = {'season': cur, 'firstSeason': int(LG.get('firstSeason') or 0) or None, 'T': T, 'generatedAt': int(now)}

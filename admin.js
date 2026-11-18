@@ -3,7 +3,7 @@ import {
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum, divOf, oneConference, playbookOf, pbSeason, pbOpen, pbLocked
 , loadAI
-} from './core.js?v=78';
+} from './core.js?v=79';
 // Broadcast scouting nudges the ratings a little, so load it before any lines get posted from here.
 loadAI();
 import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
@@ -274,7 +274,7 @@ function broadcastCard() {
     ${cpuSet.size ? `<details style="margin-top:12px" data-keepopen="cpu" ${ST.open?.cpu ? 'open' : ''}><summary class="muted small">User vs CPU broadcasts (${cpuSet.size}): shown on the team's page</summary>${vids.filter(v => cpuSet.has(v.id)).map(v => `<div class="vrow"><div><b>${esc(v.t)}</b><span class="muted small">${(cpuList().find(x => x.v === v.id)?.t || []).map(id => esc(team(id).abbr || team(id).name)).join(', ') || 'no league team recognized'}</span></div><button class="sm ghost" data-act="vidCpuUndo" data-vid="${esc(v.id)}">Undo</button></div>`).join('')}</details>` : ''}
     ${hidden.length ? `<details style="margin-top:12px" data-keepopen="hid" ${ST.open?.hid ? 'open' : ''}><summary class="muted small">Marked "not a game" (${hidden.length}): tap to review or undo</summary>${hidden.map(v => `<div class="vrow"><div><b>${esc(v.t)}</b><span class="muted small">${new Date(v.d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span></div><div class="row"><select data-vidpick="${esc(v.id)}" style="max-width:220px"><option value="">Pick a game…</option>${gopts}</select><button class="sm" data-act="vidLink" data-vid="${esc(v.id)}">Link</button><button class="sm ghost" data-act="vidRestore" data-vid="${esc(v.id)}">Undo</button></div></div>`).join('')}</details>` : ''}
     <div class="row" style="margin-top:14px"><button class="sm ghost" data-act="vidReset">↺ Start over (re-match everything)</button></div>
-    ${linked.length ? `<h3>Linked</h3><p class="muted small" style="margin-top:0">A game can have several parts if a stream restarted. Link another video to the same game to add a part.</p>${linked.map(g => `<div class="vrow"><div><b>${esc(glabel(g))}</b>${vidsOfGame(g).map((id, i, a) => `<span class="muted small vpart">${a.length > 1 ? `Part ${i + 1}: ` : ''}${vt(id)} <a href="#" data-act="vidUnlink" data-gid="${esc(g.id)}" data-vid="${esc(id)}" title="Unlink">✕</a></span>`).join('')}</div></div>`).join('')}` : ''}
+    ${linked.length ? `<details style="margin-top:12px" data-keepopen="lnk" ${ST.open?.lnk ? 'open' : ''}><summary class="muted small">Linked broadcasts (${linked.length}): tap to review</summary><p class="muted small" style="margin-top:6px">A game can have several parts if a stream restarted. Link another video to the same game to add a part.</p>${linked.map(g => `<div class="vrow"><div><b>${esc(glabel(g))}</b>${vidsOfGame(g).map((id, i, a) => `<span class="muted small vpart">${a.length > 1 ? `Part ${i + 1}: ` : ''}${vt(id)} <a href="#" data-act="vidUnlink" data-gid="${esc(g.id)}" data-vid="${esc(id)}" title="Unlink">✕</a></span>`).join('')}</div></div>`).join('')}</details>` : ''}
   </details>`;
 }
 const views = {
@@ -386,8 +386,8 @@ const views = {
   coaches() {
     const us = D.users.slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     return `<div class="card"><h2>Coach Accounts</h2><p class="muted small">Coaches create their own login on the hub (Coach Login → Create account). Link each account to a team here so they can bet and vote. Commissioners can use these tools; you can be a coach and the commissioner at the same time.</p>
-      ${us.length ? `<div class="tablewrap"><table class="stack-sm"><tr><th>Coach name</th><th>Team</th><th>Role</th></tr>${us.map(u => `<tr data-user="${esc(u.id)}"><td data-l="Coach"><input data-k="name" value="${esc(u.name)}"></td>
-        <td data-l="Team"><select data-k="teamId">${acctTeamOpts(u)}</select></td><td data-l="Role"><select data-k="role"><option value="coach" ${u.role !== 'commish' ? 'selected' : ''}>Coach</option><option value="commish" ${u.role === 'commish' ? 'selected' : ''}>Commissioner</option></select></td></tr>`).join('')}</table></div>
+      ${us.length ? `<div class="acctlist"><div class="acchd"><span>Name</span><span>Team</span><span>Role</span></div>${us.map(u => `<div class="acctrow" data-user="${esc(u.id)}"><input data-k="name" value="${esc(u.name)}" aria-label="Name">
+        <select data-k="teamId" aria-label="Team">${acctTeamOpts(u)}</select><select data-k="role" aria-label="Role"><option value="coach" ${u.role !== 'commish' ? 'selected' : ''}>Coach</option><option value="commish" ${u.role === 'commish' ? 'selected' : ''}>Commish</option></select></div>`).join('')}</div>
         <div style="margin-top:10px"><button data-act="saveUsers">Save accounts</button></div>` : '<p class="muted">No one has signed up yet.</p>'}</div>
       ${us.length ? `<div class="card"><h3 style="margin-top:0">Coach from outside the ${esc(L().conference)}</h3>
         <p class="muted small">For a coach who joined mid-season and plays outside the ${esc(L().conference)} this year. Their team is added as non-conference, so they can bet, vote and show on the betting leaderboard, but they won't appear in the standings, odds or power rankings. When they join the ${esc(L().conference)}, open the New Season tab, change the team's Conf to ${esc(L().conference)}, pick a division and save.</p>
@@ -401,8 +401,10 @@ const views = {
     const lg = L(), s = lg.season, wk = D.wagers.filter(w => w.season === s).sort((a, b) => b.week - a.week || (b.ts || 0) - (a.ts || 0));
     return `<div class="card"><h2>Sportsbook Controls</h2><p>Betting is <b>${lg.bettingOpen ? 'OPEN' : 'LOCKED'}</b> for ${esc(weekLabel())}. <span class="muted small">Lock or unlock it on This Week.</span></p><div class="row">
       <button class="ghost" data-act="repost">Re-post lines for ${esc(weekLabel())}</button></div><p class="muted small">Re-posting recalculates lines for this week's unplayed games (use after adding games mid-week or fixing ratings). Existing wagers keep the line they were placed at.</p></div>
-      <div class="card"><h3 style="margin-top:0">${s} wagers (${wk.length})</h3>${wk.length ? `<div class="tablewrap"><table><tr><th>Wk</th><th>Coach</th><th>Bet</th><th>Placed</th><th class="num">Stake</th><th class="num">Status</th><th></th></tr>
-        ${wk.map(w => `<tr><td>${w.week}</td><td>${esc(w.coach)}</td><td style="white-space:normal">${esc(wagerLabel(w))}${legsHtml(w)}</td><td class="muted small">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num"><span class="pill ${w.status}">${w.status}${w.payout ? ' ' + (w.payout > 0 ? '+' : '') + w.payout : ''}</span></td><td>${w.status !== 'void' ? `<button class="sm danger" data-void="${esc(w.id)}">Void</button>` : ''}</td></tr>`).join('')}</table></div>` : '<p class="muted">No wagers yet.</p>'}</div>`;
+      <div class="card"><h3 style="margin-top:0">${s} wagers (${wk.length})</h3>${(() => { const grp = w => w.status === 'void' ? 'push' : w.status, FL = [['open', 'Open'], ['all', 'All'], ['won', 'Won'], ['lost', 'Lost'], ['cashed', 'Cashed out'], ['push', 'Push / void']], cnt = k => k === 'all' ? wk.length : wk.filter(w => grp(w) === k).length, cur = ST.wf || 'open';
+          ST.wfList = cur === 'all' ? wk : wk.filter(w => grp(w) === cur);
+          return `<div class="bfilters">${FL.filter(([k]) => k === 'open' || k === 'all' || cnt(k)).map(([k, l]) => `<button class="bfilter${k === cur ? ' on' : ''}" data-act="wfilter" data-f="${k}">${l} <span>${cnt(k)}</span></button>`).join('')}</div>`; })()}${ST.wfList.length ? `<div class="tablewrap"><table><tr><th>Wk</th><th>Coach</th><th>Bet</th><th>Placed</th><th class="num">Stake</th><th class="num">Status</th><th></th></tr>
+        ${ST.wfList.map(w => `<tr><td>${w.week}</td><td>${esc(w.coach)}</td><td style="white-space:normal">${esc(wagerLabel(w))}${legsHtml(w)}</td><td class="muted small">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num"><span class="pill ${w.status}">${w.status}${w.payout ? ' ' + (w.payout > 0 ? '+' : '') + w.payout : ''}</span></td><td>${w.status !== 'void' ? `<button class="sm danger" data-void="${esc(w.id)}">Void</button>` : ''}</td></tr>`).join('')}</table></div>` : `<p class="muted">${wk.length ? 'No bets in this group.' : 'No wagers yet.'}</p>`}</div>`;
   },
 
   awards() {
@@ -766,6 +768,7 @@ const ACT = {
     stay('Cleared. Now run the League notifications workflow.');
   },
   async vidRestore(t) { await put('meta', 'league', { vidIgnore: (L().vidIgnore || []).filter(x => x !== t.dataset.vid) }); stay('Back in the "Not linked" list.'); },
+  wfilter(t) { ST.wf = t.dataset.f; render(); },
   async vidIgnore(t) { await put('meta', 'league', { vidIgnore: [...(L().vidIgnore || []), t.dataset.vid].slice(-300) }); stay('Hidden from this list.'); },
   async savePush() {
     await put('meta', 'league', { pushKey: $('#stPush').value.trim() }); flash('Notification key saved.');
