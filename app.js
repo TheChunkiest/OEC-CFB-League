@@ -394,7 +394,7 @@ const PAGES = {
     else if (!me.teamId) html += `<div class="notice">You're a spectator: you can bet with your ${START_CREDITS.toLocaleString()} Crackers like everyone else. If you join the league, the commissioner will link you to your team.</div>`;
     html += !open ? `<div class="card empty">Betting is ${L.phase === PHASES.PRE ? 'closed until the season is published' : 'locked right now'}.</div>` :
       games.length ? `<div class="row" style="margin-bottom:10px"><div class="seg"><button data-mode="single" class="${UI.mode === 'single' ? 'on' : ''}">Single bets</button><button data-mode="parlay" class="${UI.mode === 'parlay' ? 'on' : ''}">Parlay</button></div>${UI.mb}
-        ${UI.mode === 'parlay' ? `<span class="muted small">Tap 2–${MAX_LEGS} picks from any upcoming week, plus League Champion and Win Total picks below. Per game: one spread, one moneyline and one O/U, but not the spread and moneyline on the same team. All must hit; payouts multiply. Once more than half the legs have won, you can cash out early for your stake plus ${Math.round(CASHOUT_SHARE * 100)}% of what the winning legs would pay.</span>` : ''}</div>
+        ${UI.mode === 'parlay' ? `<span class="muted small">Tap 2–${MAX_LEGS} picks from any upcoming week, plus League Champion and Win Total picks below. Per game: one spread, one moneyline and one O/U, but not the spread and moneyline on the same team, or a team total and the game total on the same side (both overs or both unders). All must hit; payouts multiply. Once more than half the legs have won, you can cash out early for your stake plus ${Math.round(CASHOUT_SHARE * 100)}% of what the winning legs would pay.</span>` : ''}</div>
         <div class="row" style="margin-bottom:14px"><select data-betweek="1" aria-label="Week to bet on">${bwks.map(w => `<option value="${w}" ${w === bw ? 'selected' : ''}>Week ${w}${w === L.week ? ' (this week)' : ''}</option>`).join('')}</select>
         <span class="muted small">${bw === L.week ? '' : 'Early lines: they move after every advance, but your bet keeps the line you took.'}</span></div><div class="card"><div class="betgrid"><div class="hdr">Spread</div><div class="hdr">Moneyline</div><div class="hdr">Total</div>
         ${games.slice().sort((x, y) => (y.id === gotwGameId()) - (x.id === gotwGameId())).map(g => betRows(g)).join('')}</div></div>${bw === L.week ? `<div id="popular">${popularCard()}</div>` : ''}<div id="value">${valueCard(games)}</div>` : '<div class="card empty">No open games this week.</div>';
@@ -1169,6 +1169,10 @@ function toggleLeg(gid, market, pick, tid) {
   const i = UI.legs.findIndex(x => legGroup(x) === grp);
   if (i >= 0 && UI.legs[i].market === market && UI.legs[i].pick === pick) { UI.legs.splice(i, 1); route(); return; }
   const leg = legFor(gid, market, pick, tid); if (!leg) return;
+  // A team total and the game total on the same side (both overs or both unders) of one game can't be combined.
+  const tt = m => m === 'tth' || m === 'tta';
+  const ouClash = (market === 'total' || tt(market)) && UI.legs.find(x => x.gameId === gid && x.pick === pick && x !== UI.legs[i] && ((market === 'total' && tt(x.market)) || (tt(market) && x.market === 'total')));
+  if (ouClash) return alert(`A team total ${pick} and the game total ${pick} from the same game can't be in one parlay. Mixing an over with an under is fine.`);
   // Spread and moneyline on the SAME team can't be combined: the new pick replaces the old one.
   const clash = (market === 'ml' || market === 'spread') ? UI.legs.findIndex(x => x.gameId === gid && x.market === (market === 'ml' ? 'spread' : 'ml') && x.pick === pick) : -1;
   if (i >= 0) UI.legs[i] = leg;

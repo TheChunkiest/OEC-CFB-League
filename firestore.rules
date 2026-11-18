@@ -41,13 +41,16 @@ service cloud.firestore {
     function validGameWager(d, t, L) {
       let g = gameOf(d.gameId);
       let ln = g.get('lines', {});
+      // Which posted price each pick must match (odds key per market/side), and which posted line it must match.
+      // One lookup per leg instead of walking every market in turn keeps big parlays well inside Firestore's
+      // per-request evaluation limits. Missing juice fields default to -110 like the site prices them.
+      let OK = {'ml': {'home': 'mlHome', 'away': 'mlAway'}, 'spread': {'home': 'spreadOddsHome', 'away': 'spreadOddsAway'},
+        'total': {'over': 'overOdds', 'under': 'underOdds'}, 'tth': {'over': 'ttHomeOver', 'under': 'ttHomeUnder'}, 'tta': {'over': 'ttAwayOver', 'under': 'ttAwayUnder'}};
+      let LK = {'spread': 'spread', 'total': 'total', 'tth': 'ttHome', 'tta': 'ttAway'};
       return g.home != t && g.away != t && g.season == L.season && g.week >= L.week && g.get('homeScore', null) == null
-        && ((d.market == 'ml' && ((d.pick == 'home' && d.odds == ln.get('mlHome', null)) || (d.pick == 'away' && d.odds == ln.get('mlAway', null))))
-          || (d.market == 'spread' && d.line == ln.get('spread', null) && ((d.pick == 'home' && d.odds == ln.get('spreadOddsHome', -110)) || (d.pick == 'away' && d.odds == ln.get('spreadOddsAway', -110))))
-          || (d.market == 'total' && d.line == ln.get('total', null) && ((d.pick == 'over' && d.odds == ln.get('overOdds', -110)) || (d.pick == 'under' && d.odds == ln.get('underOdds', -110))))
-          // Team totals: tth = home team's points, tta = away team's points.
-          || (d.market == 'tth' && d.line == ln.get('ttHome', null) && d.line != null && ((d.pick == 'over' && d.odds == ln.get('ttHomeOver', -110)) || (d.pick == 'under' && d.odds == ln.get('ttHomeUnder', -110))))
-          || (d.market == 'tta' && d.line == ln.get('ttAway', null) && d.line != null && ((d.pick == 'over' && d.odds == ln.get('ttAwayOver', -110)) || (d.pick == 'under' && d.odds == ln.get('ttAwayUnder', -110)))));
+        && d.market in OK && d.pick in OK[d.market]
+        && d.odds == ln.get(OK[d.market][d.pick], d.market == 'ml' ? null : -110)
+        && (d.market == 'ml' || (d.line != null && d.line == ln.get(LK[d.market], null)));
     }
     function validFuture(d, L, t) {
       return d.pick != t && L.phase == 'Regular Season' && L.futures.season == L.season && L.futures.open == true
@@ -63,9 +66,21 @@ service cloud.firestore {
       return (leg.market == 'future' && validFuture(leg, L, t)) || (leg.market == 'wins' && validWins(leg, L, t))
         || (leg.market != 'future' && leg.market != 'wins' && validGameWager(leg, t, L));
     }
+    // A team total and the game total on the same side (over+over or under+under) of one game can't share a parlay.
+    function ouClash(a, b) {
+      return a.get('gameId', '') == b.get('gameId', '') && a.get('gameId', '') != '' && a.pick == b.pick
+        && ((a.market == 'total' && b.market in ['tth', 'tta']) || (b.market == 'total' && a.market in ['tth', 'tta']));
+    }
+    function pairOk(ls, i, j) { return ls.size() <= j || !ouClash(ls[i], ls[j]); }
+    function noOUClash(ls) {
+      return pairOk(ls, 0, 1) && pairOk(ls, 0, 2) && pairOk(ls, 0, 3) && pairOk(ls, 0, 4) && pairOk(ls, 0, 5)
+        && pairOk(ls, 1, 2) && pairOk(ls, 1, 3) && pairOk(ls, 1, 4) && pairOk(ls, 1, 5)
+        && pairOk(ls, 2, 3) && pairOk(ls, 2, 4) && pairOk(ls, 2, 5)
+        && pairOk(ls, 3, 4) && pairOk(ls, 3, 5) && pairOk(ls, 4, 5);
+    }
     function validParlay(d, L, t) {
       let n = d.legs.size();
-      return d.legs is list && n >= 2 && n <= 6
+      return d.legs is list && n >= 2 && n <= 6 && noOUClash(d.legs)
         && validLeg(d.legs[0], L, t) && validLeg(d.legs[1], L, t)
         && (n < 3 || validLeg(d.legs[2], L, t)) && (n < 4 || validLeg(d.legs[3], L, t))
         && (n < 5 || validLeg(d.legs[4], L, t)) && (n < 6 || validLeg(d.legs[5], L, t));
