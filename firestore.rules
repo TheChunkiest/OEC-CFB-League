@@ -38,19 +38,24 @@ service cloud.firestore {
     }
     // Missing fields are read with defaults (an unplayed game may have no score field at all, and older lines
     // have no juice fields, which the site prices at -110), so a missing field never blocks a valid bet.
+    // Which posted price / line a pick must match. Plain if-chains: only the branch that applies is evaluated, which
+    // keeps a 6-leg parlay well inside Firestore's per-request evaluation budget.
+    function oddsKey(m, p) {
+      return m == 'ml' ? (p == 'home' ? 'mlHome' : 'mlAway')
+        : m == 'spread' ? (p == 'home' ? 'spreadOddsHome' : 'spreadOddsAway')
+        : m == 'total' ? (p == 'over' ? 'overOdds' : 'underOdds')
+        : m == 'tth' ? (p == 'over' ? 'ttHomeOver' : 'ttHomeUnder')
+        : (p == 'over' ? 'ttAwayOver' : 'ttAwayUnder');
+    }
+    function lineKey(m) { return m == 'spread' ? 'spread' : m == 'total' ? 'total' : m == 'tth' ? 'ttHome' : 'ttAway'; }
     function validGameWager(d, t, L) {
       let g = gameOf(d.gameId);
       let ln = g.get('lines', {});
-      // Which posted price each pick must match (odds key per market/side), and which posted line it must match.
-      // One lookup per leg instead of walking every market in turn keeps big parlays well inside Firestore's
-      // per-request evaluation limits. Missing juice fields default to -110 like the site prices them.
-      let OK = {'ml': {'home': 'mlHome', 'away': 'mlAway'}, 'spread': {'home': 'spreadOddsHome', 'away': 'spreadOddsAway'},
-        'total': {'over': 'overOdds', 'under': 'underOdds'}, 'tth': {'over': 'ttHomeOver', 'under': 'ttHomeUnder'}, 'tta': {'over': 'ttAwayOver', 'under': 'ttAwayUnder'}};
-      let LK = {'spread': 'spread', 'total': 'total', 'tth': 'ttHome', 'tta': 'ttAway'};
       return g.home != t && g.away != t && g.season == L.season && g.week >= L.week && g.get('homeScore', null) == null
-        && d.market in OK && d.pick in OK[d.market]
-        && d.odds == ln.get(OK[d.market][d.pick], d.market == 'ml' ? null : -110)
-        && (d.market == 'ml' || (d.line != null && d.line == ln.get(LK[d.market], null)));
+        && d.market in ['ml', 'spread', 'total', 'tth', 'tta']
+        && d.pick in (d.market in ['ml', 'spread'] ? ['home', 'away'] : ['over', 'under'])
+        && d.odds == ln.get(oddsKey(d.market, d.pick), d.market == 'ml' ? null : -110)
+        && (d.market == 'ml' || (d.line != null && d.line == ln.get(lineKey(d.market), null)));
     }
     function validFuture(d, L, t) {
       return d.pick != t && L.phase == 'Regular Season' && L.futures.season == L.season && L.futures.open == true
@@ -68,15 +73,11 @@ service cloud.firestore {
     }
     // Same-game parlay rules: per game, one side pick (spread or moneyline) and one points pick (game total or a team total).
     function grpOf(m) { return m in ['ml', 'spread'] ? 'side' : m in ['total', 'tth', 'tta'] ? 'pts' : m; }
-    function ouClash(a, b) {
-      return a.get('gameId', '') != '' && a.get('gameId', '') == b.get('gameId', '') && grpOf(a.market) == grpOf(b.market);
-    }
-    function pairOk(ls, i, j) { return ls.size() <= j || !ouClash(ls[i], ls[j]); }
+    // Each game leg gets a key "game|side" or "game|pts"; any repeat means two picks from the same group.
+    // Six keys and one set check instead of fifteen pairwise comparisons (non-game legs get unique fillers).
+    function legKey(ls, i, filler) { return ls.size() > i && ls[i].get('gameId', '') != '' ? ls[i].gameId + '|' + grpOf(ls[i].market) : filler; }
     function noOUClash(ls) {
-      return pairOk(ls, 0, 1) && pairOk(ls, 0, 2) && pairOk(ls, 0, 3) && pairOk(ls, 0, 4) && pairOk(ls, 0, 5)
-        && pairOk(ls, 1, 2) && pairOk(ls, 1, 3) && pairOk(ls, 1, 4) && pairOk(ls, 1, 5)
-        && pairOk(ls, 2, 3) && pairOk(ls, 2, 4) && pairOk(ls, 2, 5)
-        && pairOk(ls, 3, 4) && pairOk(ls, 3, 5) && pairOk(ls, 4, 5);
+      return [legKey(ls, 0, 'n0'), legKey(ls, 1, 'n1'), legKey(ls, 2, 'n2'), legKey(ls, 3, 'n3'), legKey(ls, 4, 'n4'), legKey(ls, 5, 'n5')].toSet().size() == 6;
     }
     function validParlay(d, L, t) {
       let n = d.legs.size();
