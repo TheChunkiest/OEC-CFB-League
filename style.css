@@ -980,3 +980,9 @@ a.reclink .goty{color:var(--muted)}
 .racetab.on{background:var(--red);border-color:var(--red);color:#fff}
 .racetab.on span{color:#fff}
 .racedrop{animation:lpIn .2s ease-out}
+/* Featured boxes keep their own diagonal red wash (the page background runs top-to-bottom, these run corner-to-corner) */
+.card.gotw,.card.popular,.gp-head.gotw,.card.game.gotw{background:linear-gradient(135deg,rgba(190,22,34,.42) 0%,rgba(110,12,20,.28) 35%,rgba(24,18,20,.97) 75%),#171214}
+.betgame.gotw{background:linear-gradient(135deg,rgba(190,22,34,.38) 0%,rgba(110,12,20,.22) 40%,rgba(28,21,23,.97) 80%),#1a1416}
+.card.banner{background:linear-gradient(135deg,rgba(190,22,34,.25) 0%,rgba(24,18,20,.97) 60%),#171214}
+.card.value{background:linear-gradient(135deg,rgba(30,110,170,.42) 0%,rgba(20,60,95,.25) 35%,rgba(24,18,20,.97) 75%),#171214}
+.card.feature{background:radial-gradient(120% 90% at 50% 0%,rgba(190,22,34,.50),rgba(24,18,20,.97) 70%),#171214}
