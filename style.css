@@ -895,3 +895,6 @@ nav{background:rgba(18,10,12,.92)}
 .gotw,.popular,.betgame.gotw{background:linear-gradient(135deg,rgba(120,14,20,.35),rgba(26,20,22,.92) 60%)}
 .banner{background:linear-gradient(135deg,rgba(120,14,20,.22),rgba(26,20,22,.92) 60%)}
 .badge,.badge.gold,.badge.adv{background:rgba(0,0,0,.28);border-color:rgba(255,255,255,.1)}
+/* Hidden Value: soft blue wash (matches the red wash on Most Popular) */
+.card.value{border-color:rgba(120,200,255,.35);background:linear-gradient(135deg,rgba(20,70,110,.45),rgba(26,20,22,.92) 60%)}
+.ribbon.vrib{background:#7fd0ff;color:#06202e}
