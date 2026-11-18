@@ -314,7 +314,7 @@ jobs:
                     # Bets that went final since last time (only those docs are read). One nudge per coach per
                     # run, without saying won or lost, so they open the app to find out. Cash-outs are skipped
                     # (the coach did that themselves).
-                    since = int(st.get('settle') or now)
+                    since = int(st.get('settle') or now - 6 * 3600e3)   # first run after this was added: look back 6 hours
                     fin = [w for w in query('wagers', 'settledAt', 'GREATER_THAN', since)
                            if not w.get('deleted') and w.get('status') in ('won', 'lost', 'push', 'void')]
                     per = {}
@@ -328,7 +328,7 @@ jobs:
                     elif 'settle' not in st: st['settle'] = int(now)
                     # Final scores: a game is announced once, when its score is first saved (playedAt). Each device
                     # picks the teams it follows (empty list = every game). A big result gets a catchy headline.
-                    fsince = int(st.get('final') or now)
+                    fsince = int(st.get('final') or now - 6 * 3600e3)   # first run after this was added: look back 6 hours
                     fsent = st.setdefault('finSent', {})
                     finals = sorted([g for g in query('games', 'playedAt', 'GREATER_THAN', fsince)
                                      if g.get('homeScore') is not None and g.get('awayScore') is not None and not g.get('deleted')],
