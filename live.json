@@ -1,13 +1,13 @@
 {
  "live": true,
- "videoId": "5qPkG2_ar0Y",
- "url": "https://www.youtube.com/watch?v=5qPkG2_ar0Y",
- "title": "UNC @ LA Tech",
+ "videoId": "hNqDgJ5w08g",
+ "url": "https://www.youtube.com/watch?v=hNqDgJ5w08g",
+ "title": "OEC CFB S3 W13 - WYO (1-10) @ FIU (7-4)",
  "streams": [
   {
-   "videoId": "5qPkG2_ar0Y",
-   "url": "https://www.youtube.com/watch?v=5qPkG2_ar0Y",
-   "title": "UNC @ LA Tech"
+   "videoId": "hNqDgJ5w08g",
+   "url": "https://www.youtube.com/watch?v=hNqDgJ5w08g",
+   "title": "OEC CFB S3 W13 - WYO (1-10) @ FIU (7-4)"
   }
  ],
  "notified": "5qPkG2_ar0Y",
@@ -16,5 +16,5 @@
   "ed5hjhcJqaA",
   "5qPkG2_ar0Y"
  ],
- "checkedAt": 1794969477064
+ "checkedAt": 1794972649269
 }
