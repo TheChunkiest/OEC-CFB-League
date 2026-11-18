@@ -1,9 +1,9 @@
 import {
   $, $$, esc, D, DEMO, PHASES, loadAll, batch, put, newId, loadBallots, auth, isCommish, watchAuth, refreshProfile,
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
-  orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum, playbookOf, pbSeason, pbOpen, pbLocked
+  orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum, divOf, oneConference, playbookOf, pbSeason, pbOpen, pbLocked
 , loadAI
-} from './core.js?v=66';
+} from './core.js?v=67';
 // Broadcast scouting nudges the ratings a little, so load it before any lines get posted from here.
 loadAI();
 import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
@@ -116,6 +116,13 @@ function readScores(games) {
   return { ops, missing };
 }
 const lineOps = (week, season = L().season) => boardOps(week, season);
+// Before divisions change, save the alignment every past/current season was played with (once per season).
+function alignSnapshot() {
+  const A = { ...(L().align || {}) }, map = Object.fromEntries(leagueTeams().map(t => [t.id, t.div || '']));
+  const seasons = [...new Set([...D.games.map(g => g.season), ...D.history.map(h => h.season)])].filter(x => x <= L().season);
+  let changed = false; seasons.forEach(x => { if (!A[x]) { A[x] = { ...map, _one: !Object.values(map).some(Boolean) }; changed = true; } });
+  return changed ? A : null;
+}
 // Re-price every open game, League Champion futures and win totals from all data entered so far.
 async function refreshBooks() { const p = L().phase; if (p === PHASES.REG || p === PHASES.CCG) await batch(boardOps(L().week)); }
 async function saveScoresAndSettle(games) {
@@ -283,7 +290,7 @@ const views = {
     if (lg.phase === PHASES.CCG) {
       const ccg = D.games.find(g => g.season === s && g.type === 'ccg');
       if (!ccg) {
-        const divs = divisions(), finals = divs.length > 1 ? divs.map(d => orderGroup(leagueTeams().filter(t => t.div === d).map(t => t.id), s)[0]) : orderGroup(leagueTeams().map(t => t.id), s).slice(0, 2);
+        const divs = divisions(s), finals = divs.length > 1 ? divs.map(d => orderGroup(leagueTeams().filter(t => divOf(t, s) === d).map(t => t.id), s)[0]) : orderGroup(leagueTeams().map(t => t.id), s).slice(0, 2);
         const cats = (lg.awards?.season === s && lg.awards.categories?.length) ? lg.awards.categories : DEFAULT_AWARDS.map(l => ({ key: slug(l), label: l, options: [{ name: '', team: '' }, { name: '', team: '' }, { name: '', team: '' }] }));
         return `<div class="card"><h2>End of Regular Season</h2><p class="muted">Set the ${esc(lg.conference)} Championship Game and the awards ballot. Submitting opens championship-week betting and awards voting. Voting closes automatically when you submit the championship result.</p>
           <h3>League Championship Game</h3><div class="row"><select id="ccgA">${teamOpts(finals[1] || '', true, t => t.conf === lg.conference)}</select> vs <select id="ccgH">${teamOpts(finals[0] || '', true, t => t.conf === lg.conference)}</select>
@@ -318,7 +325,9 @@ const views = {
     return `${lg.phase !== PHASES.PRE ? `<div class="notice">The ${lg.season} season is in progress (${esc(weekLabel())}). Team rating edits apply right away; only publish a new season once this one is finalized.</div>` : ''}
       <div class="card"><h2>Preseason Setup</h2><div class="row"><div><label>Season</label><input id="psSeason" type="number" value="${next}" style="width:100px"></div>
         <div><label>Final regular-season week</label><input id="psFinal" type="number" value="${lg.finalWeek || 14}" style="width:100px"></div>
-        <div><label>League conference</label><input id="psConf" value="${esc(lg.conference)}" style="width:120px"></div></div></div>
+        <div><label>League conference</label><input id="psConf" value="${esc(lg.conference)}" style="width:120px"></div>
+        <div><label>Conference format</label><select id="psFormat"><option value="div" ${oneConference(lg.season) ? '' : 'selected'}>Divisions (each team's Div)</option><option value="one" ${oneConference(lg.season) ? 'selected' : ''}>One conference, no divisions</option></select></div></div>
+        <p class="muted small" style="margin:8px 0 0">Set every season. <b>One conference:</b> one standings table, one race, and the top two teams play for the title. <b>Divisions:</b> uses the Div column below; division winners meet in the title game. Past seasons keep the format they were played in.</p></div>
       <div class="card"><h3 style="margin-top:0">Teams, coaches & ratings</h3><p class="muted small">Every user team belongs in the league conference (${esc(lg.conference)}). Add any non-conference opponents as "Non-Conf" so they can be scheduled. OVR/OFF/DEF drive the odds. Division is optional (e.g. East/West).</p>
         <div class="tablewrap"><table id="teamTbl" class="stack-sm"><tr><th>Team</th><th>Abbr</th><th>Conf</th><th>Div</th><th>Coach</th><th>Account</th><th>Color</th><th>OVR</th><th>OFF</th><th>DEF</th><th></th></tr>
         ${ts.map(t => teamRow(t)).join('')}</table></div>
@@ -618,6 +627,7 @@ const ACT = {
   },
 
   async saveTeams() {
+    const snap = alignSnapshot(); if (snap) await put('meta', 'league', { align: snap });   // keep past seasons' divisions before any Div changes
     const ops = [], userOps = {}, conf = $('#psConf').value.trim() || L().conference;
     for (const tr of $$('[data-team]')) {
       const id = tr.dataset.team, v = k => tr.querySelector(`[data-k="${k}"]`).value;
@@ -650,11 +660,17 @@ const ACT = {
     ST.msg = `Added ${ops.length} game(s).` + (bad.length ? ` Couldn't read: ${bad.join(' | ')} (save new teams first, and check spelling).` : ''); render();
   },
   async publish() {
-    const s = +$('#psSeason').value, fw = +$('#psFinal').value, sg = D.games.filter(g => g.season === s);
+    const s = +$('#psSeason').value, fw = +$('#psFinal').value, sg = D.games.filter(g => g.season === s), fmt = $('#psFormat').value;
     if (!sg.length) return alert(`Add the ${s} schedule first.`);
+    if (fmt === 'div' && leagueTeams().some(t => !t.div)) return alert('Give every conference team a Div (or pick "One conference").');
+    if (fmt === 'div' && new Set(leagueTeams().map(t => t.div)).size < 2) return alert('Divisions need at least two different Div names (or pick "One conference").');
     if (L().phase !== PHASES.PRE && s !== L().season && !confirm(`The ${L().season} season hasn't been finalized. Publish ${s} anyway?`)) return;
     if (!confirm(`Publish the ${s} season? This posts preseason odds and opens betting.`)) return;
     const first = Math.min(...sg.map(g => g.week));
+    // Remember this season's alignment (and the earlier seasons', if never saved) so standings stay right later.
+    const align = { ...(alignSnapshot() || L().align || {}), [s]: fmt === 'one' ? { _one: true } : { _one: false, ...Object.fromEntries(leagueTeams().map(t => [t.id, t.div])) } };
+    D.league.align = align;
+    await put('meta', 'league', { align });
     await put('meta', 'league', { season: s, finalWeek: fw, week: first, advancedAt: Date.now(), advExt: 0, phase: PHASES.REG, bettingOpen: true, desk: deskValue(), awards: { open: false, season: s, categories: [], results: [] } });
     await batch(lineOps(first, s));
     ST.desk = 'no'; ST.tab = 'advance'; flash(`${s} season published. Week ${first} lines are posted and preseason odds are live.`);

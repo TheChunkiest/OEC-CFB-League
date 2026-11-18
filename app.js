@@ -2,9 +2,9 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, batch, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout, PUSH_PREFS, pushDefaults, pushLocal, pushSupported, pushEnable, pushPrefs, pushDisable,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, raceSim, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
+  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, divOf, oneConference, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
 , playbookOf, pbSeason, pbText
-} from './core.js?v=66';
+} from './core.js?v=67';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -26,7 +26,8 @@ function gameTags(g) {
   const cpu = side => { const c = coachOf(g, side); return !c || String(c).toUpperCase() === 'CPU'; };
   if (cpu('home') || cpu('away')) out.push('<span class="h2h cputag">CPU GAME</span>');
   const conf = D.league.conference;
-  if ((g.type || 'reg') === 'reg' && h.div && h.div === a.div && h.conf === conf && a.conf === conf) out.push(`<span class="h2h divtag" title="Both teams are in the ${esc(h.div)} division">${esc(h.div.toUpperCase())}</span>`);
+  const hd = divOf(h, g.season), ad = divOf(a, g.season);
+  if ((g.type || 'reg') === 'reg' && hd && hd === ad && h.conf === conf && a.conf === conf) out.push(`<span class="h2h divtag" title="Both teams are in the ${esc(hd)} division">${esc(hd.toUpperCase())}</span>`);
   return out.join('');
 }
 // Week order: Game of the Week first, then games still to play (earliest kickoff first), then finals.
@@ -206,9 +207,9 @@ let racePicks = {}; try { racePicks = JSON.parse(sessionStorage.getItem('oecRace
 const saveRacePicks = () => { try { sessionStorage.setItem('oecRace', JSON.stringify(racePicks)); } catch (e) { } };
 function raceSection() {
   const s = S(); if (s !== D.league.season || D.league.phase !== PHASES.REG) return '';
-  const sims = divisions().map(d => raceSim(d, racePicks, s)).filter(r => r && r.left.length);
+  const sims = divisions(s).map(d => raceSim(d, racePicks, s)).filter(r => r && r.left.length);
   if (!sims.length) return '';
-  return `<h2>Division Race</h2>` + sims.map(raceCard).join('');
+  return `<h2>${sims.length > 1 ? 'Division Race' : 'Title Game Race'}</h2>` + sims.map(raceCard).join('');
 }
 function raceCard(r) {
   const nm = id => esc(team(id).name), ab = id => esc(team(id).abbr || team(id).name);
@@ -312,11 +313,11 @@ const PAGES = {
     // Division record: regular-season games against teams in the same division.
     const dv = {};
     D.games.filter(g => g.season === s && played(g) && (g.type || 'reg') === 'reg').forEach(g => {
-      const h = team(g.home), a = team(g.away); if (!h.div || h.div !== a.div || h.conf !== D.league.conference || a.conf !== D.league.conference) return;
+      const h = team(g.home), a = team(g.away); if (!divOf(h, s) || divOf(h, s) !== divOf(a, s) || h.conf !== D.league.conference || a.conf !== D.league.conference) return;
       const hw = +g.homeScore > +g.awayScore; [[g.home, hw], [g.away, !hw]].forEach(([id, w]) => { const r = dv[id] || (dv[id] = { w: 0, l: 0 }); w ? r.w++ : r.l++; });
     });
-    return `<h2>${s} ${esc(D.league.conference)} Standings</h2>` + divisions().map(d => {
-      const ids = leagueTeams().filter(t => !d || t.div === d).map(t => t.id);
+    return `<h2>${s} ${esc(D.league.conference)} Standings</h2>` + divisions(s).map(d => {
+      const ids = leagueTeams().filter(t => !d || divOf(t, s) === d).map(t => t.id);
       const ordered = orderGroup(ids, s).map((id, i) => ({ id, place: i + 1, ...R[id], name: team(id).name, coach: team(id).coach || 'CPU', cpct: R[id].cw + R[id].cl ? R[id].cw / (R[id].cw + R[id].cl) : 0, opct: R[id].w + R[id].l ? R[id].w / (R[id].w + R[id].l) : 0, diff: R[id].pf - R[id].pa, stk: streak(R[id]), dw: (dv[id] || {}).w || 0, dl: (dv[id] || {}).l || 0, dpct: dv[id] && dv[id].w + dv[id].l ? dv[id].w / (dv[id].w + dv[id].l) : 0 }));
       const rows = sortRows(ordered, st, { stk: r => (r.stk[0] === 'W' ? 1 : -1) * (+r.stk.slice(1) || 0) });
       return `<div class="card"><h3 style="margin-top:0">${esc(d ? D.league.conference + ' ' + d : D.league.conference)}</h3><div class="tablewrap"><table>
@@ -346,7 +347,7 @@ const PAGES = {
     return `<h2>${pre ? 'Preseason Odds' : 'Season Odds'}</h2>
       <p class="muted small">${pre ? 'Built from team overall, offense and defense ratings and the full schedule, before any Week 0 games.' : 'Re-simulated 1,500 times after every advance using results so far.'}</p>
       <div class="card"><div class="tablewrap"><table>
-        <tr>${sortTh(st, 'name', 'Team')}${sortTh(st, 'coach', 'Coach', 'hide-sm')}${sortTh(st, 'likely', 'Likely', 'num')}${sortTh(st, 'expW', 'Proj. W', 'num hide-xs')}${sortTh(st, 'divPct', divLbl.replace('Reg. Season Title', 'Div'), 'num')}${sortTh(st, 'ccgPct', 'Make Title Game', 'num hide-sm')}${sortTh(st, 'titlePct', 'Title', 'num')}</tr>
+        <tr>${sortTh(st, 'name', 'Team')}${sortTh(st, 'coach', 'Coach', 'hide-sm')}${sortTh(st, 'likely', 'Likely', 'num')}${sortTh(st, 'expW', 'Proj. W', 'num hide-xs')}${sortTh(st, 'divPct', divLbl.replace('Reg. Season Title', '1st').replace('Division', 'Div'), 'num')}${sortTh(st, 'ccgPct', 'Make Title Game', 'num hide-sm')}${sortTh(st, 'titlePct', 'Title', 'num')}</tr>
         ${rows.map(r => `<tr id="odds-${esc(r.id)}" class="${myTeam()?.id === r.id ? 'me' : ''}${focus === r.id ? ' focus' : ''}"><td>${chip(r.id)}${subSm(isUserTeam(team(r.id)) ? esc(r.coach) + ' · ' + r.expW.toFixed(1) + ' proj. W' : 'CPU')}</td><td class="hide-sm">${isUserTeam(team(r.id)) ? esc(r.coach) : '<span class="muted">CPU</span>'}</td><td class="num">${r.likely}</td><td class="num hide-xs">${r.expW.toFixed(1)}</td><td class="num">${pctStr(r.divPct)}</td><td class="num hide-sm">${pctStr(r.ccgPct)}</td><td class="num"><b>${pctStr(r.titlePct)}</b></td></tr>`).join('')}
       </table></div></div>
       <h2>Coach Odds Trend</h2><div class="card chart"><div class="row spread"><div class="seg">
@@ -413,8 +414,8 @@ const PAGES = {
 
   teams() {
     const s = S(), R = records(s), all = D.teams.filter(t => t.conf === D.league.conference), me = myTeam()?.id;
-    const grids = divisions().map(d => {
-      const ids = orderGroup(all.filter(t => !d || t.div === d).map(t => t.id), s);
+    const grids = divisions(s).map(d => {
+      const ids = orderGroup(all.filter(t => !d || divOf(t, s) === d).map(t => t.id), s);
       return `<h2>${esc(d ? D.league.conference + ' ' + d : D.league.conference)}</h2><div class="tgrid">${ids.map((id, i) => { const t = team(id); return `<a class="tcard${id === me ? ' me' : ''}" style="--tc:${esc(teamColor(t))}" href="#team/${esc(id)}">
         <div class="tc-top"><span class="tc-pl">${i + 1}</span><b class="tc-name">${esc(t.name)}</b></div>
         <div class="tc-rec">${rec(R[id])}${streak(R[id]) !== '–' ? `<span class="muted small"> · ${streak(R[id])}</span>` : ''}</div>
@@ -432,7 +433,7 @@ const PAGES = {
     const pb = isUserTeam(t) || sc ? playbookOf(t, s === D.league.season ? pbSeason() : s, sc) : null;
     return `<p><a href="#teams">← All teams</a></p>
       <div class="card" style="border-left:6px solid ${esc(teamColor(t))}"><h2>${pr ? '#' + pr.rank + ' ' : ''}${esc(t.name)}</h2>
-        <div class="muted">${esc(t.conf)}${t.div ? ' ' + esc(t.div) : ''} · ${isUserTeam(t) ? `Coach <a href="#coach/${slug(t.coach)}">${esc(t.coach)}</a>` : 'CPU'}</div>
+        <div class="muted">${esc(t.conf)}${divOf(t, s) ? ' ' + esc(divOf(t, s)) : ''} · ${isUserTeam(t) ? `Coach <a href="#coach/${slug(t.coach)}">${esc(t.coach)}</a>` : 'CPU'}</div>
         <div class="stat" style="margin-top:10px"><div><span>Record</span><b>${rec(r)}</b></div><div><span>Conf</span><b>${r.cw}-${r.cl}</b></div><div><span>PF / PA</span><b>${r.pf} / ${r.pa}</b></div><div><span>Streak</span><b>${streak(r)}</b></div>
           <div><span>OVR / OFF / DEF</span><b>${t.ovr || '–'} / ${t.off || '–'} / ${t.def || '–'}</b></div>${pb ? `<div><span>Offense playbook</span><b>${esc(pb.off || '–')}</b></div><div><span>Defense playbook</span><b>${esc(pb.def || '–')}</b></div>` : ''}${sim ? `<div><span>Likely record</span><b>${sim.likely}</b></div><div><span>Title odds</span><b>${pctStr(sim.titlePct)}</b></div>` : ''}</div></div>
       ${teamStatsCard(id, s)}
@@ -1634,8 +1635,9 @@ PAGES.game = function (id) {
   const meets = coachMeetings(coachA, coachH, g.id);
   const mw = meets.reduce((o, m) => { const w = meetingWinner(m).coach; o[w] = (o[w] || 0) + 1; return o; }, {});
   const isGotw = gotwTally(s, g.week).game?.id === g.id;
-  const same = A.conf === L.conference && H.conf === L.conference && A.div && A.div === H.div && divisions().length > 1;
-  const divOrder = same ? orderGroup(leagueTeams().filter(t => t.div === A.div).map(t => t.id), s) : [];
+  const dA = divOf(A, s), dH = divOf(H, s);
+  const same = A.conf === L.conference && H.conf === L.conference && dA && dA === dH && divisions(s).length > 1;
+  const divOrder = same ? orderGroup(leagueTeams().filter(t => divOf(t, s) === dA).map(t => t.id), s) : [];
   const where = g.neutral ? 'at a neutral site' : `at ${H.name}`;
 
   // ----- headline -----
@@ -1648,7 +1650,7 @@ PAGES.game = function (id) {
     const cand = [];
     if (g.type === 'ccg') cand.push([100, `For All the Marbles: ${rn(A)} vs. ${rn(H)}`]);
     if (rk(A) && rk(H)) cand.push([90, `Top-25 Clash: ${rn(A)} at ${rn(H)}`]);
-    if (same && divOrder.indexOf(A.id) < 2 && divOrder.indexOf(H.id) < 2) cand.push([86, `Showdown for the ${A.div} Crown`]);
+    if (same && divOrder.indexOf(A.id) < 2 && divOrder.indexOf(H.id) < 2) cand.push([86, `Showdown for the ${dA} Crown`]);
     const lead = Object.entries(mw).sort((x, y) => y[1] - x[1])[0];
     if (lead && meets.length >= 3 && lead[1] === meets.length) { const loser = lead[0] === coachA ? coachH : coachA; cand.push([80, `Can ${loser} Finally Solve ${lead[0]}?`]); }
     if (meets.length) { const lm = meetingWinner(meets[0]); cand.push([70, `Revenge Game: ${lm.lcoach} Gets Another Shot at ${lm.coach}`]); }
@@ -1664,8 +1666,8 @@ PAGES.game = function (id) {
   const paras = []; let stake = null;
   // "(6-0 MAC, 2-0 Catholics)": conference record, then record against teams in the same division.
   const divRec = t => { let w = 0, l = 0; D.games.filter(x => x.season === s && played(x) && (x.type || 'reg') === 'reg' && (x.home === t.id || x.away === t.id)).forEach(x => {
-    const o = team(x.home === t.id ? x.away : x.home); if (!t.div || o.div !== t.div || o.conf !== t.conf) return; const won = (x.home === t.id) === (+x.homeScore > +x.awayScore); won ? w++ : l++; }); return `${w}-${l}`; };
-  const recTxt = t => { const r = recs[t.id]; if (t.conf !== L.conference) return `${r.w}-${r.l}`; return `${r.cw}-${r.cl} ${L.conference}${t.div ? `, ${divRec(t)} ${t.div}` : ''}`; };
+    const o = team(x.home === t.id ? x.away : x.home); if (!divOf(t, s) || divOf(o, s) !== divOf(t, s) || o.conf !== t.conf) return; const won = (x.home === t.id) === (+x.homeScore > +x.awayScore); won ? w++ : l++; }); return `${w}-${l}`; };
+  const recTxt = t => { const r = recs[t.id]; if (t.conf !== L.conference) return `${r.w}-${r.l}`; return `${r.cw}-${r.cl} ${L.conference}${divOf(t, s) ? `, ${divRec(t)} ${divOf(t, s)}` : ''}`; };
   const cTxt = c => c && c !== 'CPU' ? `${possN(c)} ` : '';
   if (done) {
     const w = +g.homeScore > +g.awayScore ? H : A, lo = w === H ? A : H, ws = Math.max(+g.homeScore, +g.awayScore), ls = Math.min(+g.homeScore, +g.awayScore);
@@ -1679,7 +1681,7 @@ PAGES.game = function (id) {
   } else {
     let t = `${cTxt(coachA)}${rn(A)} (${recTxt(A)}) ${g.neutral ? 'meets' : 'visits'} ${cTxt(coachH)}${rn(H)} (${recTxt(H)}) in Week ${g.week}${g.neutral ? ' at a neutral site' : ''}.`;
     if (l && p) t += ` ${fav ? `${fav.name} is a ${Math.abs(l.spread)}-point favorite with a ${Math.max(p.a, p.h)}% chance to win` : 'The line is a pick\'em'}, and the total sits at ${l.total}.`;
-    if (same) t += ` Both teams play in the ${A.div}, where ${team(divOrder[0]).name} currently leads the division${divOrder.indexOf(A.id) < 2 && divOrder.indexOf(H.id) < 2 ? ', so the division race runs straight through this game' : ''}.`;
+    if (same) t += ` Both teams play in the ${dA}, where ${team(divOrder[0]).name} currently leads the division${divOrder.indexOf(A.id) < 2 && divOrder.indexOf(H.id) < 2 ? ', so the division race runs straight through this game' : ''}.`;
     if (isGotw) t += ` The league voted it Game of the Week, and bets on it get a +10% profit boost.`;
     paras.push(t);
     if (L.phase === PHASES.REG && s === L.season && (g.type || 'reg') === 'reg' && A.conf === L.conference && H.conf === L.conference) {
@@ -1840,7 +1842,7 @@ document.addEventListener('click', async e => {
   const rp = e.target.closest('[data-rpick]'), rr = e.target.closest('[data-rreset]');
   if (rp || rr) {
     if (rp) { const [gid, side] = rp.dataset.rpick.split('|'); if (racePicks[gid] === side) delete racePicks[gid]; else racePicks[gid] = side; }
-    else { const div = rr.dataset.rreset; D.games.forEach(g => { if (team(g.home).div === div || team(g.away).div === div) delete racePicks[g.id]; }); }
+    else { const div = rr.dataset.rreset; D.games.forEach(g => { if (divOf(team(g.home)) === div || divOf(team(g.away)) === div) delete racePicks[g.id]; }); }
     saveRacePicks();
     const box = $('#race'), y = scrollY; if (box) { box.innerHTML = raceSection(); scrollTo(0, y); }
     return;

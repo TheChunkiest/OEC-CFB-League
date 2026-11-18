@@ -471,10 +471,20 @@ export function orderGroup(ids, season) {
       pctOf(B.w, B.l) - pctOf(A.w, A.l) || ((B.pf - B.pa) - (A.pf - A.pa));
   });
 }
-export function divisions() {
-  const divs = [...new Set(leagueTeams().map(t => t.div || ''))];
+// Conference alignment is kept per season (league.align = { "<season>": { teamId: "Division" } }; an empty map
+// = one big conference with no divisions). A season with nothing saved uses the teams' current Div fields.
+export function divOf(t, season = D.league.season) {
+  if (!t) return '';
+  const a = (D.league.align || {})[season];
+  if (!a) return t.div || '';
+  if (a._one) return '';                          // that season was one big conference
+  return t.id in a ? (a[t.id] || '') : (t.div || '');   // a team added after the season started uses its Div
+}
+export function divisions(season = D.league.season) {
+  const divs = [...new Set(leagueTeams().map(t => divOf(t, season)))];
   return divs.length > 1 && divs.every(Boolean) ? divs.sort() : [''];
 }
+export const oneConference = (season = D.league.season) => divisions(season).length < 2;
 
 /* ---------------- Division race simulator ----------------
    What-if engine for the Standings page. `picks` = { gameId: 'home' | 'away' } chosen by the viewer; every other
@@ -484,8 +494,8 @@ export function divisions() {
 export function raceSim(d, picks = {}, season = D.league.season) {
   const L = D.league;
   if (L.phase !== PHASES.REG || season !== L.season) return null;
-  const divs = divisions(), K = divs.length > 1 ? 1 : 2, reg = g => g.season === season && (g.type || 'reg') === 'reg';
-  const ids = leagueTeams().filter(t => !d || t.div === d).map(t => t.id), m = ids.length, ix = {};
+  const divs = divisions(season), K = divs.length > 1 ? 1 : 2, reg = g => g.season === season && (g.type || 'reg') === 'reg';
+  const ids = leagueTeams().filter(t => !d || divOf(t, season) === d).map(t => t.id), m = ids.length, ix = {};
   ids.forEach((id, i) => ix[id] = i);
   const left = D.games.filter(g => reg(g) && !played(g) && (g.home in ix || g.away in ix)).sort((a, b) => a.week - b.week || String(a.id).localeCompare(String(b.id)));
   const pick = g => picks[g.id] === 'home' ? true : picks[g.id] === 'away' ? false : null;
@@ -597,10 +607,10 @@ export function clinchScenarios(season = D.league.season) {
   const L = D.league;
   return cached(`clinch|${season}|${L.week}|${L.phase}`, () => {
     if (L.phase !== PHASES.REG || season !== L.season) return [];
-    const lt = leagueTeams(), divs = divisions(), K = divs.length > 1 ? 1 : 2;
+    const lt = leagueTeams(), divs = divisions(season), K = divs.length > 1 ? 1 : 2;
     const reg = g => g.season === season && (g.type || 'reg') === 'reg';
     return divs.map(d => {
-      const ids = lt.filter(t => !d || t.div === d).map(t => t.id), m = ids.length, ix = {};
+      const ids = lt.filter(t => !d || divOf(t, season) === d).map(t => t.id), m = ids.length, ix = {};
       ids.forEach((id, i) => ix[id] = i);
       const games = D.games.filter(g => reg(g) && !played(g) && (g.home in ix || g.away in ix)).sort((a, b) => a.week - b.week);
       const now = games.filter(g => g.week <= L.week), later = games.filter(g => g.week > L.week);
@@ -677,7 +687,7 @@ function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79
 export function simulate(season, upto, n = 1500, force = null) {
   return cached(`sim|${season}|${upto}|${n}|${force ? JSON.stringify(force) : ''}`, () => {
     const R = ratings(season, upto), lt = leagueTeams(), ids = lt.map(t => t.id), conf = new Set(ids);
-    const divs = divisions(), byDiv = divs.map(d => lt.filter(t => !d || t.div === d).map(t => t.id));
+    const divs = divisions(season), byDiv = divs.map(d => lt.filter(t => !d || divOf(t, season) === d).map(t => t.id));
     const games = D.games.filter(g => g.season === season && (g.type || 'reg') === 'reg' && R[g.home] && R[g.away]);
     const fixed = [], sims = [];
     games.forEach(g => { if (played(g) && g.week < upto) fixed.push(g); else sims.push({ g, p: lineFrom(R, g).pHome }); });
