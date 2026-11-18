@@ -961,3 +961,4 @@ body{background:transparent}
 body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
   background:radial-gradient(130% 60% at 50% 0%,rgba(150,16,26,.38),transparent 70%),linear-gradient(180deg,#22090c 0%,#150a0c 45%,#0e090a 100%)}
 body::before{background:radial-gradient(140% 55% at 50% 0%,rgba(170,18,30,.42),transparent 72%),radial-gradient(120% 45% at 50% 100%,rgba(120,12,22,.30),transparent 75%),linear-gradient(180deg,#260a0e 0%,#170a0c 50%,#1b0a0d 100%)}
+.feat-tags{display:flex;justify-content:center;gap:6px;margin-bottom:2px}

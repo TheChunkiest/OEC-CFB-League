@@ -131,18 +131,14 @@ function featureCard(g, { ribbon, note = '' } = {}) {
   const hw = +g.homeScore > +g.awayScore;
   const sideHtml = (t, side, won) => `<div class="gp-team ${done && !won ? 'l' : ''}"><i class="sw big" style="background:${esc(teamColor(t))}"></i><div><div class="gp-name">${rk(t) ? `<span class="rk">#${rk(t)}</span>` : ''}${esc(t.name)}</div>
     <div class="muted small">${rec(recs[t.id])} · ${esc(coach(side))}</div></div>${done ? `<div class="gp-score">${g.forfeit ? (won ? 'FW' : 'FL') : g[side + 'Score']}</div>` : ''}</div>`;
-  const fav = l && (l.spread <= 0 ? H : A), v = venueOf(g), ko = kickoffOf(g);
-  const boost = g.type === 'ccg' ? CCG_BOOST : g.id === gotwGameId() ? GOTW_BOOST : null;
-  const canBet = !done && s === L.season && g.week >= L.week && L.bettingOpen && !ownGame(g);
-  const odds = l && !done ? `<div class="gp-odds"><div><span>Spread</span><b>${l.spread === 0 ? 'PK' : esc(fav.abbr || fav.name) + ' ' + fmtLine(-Math.abs(l.spread))}</b></div><div><span>Total</span><b>O/U ${l.total}</b></div>
-    <div><span>Moneyline</span><b>${esc(A.abbr)} ${fmtOdds(l.mlAway)}</b><b>${esc(H.abbr)} ${fmtOdds(l.mlHome)}</b></div></div>` : '';
+  const v = venueOf(g), ko = kickoffOf(g);
   return `<div class="card gp-head gotw feature" data-game="${esc(g.id)}"><span class="ribbon">${ribbon}</span>
-    <div class="muted small" style="text-transform:uppercase;letter-spacing:.8px;font-weight:800">Season ${seasonNum(s)} · ${g.type === 'ccg' ? 'League Championship' : 'Week ' + g.week}${done ? ' · Final' : ''}${gameTags(g) ? ' · ' + gameTags(g) : ''}</div>
+    ${gameTags(g) ? `<div class="feat-tags">${gameTags(g)}</div>` : ''}
     <div class="gp-vs">${sideHtml(A, 'away', !hw)}<div class="gp-at">${g.neutral ? 'vs' : '@'}</div>${sideHtml(H, 'home', hw)}</div>
     ${ko || v ? `<div class="feat-meta">${ko ? `<span>🕗 <b>${esc(fmtKick(ko))}</b></span>` : ''}${v ? `<span>📍 <b>${esc(v.name)}</b></span>` : ''}</div>` : ''}
-    ${odds}${l && !g.forfeit ? probBar(g, l, done) : ''}
+    ${l && !g.forfeit ? probBar(g, l, done) : ''}
     ${note ? `<div class="meta" style="text-align:center;margin-top:8px">${note}</div>` : ''}
-    <div class="feat-act">${canBet ? `<button class="gold" data-betgame="${g.week}">Bet this game${boost ? ` · +${Math.round((boost - 1) * 100)}% boost` : ''} →</button>` : ''}<a class="btn ghost" href="#game/${esc(g.id)}">${done ? 'Recap' : 'Preview'} →</a></div></div>`;
+    <div class="feat-act"><a class="btn ghost" href="#game/${esc(g.id)}">${done ? 'Recap' : 'Preview'} →</a></div></div>`;
 }
 function gameCard(g, opts = {}) {
   const h = team(g.home), a = team(g.away), done = played(g);
@@ -322,7 +318,7 @@ const PAGES = {
     if (L.desk && L.desk.show && L.desk.text) html += `<div class="card banner"><h2>Commissioner's Desk</h2><div style="white-space:pre-wrap">${esc(L.desk.text)}</div></div>`;
     const ccgNow = games.find(g => g.type === 'ccg');
     if (ccgNow && !gt.game) html += featureCard(ccgNow, { ribbon: champRibbon(), note: played(ccgNow) ? 'League champion crowned' : '' });
-    if (gt.game) html += featureCard(gt.game, { ribbon: '★ Game of the Week', note: `${gt.counts[gt.game.id]} of ${gt.total} coach vote${gt.total === 1 ? '' : 's'}` });
+    if (gt.game) html += featureCard(gt.game, { ribbon: '★ Game of the Week' });
     else if (L.phase === PHASES.REG && games.length) html += `<div class="card gotw"><span class="ribbon">★ Game of the Week</span><div class="muted">No Game of the Week votes were cast for ${esc(weekLabel())}. <a href="#vote">Vote for next week's game →</a></div></div>`;
     html += `<div class="grid2"><div><h2>This Week's Storylines</h2><div class="card">${stories.length ? stories.map(st => `<${st.href ? `a href="${esc(st.href)}"` : 'div'} class="story${st.href ? ' link' : ''}"><span class="tag">${esc(st.tag)}</span><h3>${esc(st.title)}</h3><p>${esc((() => { const vs = {}; vary(st.title, vs); return vary(st.body, vs); })())}</p>${st.href ? '<span class="go" aria-hidden="true">›</span>' : ''}</${st.href ? 'a' : 'div'}>`).join('') : '<div class="empty">Storylines appear once games are played.</div>'}</div></div>
       <div><h2>${esc(weekLabel())} Matchups</h2>${games.length ? weekOrder(games.filter(g => g.id !== gt.game?.id && g.id !== ccgNow?.id)).map(g => gameCard(g)).join('') || `<div class="card empty">Only the ${ccgNow && !gt.game ? 'championship game' : 'Game of the Week'} is on the slate.</div>` : '<div class="card empty">No games scheduled this week.</div>'}</div></div>
