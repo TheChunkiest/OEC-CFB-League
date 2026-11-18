@@ -749,3 +749,8 @@ h3{margin-bottom:10px}
 /* Team totals rows under each game's lines in the sportsbook: [UK team total] [O 23.5] [U 23.5] */
 .betgame .ttrow{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;align-items:center;margin-top:4px;padding-top:8px;border-top:1px dashed var(--line)}
 .betgame .ttname{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;line-height:1.2;text-align:center}
+/* Final-score alert team picker (Account → notifications) */
+.finteams{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:2px 0 8px 26px}
+.chipbtn{background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--txt,#eee);border-radius:999px;padding:5px 10px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:5px;cursor:pointer}
+.chipbtn.on{background:var(--gold);color:#140b00;border-color:var(--gold)}
+.chipbtn .sw{width:9px;height:9px;margin:0}

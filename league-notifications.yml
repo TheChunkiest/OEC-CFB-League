@@ -249,7 +249,7 @@ jobs:
 
               try:   # whatever happens, remember what was already sent so nothing goes out twice
                 if fresh:   # first run: remember where things stand, so old events aren't announced...
-                    st = {'adv': advkey, 'ann': ann.get('id'), 'inv': int(now), 'resp': int(now), 'kick': {}, 'settle': int(now)}
+                    st = {'adv': advkey, 'ann': ann.get('id'), 'inv': int(now), 'resp': int(now), 'kick': {}, 'settle': int(now), 'final': int(now)}
                     if now - int(lg.get('advancedAt') or 0) < 3600e3:   # ...except an advance from the last hour
                         st['adv'] = ''; fresh = False
                 if not fresh:
@@ -326,6 +326,43 @@ jobs:
                            f'{link}#betting', uids={uid}, tag='bets', default=True)
                     if fin: st['settle'] = max(int(w.get('settledAt') or 0) for w in fin)
                     elif 'settle' not in st: st['settle'] = int(now)
+                    # Final scores: a game is announced once, when its score is first saved (playedAt). Each device
+                    # picks the teams it follows (empty list = every game). A big result gets a catchy headline.
+                    fsince = int(st.get('final') or now)
+                    fsent = st.setdefault('finSent', {})
+                    finals = sorted([g for g in query('games', 'playedAt', 'GREATER_THAN', fsince)
+                                     if g.get('homeScore') is not None and g.get('awayScore') is not None and not g.get('deleted')],
+                                    key=lambda g: int(g.get('playedAt') or 0))
+                    def headline(g):
+                        hs, as_ = int(g['homeScore']), int(g['awayScore']); hw = hs > as_
+                        W, Lo = (g['home'], g['away']) if hw else (g['away'], g['home'])
+                        ws, ls = max(hs, as_), min(hs, as_); mg, tot = ws - ls, hs + as_
+                        wn, ln = tname(W), tname(Lo)
+                        body = f"Final: {wn} {ws}, {ln} {ls}" + (f" · Week {g.get('week')}" if g.get('type', 'reg') == 'reg' else '')
+                        if g.get('forfeit'): return f'🏳️ {wn} wins by forfeit', f'{ln} forfeited.'
+                        lines = g.get('lines') or {}
+                        dog = lines.get('mlHome' if hw else 'mlAway')
+                        if g.get('type') == 'ccg': return f"🏆 {wn} are {lg.get('conference') or 'League'} champions!", body
+                        if isinstance(dog, (int, float)) and dog >= 200: return f'🚨 UPSET ALERT: {wn} stuns {ln}', body
+                        if mg <= 3: return f'😬 Nail-biter: {wn} survives {ln}', body
+                        if isinstance(dog, (int, float)) and dog >= 120: return f'😮 Upset: {wn} knocks off {ln}', body
+                        if mg >= 28: return f'💥 Blowout: {wn} rolls {ln}', body
+                        if tot >= 85: return f'🔥 Shootout: {wn} outguns {ln}', body
+                        if tot <= 24: return f'🧱 Defensive battle: {wn} grinds past {ln}', body
+                        return f'🏈 Final: {wn} beats {ln}', body
+                    for g in finals:
+                        if g['id'] in fsent: continue
+                        title, body = headline(g)
+                        for d in devs():
+                            p = d.get('prefs') or {}
+                            if not p.get('finals', True): continue
+                            ft = p.get('finalTeams') or []
+                            if ft and g.get('home') not in ft and g.get('away') not in ft: continue
+                            send(d, title, body, f"{link}#game/{g['id']}", 'f' + g['id'])
+                        fsent[g['id']] = int(now)
+                    if finals: st['final'] = max(int(g.get('playedAt') or 0) for g in finals)
+                    elif 'final' not in st: st['final'] = int(now)
+                    st['finSent'] = {k: v for k, v in fsent.items() if v > now - 14 * 86400e3}
                 # Welcome message for devices that just turned notifications on (confirms it works)
                 for d in query('push', 'welcomed', 'EQUAL', False):
                     send(d, '🔔 Notifications are on', "You'll get OEC Hub alerts on this device. Change them anytime on your Account page.", link + '#account', 'welcome')

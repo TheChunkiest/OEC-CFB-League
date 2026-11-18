@@ -1423,8 +1423,8 @@ function shuffle(a, r) { for (let i = a.length - 1; i > 0; i--) { const j = Math
 /* ---------------- Phone notifications ----------------
    The site only registers this device's push token in the `push` collection. Sending happens in the
    GitHub workflow (free Firebase Cloud Messaging), so there is no server to pay for. */
-export const PUSH_PREFS = [['advance', 'League advances & commissioner news'], ['live', 'OEC goes live on YouTube'], ['mygame', 'My game is about to kick off'], ['invites', 'Kickoff invites & replies'], ['bets', 'One of my bets went final'], ['league', 'Every league kickoff (reminder to watch)']];
-export const pushDefaults = () => ({ advance: true, live: true, mygame: true, invites: true, bets: true, league: false });
+export const PUSH_PREFS = [['advance', 'League advances & commissioner news'], ['live', 'OEC goes live on YouTube'], ['mygame', 'My game is about to kick off'], ['invites', 'Kickoff invites & replies'], ['bets', 'One of my bets went final'], ['finals', 'Final scores'], ['league', 'Every league kickoff (reminder to watch)']];
+export const pushDefaults = () => ({ advance: true, live: true, mygame: true, invites: true, bets: true, finals: true, finalTeams: [], league: false });
 export const pushLocal = () => { try { return JSON.parse(localStorage.getItem('oecPush') || 'null'); } catch (e) { return null; } };
 const pushSave = v => { try { v ? localStorage.setItem('oecPush', JSON.stringify(v)) : localStorage.removeItem('oecPush'); } catch (e) { } };
 export const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;

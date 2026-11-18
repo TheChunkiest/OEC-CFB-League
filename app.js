@@ -4,7 +4,7 @@ import {
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, raceSim, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
   gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
 , playbookOf, pbSeason, pbText
-} from './core.js?v=69';
+} from './core.js?v=70';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -1575,8 +1575,15 @@ function pushCard() {
   if (!cur) return head + `<div class="card"><p style="margin-top:0">Get a notification when the league advances, before your game kicks off, and when a coach sends you kickoff times.</p><button data-act="pushOn">🔔 Turn on notifications</button></div>`;
   const pf = { ...pushDefaults(), ...(cur.prefs || {}) };
   return head + `<div class="card"><p style="margin-top:0">🔔 On for this device. Pick what you want:</p>
-    <div class="pushprefs">${PUSH_PREFS.map(([k, l]) => `<label class="chk"><input type="checkbox" data-pushpref="${k}" ${pf[k] ? 'checked' : ''}> ${esc(l)}</label>`).join('')}</div>
+    <div class="pushprefs">${PUSH_PREFS.map(([k, l]) => `<label class="chk"><input type="checkbox" data-pushpref="${k}" ${pf[k] ? 'checked' : ''}> ${esc(l)}</label>${k === 'finals' && pf.finals ? finalTeamsPicker(pf.finalTeams || []) : ''}`).join('')}</div>
     <button class="ghost sm" data-act="pushOff" style="margin-top:10px">Turn off on this device</button></div>`;
+}
+// Final-score alerts: follow every game, or only games with the teams picked here.
+function finalTeamsPicker(sel) {
+  const ts = leagueTeams().slice().sort((a, b) => a.name.localeCompare(b.name));
+  return `<div class="finteams"><span class="muted small">Final scores for:</span>
+    <button type="button" class="chipbtn${sel.length ? '' : ' on'}" data-finteam="">All games</button>
+    ${ts.map(t => `<button type="button" class="chipbtn${sel.includes(t.id) ? ' on' : ''}" data-finteam="${esc(t.id)}"><i class="sw" style="background:${esc(teamColor(t))}"></i>${esc(t.abbr || t.name)}</button>`).join('')}</div>`;
 }
 // ---- Add to Home Screen ----
 const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
@@ -1859,7 +1866,7 @@ document.addEventListener('click', async e => {
   if (lx) { try { localStorage.setItem('oecLiveDismissed', lx.dataset.livex); } catch (err) { /* ignore */ } showLive(); return; }
   const tf = e.target.closest('[data-tsflip]'); if (tf) { UI.tsFlip = !UI.tsFlip; route(); return; }
   const tr = e.target.closest('tr[data-team]'); if (tr && !e.target.closest('a')) { location.hash = '#team/' + tr.dataset.team; return; }
-  const t = e.target.closest('[data-pname],[data-momhide],[data-sort],[data-metric],[data-trend],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-slip],[data-popular],[data-res],[data-act],[data-close],[data-stake],[data-acct],[data-cancel],[data-cashout],[data-value],[data-kinv],[data-kacc],[data-kdec],[data-kcan]');
+  const t = e.target.closest('[data-finteam],[data-pname],[data-momhide],[data-sort],[data-metric],[data-trend],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-slip],[data-popular],[data-res],[data-act],[data-close],[data-stake],[data-acct],[data-cancel],[data-cashout],[data-value],[data-kinv],[data-kacc],[data-kdec],[data-kcan]');
   if (!t) return;
   const page = (location.hash.slice(1) || 'home').split('/')[0];
   if (t.dataset.sort) {
@@ -1901,6 +1908,12 @@ document.addEventListener('click', async e => {
     F[orig] = nv.trim() === cur && !F[orig] ? '' : nv.trim();   // '' = no fix (saved merges can't remove a key)
     await put('meta', 'league', { pnames: { ...(D.league.pnames || {}), [tid]: F } }); route();
   }
+  else if (t.dataset.finteam != null && t.matches('.chipbtn')) {
+    const prefs = { ...pushDefaults(), ...(pushLocal()?.prefs || {}) }, id = t.dataset.finteam, cur = prefs.finalTeams || [];
+    prefs.finalTeams = !id ? [] : cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id];
+    try { await pushPrefs(prefs); } catch (err) { alert(err.message || String(err)); }
+    route();
+  }
   else if (t.dataset.act === 'momRedo') { if (confirm('Run this game through the AI again? It will be redone within about an hour.')) { await put('meta', 'league', { momRedo: { [t.dataset.gid]: Date.now() } }); route(); } }
   else if (t.dataset.momhide) {
     const [gid, k] = t.dataset.momhide.split('|'), cur = (D.league.momHide || {})[gid] || [];
@@ -1933,7 +1946,7 @@ document.addEventListener('change', e => {
   if (e.target.matches('[data-pushpref]')) {
     const prefs = { ...pushDefaults(), ...(pushLocal()?.prefs || {}) };
     $$('[data-pushpref]').forEach(c => { prefs[c.dataset.pushpref] = c.checked; });
-    pushPrefs(prefs).catch(err => alert(err.message || String(err)));
+    pushPrefs(prefs).then(() => { if (e.target.dataset.pushpref === 'finals') route(); }).catch(err => alert(err.message || String(err)));
     return;
   }
   if (e.target.dataset.betweek) { UI.betWeek = +e.target.value; route(); }
