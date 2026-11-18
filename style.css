@@ -1028,3 +1028,11 @@ table.compact td:first-child{line-height:1.25}
 .card.game.gotw{padding-top:22px}
 .trlist,.trlist[style]{justify-content:space-evenly}
 @media (max-width:640px){.trlist,.trlist[style]{justify-content:space-evenly}}
+/* Home: this week's matchups grouped in one big card */
+.card.matchbox{padding:10px}
+.card.matchbox .card.game{margin-bottom:10px;background:rgba(255,255,255,.025)}
+.card.matchbox .card.game:last-child{margin-bottom:0}
+/* Small text floor + tiny-phone fit for the odds trend list */
+.place,.tag.gold,.cseason .tag,.pbar em{font-size:11px}
+@media (max-width:359px){.trlist,.trlist[style]{gap:4px 10px}.trlist li{font-size:12px;gap:4px}.trlist .ab{min-width:32px}}
+@media(max-width:440px){table.cseason .tag,table.cseason .place{font-size:11px}}
