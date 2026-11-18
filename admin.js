@@ -3,8 +3,8 @@ import {
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum, divOf, oneConference, playbookOf, pbSeason, pbOpen, pbLocked
 , loadAI, kickoffOf, fmtKick
-, AWARD_DEFS, tallyAwards, awardGames, awardGameLabel, awardCoaches, sameName
-} from './core.js?v=82';
+, reliefPatch, AWARD_DEFS, tallyAwards, awardGames, awardGameLabel, awardCoaches, sameName
+} from './core.js?v=84';
 // Broadcast scouting nudges the ratings a little, so load it before any lines get posted from here.
 loadAI();
 import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
@@ -529,6 +529,13 @@ function readReview() {
 }
 
 /* ---------- actions ---------- */
+// Relief top-ups at an advance that opens betting. Waits a moment so the bets just graded are in D.wagers.
+async function giveRelief() {
+  await new Promise(r => setTimeout(r, 400));
+  const R = reliefPatch(); if (!R) return '';
+  await put('meta', 'league', R.patch);
+  return `${R.given.join(', ')} ${R.given.length === 1 ? 'was' : 'were'} out of Crackers and got 25 relief Crackers.`;
+}
 const ACT = {
   async toggleBet() { await put('meta', 'league', { bettingOpen: !L().bettingOpen }); flash('Betting ' + (L().bettingOpen ? 'opened' : 'locked') + '.'); },
   async saveScores() {
@@ -571,6 +578,7 @@ const ACT = {
       const gotwG = gotwTally(lg.season, W + 1, { includeOpen: true }).game;
       await put('meta', 'league', { week: W + 1, advancedAt: Date.now(), advExt: 0, bettingOpen: true, desk, gotw: { season: lg.season, week: W + 1, gameId: gotwG ? gotwG.id : '' } });
       await batch(lineOps(W + 1));
+      dr.relief = await giveRelief();
     }
     const settled = D.wagers.filter(w => w.settledAt && Date.now() - w.settledAt < 60000).length;
     ST.draft = null; ST.step = 1; ST.desk = 'no';
@@ -578,7 +586,7 @@ const ACT = {
       <li>${ops.length} result${ops.length === 1 ? '' : 's'} saved; ${settled} bet${settled === 1 ? '' : 's'} graded and paid.</li>
       ${last ? '<li>Win totals settled and League Champion futures closed.</li>' : `<li>Lines posted for every upcoming game; betting is open for Week ${W + 1}.</li><li>Standings, odds, power rankings and storylines are updated.</li>`}
       ${dr.poll && pollChanged(dr.poll, W) ? `<li>Top 25 updated (${dr.poll.length} ranked teams).</li>` : '<li>Top 25 carried over.</li>'}
-      <li>${desk.show ? "Commissioner's Desk note posted." : "Commissioner's Desk cleared."}</li></ul>
+      <li>${desk.show ? "Commissioner's Desk note posted." : "Commissioner's Desk cleared."}</li>${dr.relief ? `<li>🪙 ${esc(dr.relief)}</li>` : ''}</ul>
       <div class="row" style="margin-top:10px"><a class="btn" style="padding:8px 14px;border-radius:8px" href="index.html" target="_blank">View the site</a><button class="gold" data-act="wizDone">${last ? 'Set up the championship →' : `Start Week ${W + 1} →`}</button></div></div>`;
     render(); window.scrollTo(0, 0);
   },
@@ -599,7 +607,8 @@ const ACT = {
       if (poll && pollChanged(poll, W)) await put('meta', 'league', { polls: { [pollKey(W + 1)]: poll } });
       await put('meta', 'league', { week: W + 1, advancedAt: Date.now(), advExt: 0, bettingOpen: true, desk });
       await batch(lineOps(W + 1));
-      ST.desk = 'no'; flash(`Advanced to Week ${W + 1}. Lines posted, betting open, odds and power rankings updated.`);
+      const rel = await giveRelief();
+      ST.desk = 'no'; flash(`Advanced to Week ${W + 1}. Lines posted, betting open, odds and power rankings updated.${rel ? ' ' + rel : ''}`);
     }
   },
   async openCcg() {
@@ -609,7 +618,8 @@ const ACT = {
     await put('games', id, { season: lg.season, week: wk, type: 'ccg', home: h, away: a, neutral: $('#ccgN').checked, homeScore: null, awayScore: null }, false);
     await batch(lineOps(wk));
     await put('meta', 'league', { week: wk, bettingOpen: true, desk: deskValue(), awards: { open: true, season: lg.season, categories: [], results: [] } });
-    ST.desk = 'no'; flash('Championship week is live: game posted with lines, betting open, awards voting open.');
+    const rel = await giveRelief();
+    ST.desk = 'no'; flash('Championship week is live: game posted with lines, betting open, awards voting open.' + (rel ? ' ' + rel : ''));
   },
   async finishCcg() {
     const lg = L(), ccg = D.games.find(g => g.season === lg.season && g.type === 'ccg');

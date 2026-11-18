@@ -898,8 +898,13 @@ export function parlayOps(regrade = false) {
     return same ? null : { op: 'set', col: 'wagers', id: w.id, data: { status: r.status, payout: r.payout, legs: r.legs, ...(r.status !== w.status && r.status !== 'open' ? { settledAt: Date.now() } : {}) } };
   }).filter(Boolean);
 }
+// Relief: a coach who is completely out (exactly 0 Crackers and nothing in play) gets RELIEF at each
+// advance. It isn't winnings, so it adds to the balance but never to net / P&L. Resets with the season.
+export const RELIEF = 25;
+export const reliefOf = (uid, season = D.league.season) => { const R = D.league.relief; return R && R.season === season && R.u && R.u[uid] ? R.u[uid] : { amt: 0, n: 0 }; };
 export function bankroll(uid, season = D.league.season) {
-  const b = { balance: START_CREDITS, w: 0, l: 0, p: 0, net: 0, open: 0, risked: 0, n: 0 };
+  const rl = reliefOf(uid, season);
+  const b = { balance: START_CREDITS + (rl.amt || 0), w: 0, l: 0, p: 0, net: 0, open: 0, risked: 0, n: 0, relief: rl.amt || 0, reliefN: rl.n || 0 };
   D.wagers.filter(x => x.uid === uid && x.season === season).forEach(x => {
     b.n++;
     if (x.status === 'open') { b.open += x.stake; b.balance -= x.stake; return; }
@@ -1659,4 +1664,16 @@ export function seasonStorylines(s) {
     out.push({ href: '#game/' + b.id, tag: 'Bowl Season', title: `League coaches went ${w}-${l} in bowl games`, body: `${who(b, r.w)} ${cName(b, r.w) ? 'had the most convincing win' : 'had the biggest margin'}, ${r.ws}-${r.ls} over ${who(b, r.l)}${b.note ? ` in the ${b.note}` : ''}.` });
   }
   return out;
+}
+
+// Who gets relief at this advance, and the league-doc patch that records it (null if nobody qualifies).
+export function reliefPatch() {
+  const L = D.league, s = L.season, u = { ...((L.relief && L.relief.season === s && L.relief.u) || {}) }, given = [];
+  bettors(s).forEach(x => {
+    const b = bankroll(x.id, s);
+    if (b.open > 0 || b.balance > 0) return;   // only when completely out: 0 Crackers and no bet riding
+    const amt = RELIEF, cur = u[x.id] || { amt: 0, n: 0 };
+    u[x.id] = { amt: cur.amt + amt, n: cur.n + 1 }; given.push(x.name);
+  });
+  return given.length ? { patch: { relief: { season: s, u } }, given } : null;
 }
