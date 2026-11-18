@@ -322,8 +322,8 @@ jobs:
                     for uid, n in per.items():
                         if not uid: continue
                         to('bets', '🏁 Your bet went final' if n == 1 else f'🏁 {n} of your bets went final',
-                           'Open the Betting page to see how it did.' if n == 1 else 'Open the Betting page to see how they did.',
-                           f'{link}#betting', uids={uid}, tag='bets', default=True)
+                           'Tap to see how it did.' if n == 1 else 'Tap to see how they did.',
+                           f'{link}#mybets', uids={uid}, tag='bets', default=True)
                     if fin: st['settle'] = max(int(w.get('settledAt') or 0) for w in fin)
                     elif 'settle' not in st: st['settle'] = int(now)
                     # Final scores: a game is announced once, when its score is first saved (playedAt). Each device
