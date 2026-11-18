@@ -2,9 +2,9 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, batch, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout, PUSH_PREFS, pushDefaults, pushLocal, pushSupported, pushEnable, pushPrefs, pushDisable,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, raceSim, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
+  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
 , playbookOf, pbSeason, pbText
-} from './core.js?v=71';
+} from './core.js?v=72';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -296,7 +296,7 @@ const PAGES = {
     const gt = gotwTally(s, wk);
     const stories = storylines();
     const pr = currentPower().slice(0, 5);
-    const leaders = D.users.filter(u => u.teamId).map(u => ({ u, b: bankroll(u.id) })).sort((a, b) => b.b.net - a.b.net || b.b.balance - a.b.balance).slice(0, 5);
+    const leaders = bettors().map(u => ({ u, b: bankroll(u.id) })).sort((a, b) => b.b.net - a.b.net || b.b.balance - a.b.balance).slice(0, 5);
     let html = installTip();
     if (L.desk && L.desk.show && L.desk.text) html += `<div class="card banner"><h2>Commissioner's Desk</h2><div style="white-space:pre-wrap">${esc(L.desk.text)}</div></div>`;
     if (gt.game) html += gameCard(gt.game, { gotw: true, extra: `<div class="meta">${gt.counts[gt.game.id]} of ${gt.total} coach vote${gt.total === 1 ? '' : 's'}</div>` });
@@ -361,10 +361,10 @@ const PAGES = {
     const bw = bwks.includes(UI.betWeek) ? UI.betWeek : bwks[0];
     const games = D.games.filter(g => g.season === s && g.week === bw && !played(g));
     const open = L.bettingOpen && L.phase !== PHASES.PRE && L.phase !== PHASES.POST;
-    const bk = me && me.teamId ? bankroll(me.id) : null;
+    const bk = me ? bankroll(me.id) : null;
     let html = `<div class="sbhead"><h2>Sportsbook · ${esc(weekLabel())}</h2>${bk ? `<div class="bkmini"><div><span>Balance</span><b>${bk.balance.toLocaleString()}</b></div><div class="hide-sm"><span>In play</span><b>${bk.open}</b></div><div><span>Record</span><b>${bk.w}-${bk.l}${bk.p ? '-' + bk.p : ''}</b></div><div><span>Net</span><b class="${bk.net >= 0 ? 'win' : 'loss'}">${bk.net >= 0 ? '+' : ''}${bk.net}</b></div></div>` : ''}</div>`;
     if (!me) html += `<div class="notice">Every coach gets <b>${START_CREDITS.toLocaleString()} Crackers</b> per season. <a href="#account">Log in</a> to place wagers.</div>`;
-    else if (!me.teamId) html += `<div class="notice">Your account isn't linked to a team yet. Ask the commissioner to link it.</div>`;
+    else if (!me.teamId) html += `<div class="notice">You're a spectator: you can bet with your ${START_CREDITS.toLocaleString()} Crackers like everyone else. If you join the league, the commissioner will link you to your team.</div>`;
     html += !open ? `<div class="card empty">Betting is ${L.phase === PHASES.PRE ? 'closed until the season is published' : 'locked right now'}.</div>` :
       games.length ? `<div class="row" style="margin-bottom:10px"><div class="seg"><button data-mode="single" class="${UI.mode === 'single' ? 'on' : ''}">Single bets</button><button data-mode="parlay" class="${UI.mode === 'parlay' ? 'on' : ''}">Parlay</button></div>
         ${UI.mode === 'parlay' ? `<span class="muted small">Tap 2–${MAX_LEGS} picks from any upcoming week, plus League Champion and Win Total picks below. Per game: one spread, one moneyline and one O/U, but not the spread and moneyline on the same team. All must hit; payouts multiply. Once more than half the legs have won, you can cash out early for your stake plus ${Math.round(CASHOUT_SHARE * 100)}% of what the winning legs would pay.</span>` : ''}</div>
@@ -373,7 +373,7 @@ const PAGES = {
         ${games.slice().sort((x, y) => (y.id === gotwGameId()) - (x.id === gotwGameId())).map(g => betRows(g)).join('')}</div></div>${bw === L.week ? `<div id="popular">${popularCard()}</div>` : ''}<div id="value">${valueCard(games)}</div>` : '<div class="card empty">No open games this week.</div>';
     html += futuresSection();
     html += winsSection();
-    if (me && me.teamId) {
+    if (me) {
       const mine = D.wagers.filter(w => w.uid === me.id && w.season === s).sort((a, b) => b.week - a.week || (b.ts || 0) - (a.ts || 0));
       // One block per wager: the bet gets the full width; stake, time, result and buttons sit underneath.
       const whenOf = (w, g) => w.market === 'future' ? 'Title' : w.market === 'wins' ? 'Win total' : w.market === 'parlay' ? 'Parlay' : 'Week ' + (g ? g.week : w.week);
@@ -383,11 +383,11 @@ const PAGES = {
             <div class="wbot"><span class="wmeta"><b>${w.stake.toLocaleString()}</b> staked · ${whenOf(w, g)} · ${fmtTime(w.ts)}</span><span class="wact"><button class="sm ghost" data-slip="${esc(w.id)}" title="Bet slip image" aria-label="Bet slip image">🧾</button>${canCancel ? `<button class="sm ghost" data-cancel="${esc(w.id)}">Cancel</button>` : ''}${(() => { const co = cashOutValue(w); return co ? `<button class="sm gold" data-cashout="${esc(w.id)}">Cash out ${co.total.toLocaleString()}</button>` : ''; })()}</span></div></div>`; }).join('')}</div>` : '<div class="muted">No wagers yet this season.</div>'}</div>`;
     }
     const lb = UI.lbSort, ws = UI.wkSort;
-    const board0 = D.users.filter(u => u.teamId).map(u => ({ u, b: bankroll(u.id) })).sort((a, b) => b.b.balance - a.b.balance)
+    const board0 = bettors().map(u => ({ u, b: bankroll(u.id) })).sort((a, b) => b.b.balance - a.b.balance)
       .map((x, i) => ({ ...x, place: i + 1, name: x.u.name, rec: x.b.w + x.b.l ? x.b.w / (x.b.w + x.b.l) : 0, net: x.b.net, roi: x.b.risked ? x.b.net / x.b.risked : -Infinity, balance: x.b.balance }));
     const board = sortRows(board0, lb, { rec: r => r.rec * 1000 + r.b.w });
     html += `<h2>Season ${seasonNum()} Leaderboard</h2><div class="card"><div class="tablewrap"><table><tr>${sortTh(lb, 'place', '#', '', 'lbSort')}${sortTh(lb, 'name', 'Coach', '', 'lbSort')}${sortTh(lb, 'rec', 'W-L-P', 'num', 'lbSort')}${sortTh(lb, 'net', 'Net', 'num hide-xs', 'lbSort')}${sortTh(lb, 'roi', 'ROI', 'num hide-sm', 'lbSort')}${sortTh(lb, 'balance', 'Balance', 'num', 'lbSort')}</tr>
-      ${board.map(x => `<tr class="${me && me.id === x.u.id ? 'me' : ''}"><td class="rank">${x.place}</td><td><a href="#coach/${slug(x.u.name)}">${esc(x.u.name)}</a> <span class="muted small hide-sm">${esc(team(x.u.teamId).name)}</span>${subSm(esc(team(x.u.teamId).name))}</td><td class="num">${x.b.w}-${x.b.l}-${x.b.p}</td><td class="num hide-xs ${x.b.net >= 0 ? 'win' : 'loss'}">${x.b.net >= 0 ? '+' : ''}${x.b.net}</td><td class="num hide-sm">${x.b.risked ? Math.round(x.b.net / x.b.risked * 100) + '%' : '–'}</td><td class="num"><b>${x.b.balance.toLocaleString()}</b></td></tr>`).join('')}
+      ${board.map(x => `<tr class="${me && me.id === x.u.id ? 'me' : ''}"><td class="rank">${x.place}</td><td>${x.u.teamId ? `<a href="#coach/${slug(x.u.name)}">${esc(x.u.name)}</a>` : esc(x.u.name)} <span class="muted small hide-sm">${x.u.teamId ? esc(team(x.u.teamId).name) : 'Spectator'}</span>${subSm(x.u.teamId ? esc(team(x.u.teamId).name) : 'Spectator')}</td><td class="num">${x.b.w}-${x.b.l}-${x.b.p}</td><td class="num hide-xs ${x.b.net >= 0 ? 'win' : 'loss'}">${x.b.net >= 0 ? '+' : ''}${x.b.net}</td><td class="num hide-sm">${x.b.risked ? Math.round(x.b.net / x.b.risked * 100) + '%' : '–'}</td><td class="num"><b>${x.b.balance.toLocaleString()}</b></td></tr>`).join('')}
     </table></div></div>`;
     // Potential payout = stake back + profit (boost included). Pushes and voids just return the stake.
     const payOf = w => w.status === 'push' || w.status === 'void' ? w.stake : w.status === 'cashed' ? w.stake + (w.payout || 0) : w.stake + winProfit(w);
@@ -495,7 +495,7 @@ const PAGES = {
     const L = D.league, s = S(), me = auth.profile, nw = L.week + 1;
     let html = '';
     if (!me) html += `<div class="notice"><a href="#account">Log in</a> with your coach account to vote.</div>`;
-    else if (!me.teamId) html += `<div class="notice">Your account isn't linked to a team yet. Ask the commissioner.</div>`;
+    else if (!me.teamId) html += `<div class="notice">Game of the Week votes are for league coaches. As a spectator you can still bet the winner, boost and all.</div>`;
     const canVote = me && me.teamId;
     // Game of the Week
     const next = D.games.filter(g => g.season === s && g.week === nw);
@@ -559,7 +559,7 @@ const PAGES = {
     if (auth.user) {
       const p = auth.profile;
       return `<h2>My Account</h2><div class="card"><p>Signed in as <b>${esc(p?.name || auth.user.email)}</b>${p?.teamId ? ' · ' + chip(p.teamId) : ''}${p?.role === 'commish' ? ' · <span class="tag gold">Commissioner</span>' : ''}</p>
-        ${p && !p.teamId ? '<div class="notice">Your account is waiting for the commissioner to link it to your team.</div>' : ''}<button class="ghost" data-act="logout">Log out</button></div>${pushCard()}`;
+        ${p && !p.teamId ? `<div class="notice">You're a <b>spectator</b>: you can follow everything and bet with ${START_CREDITS.toLocaleString()} Crackers a season. If you join the league, the commissioner will link your account to your team.</div>` : ''}<button class="ghost" data-act="logout">Log out</button></div>${pushCard()}`;
     }
     const m = UI.acct;
     return `<h2>Coach Login</h2><div class="card" style="max-width:440px">${DEMO ? '<div class="notice">Demo mode: any email works. Password <b>coach</b> logs in as a regular coach; anything else logs in as the commissioner.</div>' : ''}
@@ -1067,7 +1067,6 @@ async function saveCanvas(c, name, title) {
 function showWinsSlip(tid, pick) {
   const me = auth.profile;
   if (!me) { location.hash = '#account'; return; }
-  if (!me.teamId) return alert('Your account is not linked to a team yet.');
   const leg = legFor('', 'wins', pick, tid); if (!leg) return;
   UI.slip = { wins: true, ...leg };
   const bal = bankroll(me.id).balance;
@@ -1080,7 +1079,6 @@ function showWinsSlip(tid, pick) {
 function showFutureSlip(tid) {
   const me = auth.profile;
   if (!me) { location.hash = '#account'; return; }
-  if (!me.teamId) return alert('Your account is not linked to a team yet.');
   if (ownLeg({ market: 'future', pick: tid })) return;
   const r = futuresBoard().find(x => x.id === tid); if (!r || r.odds == null) return;
   UI.slip = { future: true, pick: tid, odds: r.odds, line: null, market: 'future' };
@@ -1129,7 +1127,6 @@ function parlayBar() {
 function showParlaySlip() {
   const me = auth.profile;
   if (!me) { location.hash = '#account'; return; }
-  if (!me.teamId) return alert('Your account is not linked to a team yet.');
   if (UI.legs.some(ownLeg)) { UI.legs = UI.legs.filter(l => !ownLeg(l)); if (UI.legs.length < 2) { route(); return; } }
   UI.legs = UI.legs.map(l => legFor(l.gameId, l.market, l.pick, l.team)).filter(Boolean);
   const odds = parlayOdds(UI.legs), bal = bankroll(me.id).balance, boost = boostFor(UI.legs);
@@ -1145,7 +1142,6 @@ const boostNote = () => `<div class="boostpill">⚡ Game of the Week · +${Math.
 function showSlip(gid, market, pick) {
   const me = auth.profile;
   if (!me) { location.hash = '#account'; return; }
-  if (!me.teamId) return alert('Your account is not linked to a team yet.');
   const g = D.games.find(x => x.id === gid), l = lineOf(g);
   if (ownGame(g)) return;
   const odds = market === 'ml' ? (pick === 'home' ? l.mlHome : l.mlAway) : juiceOf(l, market, pick);

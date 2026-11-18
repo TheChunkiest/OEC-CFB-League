@@ -3,7 +3,7 @@ import {
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum, divOf, oneConference, playbookOf, pbSeason, pbOpen, pbLocked
 , loadAI
-} from './core.js?v=71';
+} from './core.js?v=72';
 // Broadcast scouting nudges the ratings a little, so load it before any lines get posted from here.
 loadAI();
 import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
@@ -33,7 +33,7 @@ const teamOpts = (sel, blank, filter = () => true) => (blank ? `<option value=""
 const acctTeamOpts = u => {
   const conf = L().conference, opt = t => `<option value="${esc(t.id)}" ${t.id === u.teamId ? 'selected' : ''}>${esc(t.name)}</option>`, byName = (a, b) => a.name.localeCompare(b.name);
   const inL = D.teams.filter(t => t.conf === conf).sort(byName), out = D.teams.filter(t => t.conf !== conf && (isUserTeam(t) || t.id === u.teamId)).sort(byName);
-  return `<option value="">Not linked</option><optgroup label="${esc(conf)}">${inL.map(opt).join('')}</optgroup>${out.length ? `<optgroup label="Outside the ${esc(conf)}">${out.map(opt).join('')}</optgroup>` : ''}`;
+  return `<option value="">Spectator (no team)</option><optgroup label="${esc(conf)}">${inL.map(opt).join('')}</optgroup>${out.length ? `<optgroup label="Outside the ${esc(conf)}">${out.map(opt).join('')}</optgroup>` : ''}`;
 };
 // Advance clock: the header shows a projected advance 3 days after the last one (+24h when extended).
 const toLocalInput = ts => { const d = new Date(ts - new Date(ts).getTimezoneOffset() * 60000); return d.toISOString().slice(0, 16); };
@@ -393,7 +393,7 @@ const views = {
         <p class="muted small">For a coach who joined mid-season and plays outside the ${esc(L().conference)} this year. Their team is added as non-conference, so they can bet, vote and show on the betting leaderboard, but they won't appear in the standings, odds or power rankings. When they join the ${esc(L().conference)}, open the New Season tab, change the team's Conf to ${esc(L().conference)}, pick a division and save.</p>
         <div class="row"><div><label>Their team</label>${programSelect('id="ocTeam" style="width:180px"', '', new Set(D.teams.filter(t => t.conf === L().conference).map(t => t.name.toLowerCase())))}</div>
           <div><label>Abbreviation</label><input id="ocAbbr" placeholder="ORST" maxlength="5" style="width:90px"></div>
-          <div><label>Account</label><select id="ocUser"><option value="">Pick an account</option>${us.slice().sort((a, b) => !!a.teamId - !!b.teamId).map(u => `<option value="${esc(u.id)}">${esc(u.name || '(no name)')}${u.teamId ? ' · ' + esc(team(u.teamId).name) : ' · not linked'}</option>`).join('')}</select></div>
+          <div><label>Account</label><select id="ocUser"><option value="">Pick an account</option>${us.slice().sort((a, b) => !!a.teamId - !!b.teamId).map(u => `<option value="${esc(u.id)}">${esc(u.name || '(no name)')}${u.teamId ? ' · ' + esc(team(u.teamId).name) : ' · spectator'}</option>`).join('')}</select></div>
           <button data-act="addOutside">Add team &amp; link</button></div></div>` : ''}`;
   },
 

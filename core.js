@@ -201,6 +201,10 @@ export async function refreshWagers() {
   return D.wagers;   // kept current by the live listener
 }
 // Identity of a selection, ignoring line movement (same side of the same market).
+// Everyone with an account bets: coaches (linked to a team) and spectators (no team). The betting boards list
+// coaches plus any spectator who has bet this season.
+export const isSpectator = u => !!u && !u.teamId;
+export const bettors = (season = D.league.season) => D.users.filter(u => u.teamId || D.wagers.some(w => w.uid === u.id && w.season === season && !w.deleted));
 export const selKey = l => l.market === 'future' ? 'future|' + l.pick : l.market === 'wins' ? `wins|${l.team}|${l.pick}` : `${l.market}|${l.gameId}|${l.pick}`;
 export async function loadBallots(all) {
   if (DEMO) return D.ballots;

@@ -84,7 +84,8 @@ service cloud.firestore {
       let u = userDoc().data;
       let L = league();
       let t = u.teamId;
-      return t != '' && baseWager(d, L) && validBoost(d, L) && ((d.market == 'future' && validFuture(d, L, t))
+      // Spectators (signed-up accounts with no team, t == '') bet like everyone else; own-team limits just don't apply.
+      return baseWager(d, L) && validBoost(d, L) && ((d.market == 'future' && validFuture(d, L, t))
         || (d.market == 'wins' && validWins(d, L, t))
         || (d.market == 'parlay' && validParlay(d, L, t))
         || (d.market != 'future' && d.market != 'wins' && d.market != 'parlay' && validGameWager(d, t, L)));
