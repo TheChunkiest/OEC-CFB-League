@@ -1075,6 +1075,7 @@ button.pill.tailpill:hover{background:rgba(245,184,46,.12)}
 @media (pointer:coarse){
   a[href^="#coach/"],a.reclink,.cseason a,td a.chip,.offboard .chip{padding-top:6px;padding-bottom:6px;margin-top:-6px;margin-bottom:-6px;display:inline-block}
   .chip{min-height:24px}
+  td a.chip,.offboard .chip{display:inline-flex}   /* keep the swatch, rank and name spaced apart */
 }
 /* Very narrow screens (Galaxy Fold closed, ~280px) */
 @media (max-width:300px){
