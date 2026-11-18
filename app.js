@@ -413,7 +413,7 @@ const PAGES = {
     const STO = { open: 0, won: 1, cashed: 1.5, push: 2, void: 3, lost: 4 };
     const wk = sortRows(D.wagers.filter(w => w.season === s && w.week === L.week), ws,
       { coach: w => (w.coach || '').toLowerCase(), bet: w => wagerLabel(w).toLowerCase(), ts: w => w.ts || 0, stake: w => w.stake, payout: payOf, status: w => STO[w.status] ?? 9 });
-    if (wk.length) html += `<h2>Bets Placed This Week</h2><div class="card"><div class="tablewrap"><table class="bets"><tr>${sortTh(ws, 'coach', 'Coach', '', 'wkSort')}${sortTh(ws, 'bet', 'Bet', '', 'wkSort')}${sortTh(ws, 'ts', 'Placed', 'hide-sm', 'wkSort')}${sortTh(ws, 'stake', 'Stake', 'num', 'wkSort')}${sortTh(ws, 'payout', 'Payout', 'num', 'wkSort')}${sortTh(ws, 'status', 'Status', 'num hide-xs', 'wkSort')}</tr>${wk.map(w => `<tr><td>${esc(w.coach || '')}</td><td class="wrap">${esc(wagerLabel(w))}${legsHtml(w)}${subSm(fmtTime(w.ts))}</td><td class="muted small hide-sm">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num">${payCell(w)}</td><td class="num hide-xs"><span class="pill ${w.status}">${w.status}</span></td></tr>`).join('')}</table></div></div>`;
+    if (wk.length) html += `<h2>Bets Placed This Week</h2><div class="card"><div class="tablewrap"><table class="bets"><tr>${sortTh(ws, 'coach', 'Coach', '', 'wkSort')}${sortTh(ws, 'bet', 'Bet', '', 'wkSort')}${sortTh(ws, 'ts', 'Placed', 'hide-sm', 'wkSort')}${sortTh(ws, 'stake', 'Stake', 'num', 'wkSort')}${sortTh(ws, 'payout', 'Payout', 'num', 'wkSort')}${sortTh(ws, 'status', 'Status', 'num hide-xs', 'wkSort')}</tr>${wk.map(w => `<tr><td>${coachCell(w)}</td><td class="wrap">${esc(wagerLabel(w))}${legsHtml(w)}${subSm(fmtTime(w.ts))}</td><td class="muted small hide-sm">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num">${payCell(w)}</td><td class="num hide-xs">${statusPill(w)}</td></tr>`).join('')}</table></div></div>`;
     return html;
   },
 
@@ -996,6 +996,11 @@ function tailBet(id) {
     if (dropped || moved || ok.length < legs.length) setTimeout(() => alert([dropped ? `${dropped} pick${dropped === 1 ? '' : 's'} on your own team's games ${dropped === 1 ? 'was' : 'were'} left out.` : '', moved ? 'Some lines have moved since it was placed; your slip uses today\'s prices.' : ''].filter(Boolean).join(' ')), 300);
   }, 50);
 }
+// Status cell for bet lists: someone else's open bet shows a "Tail" pill instead of "open" (same size and spot,
+// so the list doesn't get busier). On the narrowest phones the status column is hidden, so the pill also sits under the coach.
+const canTail = w => (w.status === 'open' || !w.status) && !w.deleted && auth.profile && w.uid !== auth.profile.id;
+const statusPill = w => canTail(w) ? `<button class="pill tailpill" data-tailgo="${esc(w.id)}" title="Load this bet into your slip">Tail ›</button>` : `<span class="pill ${esc(w.status || 'open')}">${esc(w.status || 'open')}</span>`;
+const coachCell = w => `${esc(w.coach || '')}${canTail(w) ? `<div class="show-xs"><button class="pill tailpill" data-tailgo="${esc(w.id)}">Tail ›</button></div>` : ''}`;
 function showPlacedSlip() { const w = UI.placed; UI.placed = null; if (w) showSlipImage(w); }
 async function saveSlip() {
   const c = UI.slipCanvas; if (!c) return;
@@ -1810,7 +1815,7 @@ function gameBets(g) {
   const total = ws.reduce((t, w) => t + (+w.stake || 0), 0);
   return `<div class="card"><h3 style="margin-top:0">Bets on this game</h3><p class="muted small" style="margin-top:0">${ws.length} bet${ws.length === 1 ? '' : 's'} · ${total.toLocaleString()} Crackers wagered</p>
     <div class="tablewrap"><table class="bets"><tr><th>Coach</th><th>Bet</th><th class="num">Stake</th><th class="num">Payout</th><th class="num hide-xs">Status</th></tr>
-    ${ws.map(w => `<tr><td>${esc(w.coach || '')}</td><td class="wrap">${bet(w)}</td><td class="num">${w.stake}</td><td class="num">${pay(w)}</td><td class="num hide-xs"><span class="pill ${w.status}">${w.status}</span></td></tr>`).join('')}</table></div></div>`;
+    ${ws.map(w => `<tr><td>${coachCell(w)}</td><td class="wrap">${bet(w)}</td><td class="num">${w.stake}</td><td class="num">${pay(w)}</td><td class="num hide-xs">${statusPill(w)}</td></tr>`).join('')}</table></div></div>`;
 }
 PAGES.game = function (id) {
   const g = D.games.find(x => x.id === id); if (!g) return '<div class="card empty">Game not found.</div>';
