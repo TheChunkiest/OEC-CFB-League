@@ -226,7 +226,11 @@ function raceSection() {
   const s = S(); if (s !== D.league.season || D.league.phase !== PHASES.REG) return '';
   const sims = divisions(s).map(d => raceSim(d, racePicks, s)).filter(r => r && r.left.length);
   if (!sims.length) return '';
-  return `<h2>${sims.length > 1 ? 'Division Race' : 'Title Game Race'}</h2>` + sims.map(raceCard).join('');
+  if (sims.length < 2) return `<h2>Title Game Race</h2>` + sims.map(raceCard).join('');
+  // Two divisions: one button per division; tapping one drops its race open below (tap again to close).
+  const open = sims.find(r => r.div === UI.raceDiv);
+  return `<h2>Division Race</h2><div class="racetabs">${sims.map(r => `<button class="racetab${open === r ? ' on' : ''}" data-racediv="${esc(r.div)}">${esc(r.div)} <span>${open === r ? '▴' : '▾'}</span></button>`).join('')}</div>`
+    + (open ? `<div class="racedrop">${raceCard(open)}</div>` : '<p class="muted small" style="text-align:center;margin:4px 0 0">Tap a division to see its race.</p>');
 }
 function raceCard(r) {
   const nm = id => esc(team(id).name), ab = id => esc(team(id).abbr || team(id).name);
@@ -560,12 +564,12 @@ const PAGES = {
     };
     const H = D.history.slice().sort((a, b) => b.season - a.season), C = Object.values(coachStats()).sort((a, b) => b.titles - a.titles || (b.w / Math.max(1, b.w + b.l)) - (a.w / Math.max(1, a.w + a.l)));
     const champLine = h => h.champCoach ? `${esc(h.champCoach)} over ${esc(h.runnerCoach || 'CPU')} — ${esc(team(h.champTeam).name)} ${h.champScore ?? ''}, ${esc(team(h.runnerTeam).name)} ${h.runnerScore ?? ''}` : esc(h.summary || '');
-    return `<h2>League Champions</h2><div class="card">${H.length ? H.map(h => `<div class="champ"><div class="yr">S${seasonNum(h.season)}<div class="muted small" style="font-family:system-ui">${h.season}</div></div><div><b>${champLine(h)}</b>${(() => { const g = D.games.find(x => x.season === h.season && x.type === 'ccg' && played(x)); return g ? ` <a class="small" href="#game/${esc(g.id)}">Recap ›</a>` : ''; })()}${h.notes ? `<div class="muted small">${esc(h.notes)}</div>` : ''}</div></div>`).join('') : '<div class="muted">No completed seasons yet.</div>'}</div>
+    return `<h2>League Champions</h2><div class="card">${H.length ? H.map(h => `<div class="champ"><div class="yr">S${seasonNum(h.season)}<div class="muted small" style="font-family:system-ui">${h.season}</div></div><div>${(() => { const g = D.games.find(x => x.season === h.season && x.type === 'ccg' && played(x)); return g ? `<a class="reclink" href="#game/${esc(g.id)}"><b>${champLine(h)}</b></a>` : `<b>${champLine(h)}</b>`; })()}${h.notes ? `<div class="muted small">${esc(h.notes)}</div>` : ''}</div></div>`).join('') : '<div class="muted">No completed seasons yet.</div>'}</div>
       <h2>All-Time Coaches</h2><div class="card"><div class="tablewrap"><table><tr><th>Coach</th><th class="num hide-sm">Seasons</th><th class="num">W-L</th><th class="num">Win %</th><th class="num">Titles</th></tr>
         ${C.map(c => `<tr><td><a href="#coach/${slug(c.name)}">${esc(c.name)}</a></td><td class="num hide-sm">${c.seasons.size}</td><td class="num">${c.w}-${c.l}</td><td class="num">${c.w + c.l ? (c.w / (c.w + c.l) * 100).toFixed(1) + '%' : '–'}</td><td class="num">${c.titles ? '🏆'.repeat(Math.min(c.titles, 5)) : '–'}</td></tr>`).join('')}
       </table></div><p class="muted small">Tap a coach for their profile: season-by-season records, every team they've coached, head-to-head and betting.</p></div>
       ${carousel(C)}
-      <h2>Season Awards</h2>${H.filter(h => (h.awards || []).length).map(h => `<div class="card"><h3 style="margin-top:0">${h.season}</h3><div class="tablewrap"><table>${h.awards.map(a => `<tr><td class="wrap">${esc(a.award)}</td><td class="wrap">${(() => { const g = awardGame(h, a); return g ? `<a href="#game/${esc(g.id)}"><b>${esc(a.winner)}</b></a><div class="small goty">${esc(team(g.away).abbr || team(g.away).name)} ${g.awayScore} @ ${esc(team(g.home).abbr || team(g.home).name)} ${g.homeScore} · ${g.type === 'ccg' ? 'Title game' : 'Week ' + g.week} · <a href="#game/${esc(g.id)}">Recap ›</a></div>` : `<b>${esc(a.winner)}</b>`; })()}${subSm(a.team ? esc(team(a.team).name) : '')}</td><td class="hide-sm">${a.team ? chip(a.team) : ''}</td><td class="num muted small hide-sm">${a.votes != null ? a.votes + (a.votes === 1 ? ' vote' : ' votes') : ''}</td></tr>`).join('')}</table></div></div>`).join('') || '<div class="card muted">No awards yet.</div>'}
+      <h2>Season Awards</h2>${H.filter(h => (h.awards || []).length).map(h => `<div class="card"><h3 style="margin-top:0">${h.season}</h3><div class="tablewrap"><table>${h.awards.map(a => `<tr><td class="wrap">${esc(a.award)}</td><td class="wrap">${(() => { const g = awardGame(h, a); return g ? `<a class="reclink" href="#game/${esc(g.id)}"><b>${esc(a.winner)}</b><div class="small goty">${esc(team(g.away).abbr || team(g.away).name)} ${g.awayScore} @ ${esc(team(g.home).abbr || team(g.home).name)} ${g.homeScore} · ${g.type === 'ccg' ? 'Title game' : 'Week ' + g.week}</div></a>` : `<b>${esc(a.winner)}</b>`; })()}${subSm(a.team ? esc(team(a.team).name) : '')}</td><td class="hide-sm">${a.team ? chip(a.team) : ''}</td><td class="num muted small hide-sm">${a.votes != null ? a.votes + (a.votes === 1 ? ' vote' : ' votes') : ''}</td></tr>`).join('')}</table></div></div>`).join('') || '<div class="card muted">No awards yet.</div>'}
       <h2>"Holy Shit" Moments</h2>${H.filter(h => (h.moments || []).length).map(h => `<div class="card"><h3 style="margin-top:0">${h.season}</h3>${h.moments.map(m => `<div class="story"><p>${esc(m.text)}</p>${m.coach ? `<div class="muted small">— ${esc(m.coach)}</div>` : ''}</div>`).join('')}</div>`).join('') || '<div class="card muted">None yet.</div>'}`;
   },
 
@@ -1573,7 +1577,7 @@ function statsBoard(s) {
     const w = l.x.v == null || key === 'power' ? 0 : Math.max(4, Math.abs(l.x.v) / (top || 1) * 100);
     return `<tr class="clickable${l.t.id === me ? ' me' : ''}" data-team="${esc(l.t.id)}"><td class="rank">${r ? (tie ? 'T-' : '') + r : '–'}</td><td>${chip(l.t.id)}${subSm(rec(records(s)[l.t.id]))}</td>
       <td class="hide-sm muted small">${rec(records(s)[l.t.id])}</td><td class="num tsv"><b>${l.x.f}</b>${w ? `<i style="width:${w.toFixed(0)}%;background:${esc(liftColor(teamColor(l.t)))}"></i>` : ''}</td></tr>`; }).join('');
-  return `<h2>${s} Season Stats</h2><div class="card"><div class="row spread" style="gap:8px"><select data-tstat aria-label="Stat">${opts.map(([g, rows]) => `<optgroup label="${g}">${rows.map(([k, l]) => `<option value="${k}" ${k === key ? 'selected' : ''}>${l}</option>`).join('')}</optgroup>`).join('')}</select>
+  return `<h2>${s} Season Stats</h2><div class="card"><div class="row" style="gap:6px;flex-direction:column;align-items:center;text-align:center"><select data-tstat aria-label="Stat">${opts.map(([g, rows]) => `<optgroup label="${g}">${rows.map(([k, l]) => `<option value="${k}" ${k === key ? 'selected' : ''}>${l}</option>`).join('')}</optgroup>`).join('')}</select>
     ${tip ? `<span class="muted small">${esc(tip)}</span>` : ''}</div>
     <div class="tablewrap" style="margin-top:8px"><table class="tsboard"><tr><th>#</th><th>Team</th><th class="hide-sm">Record</th><th class="num sortable" data-tsflip="1">${esc(label)} ${UI.tsFlip ? '▲' : '▼'}</th></tr>${rows}</table></div></div>`;
 }
@@ -1902,6 +1906,8 @@ async function reload() { await loadAll(); refreshProfile(); if (D.league.awards
 
 document.addEventListener('click', async e => {
   const vl = e.target.closest('[data-vidlist]'); if (vl) { e.preventDefault(); showVideoList(vl.dataset.vidlist); return; }
+  const rdv = e.target.closest('[data-racediv]');
+  if (rdv) { UI.raceDiv = UI.raceDiv === rdv.dataset.racediv ? null : rdv.dataset.racediv; const box = $('#race'); if (box) box.innerHTML = raceSection(); return; }
   const rp = e.target.closest('[data-rpick]'), rr = e.target.closest('[data-rreset]');
   if (rp || rr) {
     if (rp) { const [gid, side] = rp.dataset.rpick.split('|'); if (racePicks[gid] === side) delete racePicks[gid]; else racePicks[gid] = side; }

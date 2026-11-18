@@ -962,3 +962,21 @@ body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
   background:radial-gradient(130% 60% at 50% 0%,rgba(150,16,26,.38),transparent 70%),linear-gradient(180deg,#22090c 0%,#150a0c 45%,#0e090a 100%)}
 body::before{background:radial-gradient(140% 55% at 50% 0%,rgba(170,18,30,.42),transparent 72%),radial-gradient(120% 45% at 50% 100%,rgba(120,12,22,.30),transparent 75%),linear-gradient(180deg,#260a0e 0%,#170a0c 50%,#1b0a0d 100%)}
 .feat-tags{display:flex;justify-content:center;gap:6px;margin-bottom:2px}
+/* Odds stand out again: warm gold numbers on the bet buttons (selected stays white on red) */
+button.pick b{color:#f0c35f}
+button.pick.sel b{color:#fff}
+button.pick.off b,.pick.off b{color:#d9b25a}
+/* Darker backdrop so gray text stays readable over it */
+body::before{background:radial-gradient(140% 50% at 50% 0%,rgba(140,14,24,.30),transparent 72%),radial-gradient(120% 40% at 50% 100%,rgba(100,10,18,.20),transparent 75%),linear-gradient(180deg,#1a080a 0%,#110809 50%,#130809 100%)}
+.card{background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,0) 60%),rgba(22,17,19,.96)}
+/* Tappable recap text (League Champions, Game of the Year) */
+a.reclink{color:inherit;text-decoration:none;display:block}
+a.reclink b{text-decoration:underline;text-decoration-color:rgba(255,255,255,.3);text-underline-offset:4px}
+a.reclink .goty{color:var(--muted)}
+/* Division Race: one button per division, dropdown below */
+.racetabs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.racetab{background:var(--card2);border:1px solid var(--line);color:var(--text);font-weight:800;padding:12px 10px;border-radius:10px;font-size:15px}
+.racetab span{color:var(--muted);margin-left:4px}
+.racetab.on{background:var(--red);border-color:var(--red);color:#fff}
+.racetab.on span{color:#fff}
+.racedrop{animation:lpIn .2s ease-out}
