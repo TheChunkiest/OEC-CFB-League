@@ -240,16 +240,16 @@ jobs:
                           try: call(f"{base}/push/{dev['id']}", method='DELETE')   # phone uninstalled or turned it off
                           except Exception: pass
                       else: print('send failed', e.code, err[:200])
-              def to(pref, title, body, url, uids=None, skip=(), tag=None):
+              def to(pref, title, body, url, uids=None, skip=(), tag=None, default=False):
                   for d in devs():
-                      if not (d.get('prefs') or {}).get(pref): continue
+                      if not (d.get('prefs') or {}).get(pref, default): continue
                       if uids is not None and d.get('uid') not in uids: continue
                       if d.get('uid') in skip: continue
                       send(d, title, body, url, tag)
 
               try:   # whatever happens, remember what was already sent so nothing goes out twice
                 if fresh:   # first run: remember where things stand, so old events aren't announced...
-                    st = {'adv': advkey, 'ann': ann.get('id'), 'inv': int(now), 'resp': int(now), 'kick': {}}
+                    st = {'adv': advkey, 'ann': ann.get('id'), 'inv': int(now), 'resp': int(now), 'kick': {}, 'settle': int(now)}
                     if now - int(lg.get('advancedAt') or 0) < 3600e3:   # ...except an advance from the last hour
                         st['adv'] = ''; fresh = False
                 if not fresh:
@@ -311,6 +311,21 @@ jobs:
                             to('invites', 'Kickoff times declined', f"Coach {i.get('toName') or ''} couldn't make those times for {m}. Send new ones.", f"{link}#game/{i['gameId']}", uids={i.get('from')}, tag='i' + i['gameId'])
                     if new: st['inv'] = max(int(i.get('ts') or 0) for i in new)
                     if resp: st['resp'] = max(int(i.get('respondedAt') or 0) for i in resp)
+                    # Bets that went final since last time (only those docs are read). One nudge per coach per
+                    # run, without saying won or lost, so they open the app to find out. Cash-outs are skipped
+                    # (the coach did that themselves).
+                    since = int(st.get('settle') or now)
+                    fin = [w for w in query('wagers', 'settledAt', 'GREATER_THAN', since)
+                           if not w.get('deleted') and w.get('status') in ('won', 'lost', 'push', 'void')]
+                    per = {}
+                    for w in fin: per[w.get('uid')] = per.get(w.get('uid'), 0) + 1
+                    for uid, n in per.items():
+                        if not uid: continue
+                        to('bets', '🏁 Your bet went final' if n == 1 else f'🏁 {n} of your bets went final',
+                           'Open the Betting page to see how it did.' if n == 1 else 'Open the Betting page to see how they did.',
+                           f'{link}#betting', uids={uid}, tag='bets', default=True)
+                    if fin: st['settle'] = max(int(w.get('settledAt') or 0) for w in fin)
+                    elif 'settle' not in st: st['settle'] = int(now)
                 # Welcome message for devices that just turned notifications on (confirms it works)
                 for d in query('push', 'welcomed', 'EQUAL', False):
                     send(d, '🔔 Notifications are on', "You'll get OEC Hub alerts on this device. Change them anytime on your Account page.", link + '#account', 'welcome')
