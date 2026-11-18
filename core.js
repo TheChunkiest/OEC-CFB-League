@@ -791,9 +791,17 @@ export function gotwGameId() {
   if (G && G.season === L.season && G.week === L.week) return G.gameId || null;
   return DEMO ? (gotwTally(L.season, L.week).game?.id || null) : null;
 }
+// League Championship Game: +25% profit on the same terms (single bets on it, or parlays made only of its lines).
+export const CCG_BOOST = 1.25;
+export function boostRate(gameId) {
+  const g = gameId && D.games.find(x => x.id === gameId);
+  if (g && g.type === 'ccg' && !played(g)) return CCG_BOOST;
+  return gameId && gameId === gotwGameId() ? GOTW_BOOST : null;
+}
+export const boostName = b => b === CCG_BOOST ? 'Championship' : 'Game of the Week';
 export function boostFor(legs) {
-  const id = gotwGameId(); if (!id || !legs.length) return null;
-  return legs.every(l => l.gameId === id && GAME_MARKETS.includes(l.market)) ? GOTW_BOOST : null;
+  const id = legs.length && legs[0].gameId; if (!id) return null;
+  return legs.every(l => l.gameId === id && GAME_MARKETS.includes(l.market)) ? boostRate(id) : null;
 }
 // Profit a bet pays if it wins, including any boost.
 export function winProfit(w) { return boosted(w.market === 'parlay' ? parlayProfit(w.stake, w.legs || []) : profit(w.stake, w.odds), w); }
@@ -1304,10 +1312,30 @@ export function storylines() {
     return { href: '#game/' + g.id, tag: isG ? 'Game of the Week' : 'Up Next', title: `Week ${L.week}: ${team(g.away).name} at ${team(g.home).name}`, body: `${name(g.away)} visits ${name(g.home)}. ${l.spread === 0 ? "Pick'em" : `${team(fav).name} ${fmtLine(-Math.abs(l.spread))}`}, total ${l.total}.` };
   };
   if (lw == null) {
-    const sim = simulate(s, L.week);
-    Object.entries(sim).sort((a, b) => b[1].titlePct - a[1].titlePct).slice(0, 2).forEach(([id, o], i) => out.push({ href: '#odds/' + id, tag: i ? 'Contender' : 'Preseason', title: `${team(id).name} ${i ? 'is right behind' : 'enters as the title favorite'}`, body: `The model gives ${name(id)} a ${pctStr(o.titlePct)} shot at the league title (most likely record ${o.likely}).` }));
+    // Season preview (published, Week 1 not finished): who to watch, the best roster, who has to do a lot with a
+    // little, the underdog, the hardest schedule.
+    const sim = simulate(s, L.week), used = new Set();
+    const byTitle = Object.entries(sim).sort((a, b) => b[1].titlePct - a[1].titlePct);
+    const rated = leagueTeams().filter(t => sim[t.id] && +t.ovr > 0).sort((a, b) => b.ovr - a.ovr || (b.off + b.def) - (a.off + a.def));
+    const rk = id => rated.findIndex(t => t.id === id) + 1, unit = t => +t.off > 0 && +t.def > 0 ? ` (${t.off} offense, ${t.def} defense)` : '';
+    const topR = rated.length >= 4 ? rated[0] : null;
+    byTitle.slice(0, 2).forEach(([id, o], i) => { used.add(id); out.push({ href: '#odds/' + id, tag: i ? 'Contender' : 'Title Favorite', title: `${team(id).name} ${i ? 'is right behind' : 'enters as the title favorite'}`, body: `The model gives ${name(id)} a ${pctStr(o.titlePct)} shot at the league title (most likely record ${o.likely})${topR && topR.id === id ? `, backed by the league's top-rated roster at ${topR.ovr} overall` : ''}.` }); });
+    if (rated.length >= 4) {
+      const best = rated[0], second = rated[1];
+      if (!used.has(best.id)) out.push({ href: '#team/' + best.id, tag: 'Best Roster', title: `${best.name} has the league's most talented roster`, body: `${name(best.id)} is rated ${best.ovr} overall${unit(best)}${best.ovr > second.ovr ? `, ${best.ovr - second.ovr} ahead of ${second.name}` : `, tied with ${second.name}`}. The model still only has them at ${pctStr(sim[best.id].titlePct)} for the title.` });
+      used.add(best.id);
+      // A lot with a little: the coach with the thinnest roster.
+      const thin = rated.filter(t => isUserTeam(t) && !used.has(t.id)).slice(-1)[0];
+      if (thin) { used.add(thin.id); out.push({ href: '#team/' + thin.id, tag: 'Doing More With Less', title: `${poss(thin.coach)} ${thin.name} has work to do`, body: `At ${thin.ovr} overall${unit(thin)}, ${thin.name} has the ${rk(thin.id) === rated.length ? 'lowest-rated roster in the league' : `#${rk(thin.id)} roster of ${rated.length}`}. The model projects ${sim[thin.id].likely}, so beating that takes coaching.` }); }
+      // Underdog: a bottom-half roster with the best shot at the title game.
+      const dog = rated.filter(t => rk(t.id) > rated.length / 2 && !used.has(t.id)).sort((a, b) => sim[b.id].ccgPct - sim[a.id].ccgPct)[0];
+      if (dog && sim[dog.id].ccgPct >= 0.03) { used.add(dog.id); out.push({ href: '#odds/' + dog.id, tag: 'Underdog to Watch', title: `Don't sleep on ${dog.name}`, body: `${name(dog.id)} has only the #${rk(dog.id)} roster (${dog.ovr} overall), but the schedule sets up well: the model gives them ${pctStr(sim[dog.id].ccgPct)} to reach the title game.` }); }
+      // Toughest schedule: highest average opponent rating.
+      const sos = rated.filter(t => !used.has(t.id)).map(t => { const opp = D.games.filter(g => g.season === s && (g.type || 'reg') === 'reg' && (g.home === t.id || g.away === t.id)).map(g => +team(g.home === t.id ? g.away : g.home).ovr).filter(x => x > 0); return { t, avg: opp.length ? opp.reduce((a, b) => a + b, 0) / opp.length : 0, n: opp.length }; }).filter(x => x.n >= 3).sort((a, b) => b.avg - a.avg)[0];
+      if (sos) out.push({ href: '#team/' + sos.t.id, tag: 'Gauntlet', title: `${sos.t.name} faces the toughest road`, body: `${poss(sos.t.name)} opponents average ${sos.avg.toFixed(1)} overall, the hardest slate in the league.` });
+    }
     const u = upNext(); if (u) out.push(u);
-    return shuffle(out.slice(0, 5), rng(s * 97 + L.week * 13 + 7));
+    return shuffle(out.slice(0, 7), rng(s * 97 + L.week * 13 + 7));
   }
   const wk = D.games.filter(g => g.season === s && g.week === lw && played(g));
   const real = wk.filter(g => !g.forfeit);

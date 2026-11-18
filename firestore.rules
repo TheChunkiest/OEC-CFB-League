@@ -70,13 +70,19 @@ service cloud.firestore {
         && (n < 3 || validLeg(d.legs[2], L, t)) && (n < 4 || validLeg(d.legs[3], L, t))
         && (n < 5 || validLeg(d.legs[4], L, t)) && (n < 6 || validLeg(d.legs[5], L, t));
     }
-    // Game of the Week +10% profit boost: only on single bets on the GOTW, or parlays made only of its lines.
+    // Profit boosts, only on single bets on one game or parlays made only of that game's lines:
+    // Game of the Week +10%, League Championship Game +25%.
+    function boostGid(d) { return d.market == 'parlay' ? d.legs[0].get('gameId', '') : d.get('gameId', ''); }
+    function legOn(ls, i, gid) { return ls.size() <= i || ls[i].get('gameId', '') == gid; }
+    function allOn(d, gid) {
+      return gid != '' && ((d.market in ['ml', 'spread', 'total', 'tth', 'tta'] && d.gameId == gid)
+        || (d.market == 'parlay' && legOn(d.legs, 0, gid) && legOn(d.legs, 1, gid) && legOn(d.legs, 2, gid)
+          && legOn(d.legs, 3, gid) && legOn(d.legs, 4, gid) && legOn(d.legs, 5, gid)));
+    }
     function validBoost(d, L) {
-      return !('boost' in d) || (d.boost == 1.1 && L.gotw.season == L.season && L.gotw.week == L.week && L.gotw.gameId != ''
-        && ((d.market in ['ml', 'spread', 'total', 'tth', 'tta'] && d.gameId == L.gotw.gameId)
-          || (d.market == 'parlay' && d.legs.size() <= 3 && d.legs[0].gameId == L.gotw.gameId
-            && (d.legs.size() < 2 || d.legs[1].gameId == L.gotw.gameId)
-            && (d.legs.size() < 3 || d.legs[2].gameId == L.gotw.gameId))));
+      return !('boost' in d)
+        || (d.boost == 1.1 && L.gotw.season == L.season && L.gotw.week == L.week && allOn(d, L.gotw.gameId))
+        || (d.boost == 1.25 && allOn(d, boostGid(d)) && gameOf(boostGid(d)).get('type', 'reg') == 'ccg');
     }
     // The league doc and the bettor's profile are each read once here and passed down, so even a 6-leg parlay
     // stays well under Firestore's limit of 10 document lookups per request (profile + league + up to 6 games).

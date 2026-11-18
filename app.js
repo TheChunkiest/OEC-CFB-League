@@ -2,9 +2,9 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, batch, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout, PUSH_PREFS, pushDefaults, pushLocal, pushSupported, pushEnable, pushPrefs, pushDisable,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, raceSim, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
+  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
 , playbookOf, pbSeason, pbText
-} from './core.js?v=74';
+} from './core.js?v=75';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -299,10 +299,12 @@ const PAGES = {
     const leaders = bettors().map(u => ({ u, b: bankroll(u.id) })).sort((a, b) => b.b.net - a.b.net || b.b.balance - a.b.balance).slice(0, 5);
     let html = installTip();
     if (L.desk && L.desk.show && L.desk.text) html += `<div class="card banner"><h2>Commissioner's Desk</h2><div style="white-space:pre-wrap">${esc(L.desk.text)}</div></div>`;
+    const ccgNow = games.find(g => g.type === 'ccg');
+    if (ccgNow && !gt.game) html += gameCard(ccgNow, { extra: `<div class="meta">${played(ccgNow) ? 'League champion crowned' : `⚡ +${Math.round((CCG_BOOST - 1) * 100)}% profit boost on every bet on this game · <a href="#betting">Bet it →</a>`}</div>` });
     if (gt.game) html += gameCard(gt.game, { gotw: true, extra: `<div class="meta">${gt.counts[gt.game.id]} of ${gt.total} coach vote${gt.total === 1 ? '' : 's'}</div>` });
     else if (L.phase === PHASES.REG) html += `<div class="card gotw"><span class="ribbon">★ Game of the Week</span><div class="muted">No Game of the Week votes were cast for ${esc(weekLabel())}. <a href="#vote">Vote for next week's game →</a></div></div>`;
     html += `<div class="grid2"><div><h2>This Week's Storylines</h2><div class="card">${stories.length ? stories.map(st => `<${st.href ? `a href="${esc(st.href)}"` : 'div'} class="story${st.href ? ' link' : ''}"><span class="tag">${esc(st.tag)}</span><h3>${esc(st.title)}</h3><p>${esc((() => { const vs = {}; vary(st.title, vs); return vary(st.body, vs); })())}</p>${st.href ? '<span class="go" aria-hidden="true">›</span>' : ''}</${st.href ? 'a' : 'div'}>`).join('') : '<div class="empty">Storylines appear once games are played.</div>'}</div></div>
-      <div><h2>${esc(weekLabel())} Matchups</h2>${games.length ? weekOrder(games.filter(g => g.id !== gt.game?.id)).map(g => gameCard(g)).join('') || '<div class="card empty">Only the Game of the Week is on the slate.</div>' : '<div class="card empty">No games scheduled this week.</div>'}</div></div>
+      <div><h2>${esc(weekLabel())} Matchups</h2>${games.length ? weekOrder(games.filter(g => g.id !== gt.game?.id && g.id !== ccgNow?.id)).map(g => gameCard(g)).join('') || `<div class="card empty">Only the ${ccgNow && !gt.game ? 'championship game' : 'Game of the Week'} is on the slate.</div>` : '<div class="card empty">No games scheduled this week.</div>'}</div></div>
       <div class="grid"><div class="card"><h2>Power Rankings</h2><table>${pr.map(x => `<tr><td class="rank">${x.rank}</td><td>${chip(x.id)}</td><td class="num">${rec(x.rec)}</td><td class="num">${mvHtml(x.move)}</td></tr>`).join('')}</table><p><a href="#rankings">Full rankings →</a></p></div>
       <div class="card"><h2>Betting Leaders</h2>${leaders.length ? `<table>${leaders.map((x, i) => `<tr><td class="rank">${i + 1}</td><td>${esc(x.u.name)}</td><td class="num">${x.b.w}-${x.b.l}${x.b.p ? '-' + x.b.p : ''}</td><td class="num"><b class="${x.b.net >= 0 ? 'win' : 'loss'}">${x.b.net >= 0 ? '+' : ''}${x.b.net.toLocaleString()}</b></td></tr>`).join('')}</table>` : '<div class="muted">No coaches linked yet.</div>'}<p><a href="#betting">Place wagers →</a></p></div></div>`;
     return html;
@@ -380,7 +382,7 @@ const PAGES = {
       const whenOf = (w, g) => w.market === 'future' ? 'Title' : w.market === 'wins' ? 'Win total' : w.market === 'parlay' ? 'Parlay' : 'Week ' + (g ? g.week : w.week);
       const resOf = w => w.status === 'open' ? `Open · to win ${winProfit(w).toLocaleString()}` : w.status === 'cashed' ? `Cashed out +${(w.payout || 0).toLocaleString()}` : (w.status === 'void' ? 'Void · refunded' : w.status === 'won' ? 'Won' : w.status === 'lost' ? 'Lost' : 'Push') + (w.payout ? ' ' + (w.payout > 0 ? '+' : '') + w.payout.toLocaleString() : '');
       myW = `<h2>My Wagers</h2><div class="card">${mine.length ? `<div class="wlist">${mine.map(w => { const g = D.games.find(x => x.id === w.gameId); const canCancel = w.status === 'open' && w.market !== 'parlay' && (w.market === 'future' || w.market === 'wins' ? futuresOpen() && !(w.market === 'future' && titleOut(w.season).has(w.pick)) : open && g && !played(g));
-          return `<div class="wager"><div class="wtop"><div class="wlbl">${esc(wagerLabel(w))}${w.boost ? ' <span class="boosttag">⚡ +10%</span>' : ''}</div><span class="pill ${w.status}">${resOf(w)}</span></div>${legsHtml(w)}
+          return `<div class="wager"><div class="wtop"><div class="wlbl">${esc(wagerLabel(w))}${w.boost ? ' <span class="boosttag">⚡ +${Math.round((w.boost - 1) * 100)}%</span>' : ''}</div><span class="pill ${w.status}">${resOf(w)}</span></div>${legsHtml(w)}
             <div class="wbot"><span class="wmeta"><b>${w.stake.toLocaleString()}</b> staked · ${whenOf(w, g)} · ${fmtTime(w.ts)}</span><span class="wact"><button class="sm ghost" data-slip="${esc(w.id)}" title="Bet slip image" aria-label="Bet slip image">🧾</button>${canCancel ? `<button class="sm ghost" data-cancel="${esc(w.id)}">Cancel</button>` : ''}${(() => { const co = cashOutValue(w); return co ? `<button class="sm gold" data-cashout="${esc(w.id)}">Cash out ${co.total.toLocaleString()}</button>` : ''; })()}</span></div></div>`; }).join('')}</div>` : '<div class="muted">No wagers yet this season.</div>'}</div>`;
     }
     const lb = UI.lbSort, ws = UI.wkSort;
@@ -581,7 +583,7 @@ function betRows(g) {
   const own = ownGame(g);
   const b = (market, pick, top, odds) => own ? `<span class="pick off">${top} <b>${fmtOdds(odds)}</b></span>` : `<button class="pick${UI.mode === 'parlay' && UI.legs.some(x => x.gameId === g.id && x.market === market && x.pick === pick) ? ' sel' : ''}" data-bet="${esc(g.id)}|${market}|${pick}">${top} <b>${fmtOdds(odds)}</b></button>`;
   const isG = gotwGameId() === g.id, champ = g.type === 'ccg';
-  return `<div class="betgame${isG || champ ? ' gotw' : ''}${own ? ' own' : ''}">${isG ? `<span class="ribbon">★ Game of the Week · +${Math.round((GOTW_BOOST - 1) * 100)}% profit boost</span>` : champ ? `<span class="ribbon">${champRibbon()}</span>` : ''}<div class="tm matchup">${chip(a.id, { season: g.season, week: g.week, href: '#game/' + g.id })}<span class="at">${g.neutral ? 'vs' : '@'}</span>${chip(h.id, { season: g.season, week: g.week, href: '#game/' + g.id })}${gameTags(g)}</div>${own ? '<span class="ownnote">Your game · no betting</span>' : ''}${probBar(g, l, false, 'tm')}
+  return `<div class="betgame${isG || champ ? ' gotw' : ''}${own ? ' own' : ''}">${isG ? `<span class="ribbon">★ Game of the Week · +${Math.round((GOTW_BOOST - 1) * 100)}% profit boost</span>` : champ ? `<span class="ribbon">${champRibbon()}${played(g) ? '' : ` · +${Math.round((CCG_BOOST - 1) * 100)}% profit boost`}</span>` : ''}<div class="tm matchup">${chip(a.id, { season: g.season, week: g.week, href: '#game/' + g.id })}<span class="at">${g.neutral ? 'vs' : '@'}</span>${chip(h.id, { season: g.season, week: g.week, href: '#game/' + g.id })}${gameTags(g)}</div>${own ? '<span class="ownnote">Your game · no betting</span>' : ''}${probBar(g, l, false, 'tm')}
     <div style="display:grid;gap:4px">${b('spread', 'away', esc(a.abbr) + ' ' + fmtLine(-l.spread), juiceOf(l, 'spread', 'away'))}${b('spread', 'home', esc(h.abbr) + ' ' + fmtLine(l.spread), juiceOf(l, 'spread', 'home'))}</div>
     <div style="display:grid;gap:4px">${b('ml', 'away', esc(a.abbr), l.mlAway)}${b('ml', 'home', esc(h.abbr), l.mlHome)}</div>
     <div style="display:grid;gap:4px">${b('total', 'over', 'O ' + l.total, juiceOf(l, 'total', 'over'))}${b('total', 'under', 'U ' + l.total, juiceOf(l, 'total', 'under'))}</div>
@@ -814,7 +816,7 @@ async function drawSlip(w) {
   ctx.textAlign = 'right'; ctx.fillStyle = '#f5b82e'; ctx.fillText(fmtOdds(w.odds), W - P, y); ctx.textAlign = 'left';
   y += 40;
   if (w.boost) {
-    const txt = `⚡ GAME OF THE WEEK · +${Math.round((w.boost - 1) * 100)}% PROFIT BOOST`;
+    const txt = `⚡ ${boostName(w.boost).toUpperCase()} · +${Math.round((w.boost - 1) * 100)}% PROFIT BOOST`;
     ctx.font = `900 28px ${B}`; const tw = ctx.measureText(txt).width + 40;
     ctx.fillStyle = '#f5b82e'; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(P, y - 4, tw, 50, 25) : ctx.rect(P, y - 4, tw, 50); ctx.fill();
     ctx.fillStyle = '#140b00'; ctx.fillText(txt, P + 20, y + 31); y += 70;
@@ -1133,14 +1135,14 @@ function showParlaySlip() {
   UI.legs = UI.legs.map(l => legFor(l.gameId, l.market, l.pick, l.team)).filter(Boolean);
   const odds = parlayOdds(UI.legs), bal = bankroll(me.id).balance, boost = boostFor(UI.legs);
   UI.slip = { parlay: true, odds, boost };
-  $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card"><h2>Parlay Slip</h2><p><b>${UI.legs.length}-leg parlay ${fmtOdds(odds)}</b></p>${boost ? boostNote() : ''}
+  $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card"><h2>Parlay Slip</h2><p><b>${UI.legs.length}-leg parlay ${fmtOdds(odds)}</b></p>${boost ? boostNote(boost) : ''}
     <div class="small" style="margin-bottom:8px">${UI.legs.map(l => `• ${legWeek(l)}: ${esc(wagerLabel(l))}`).join('<br>')}</div>
     <label>Stake (balance ${bal.toLocaleString()})</label><div class="row"><input id="stake" type="number" min="1" max="${bal}" step="1" value="${Math.min(25, bal)}" inputmode="numeric" style="width:120px">
     ${[10, 25, 50, 100].map(v => `<button class="sm ghost" data-stake="${v}">${v}</button>`).join('')}</div>
     <p>To win: <b id="towin"></b></p><div class="row"><button data-act="place">Place parlay</button><button class="ghost" data-close="1">Cancel</button><span id="smsg" class="err"></span></div></div></div>`;
   updToWin();
 }
-const boostNote = () => `<div class="boostpill">⚡ Game of the Week · +${Math.round((GOTW_BOOST - 1) * 100)}% profit boost applied</div>`;
+const boostNote = b => `<div class="boostpill">⚡ ${boostName(b)} · +${Math.round((b - 1) * 100)}% profit boost applied</div>`;
 function showSlip(gid, market, pick) {
   const me = auth.profile;
   if (!me) { location.hash = '#account'; return; }
@@ -1152,7 +1154,7 @@ function showSlip(gid, market, pick) {
   UI.slip = { g, market, pick, odds, line, boost };
   const bal = bankroll(me.id).balance;
   const label = wagerLabel({ gameId: gid, market, pick, odds, line });
-  $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card"><h2>Bet Slip</h2><p><b>${esc(label)}</b></p><p class="muted small">${esc(team(g.away).name)} @ ${esc(team(g.home).name)} · Week ${g.week}</p>${boost ? boostNote() : ''}
+  $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card"><h2>Bet Slip</h2><p><b>${esc(label)}</b></p><p class="muted small">${esc(team(g.away).name)} @ ${esc(team(g.home).name)} · Week ${g.week}</p>${boost ? boostNote(boost) : ''}
     <label>Stake (balance ${bal.toLocaleString()})</label><div class="row"><input id="stake" type="number" min="1" max="${bal}" step="1" value="${Math.min(100, bal)}" inputmode="numeric" style="width:120px">
     ${[25, 50, 100, 250].map(v => `<button class="sm ghost" data-stake="${v}">${v}</button>`).join('')}</div>
     <p>To win: <b id="towin"></b></p><div class="row"><button data-act="place">Place wager</button><button class="ghost" data-close="1">Cancel</button><span id="smsg" class="err"></span></div></div></div>`;
@@ -1633,9 +1635,9 @@ function gameBets(g) {
   const pay = w => { const v = payOf(w).toLocaleString(); return w.status === 'lost' ? `<s class="muted">${v}</s>` : w.status === 'won' || w.status === 'cashed' ? `<b class="win">${v}</b>` : v; };
   const mark = r => r === 'won' ? ' <span class="win">✓</span>' : r === 'lost' ? ' <span class="loss">✗</span>' : r === 'push' || r === 'void' ? ' <span class="muted">(push)</span>' : '';
   const bet = w => {
-    if (w.market !== 'parlay') return esc(wagerLabel(w).replace(/ — .*$/, '')) + (w.boost ? ' <span class="boosttag">⚡ +10%</span>' : '');
+    if (w.market !== 'parlay') return esc(wagerLabel(w).replace(/ — .*$/, '')) + (w.boost ? ' <span class="boosttag">⚡ +${Math.round((w.boost - 1) * 100)}%</span>' : '');
     const here = w.legs.filter(l => l.gameId === g.id), rest = w.legs.length - here.length;
-    return `${w.legs.length}-leg parlay (${fmtOdds(w.odds)})${w.boost ? ' <span class="boosttag">⚡ +10%</span>' : ''}<div class="muted small">${here.map(l => esc(wagerLabel(l).replace(/ — .*$/, '')) + mark(l.result)).join('<br>')}${rest ? `<br>+ ${rest} leg${rest === 1 ? '' : 's'} on other games` : ''}</div>`;
+    return `${w.legs.length}-leg parlay (${fmtOdds(w.odds)})${w.boost ? ' <span class="boosttag">⚡ +${Math.round((w.boost - 1) * 100)}%</span>' : ''}<div class="muted small">${here.map(l => esc(wagerLabel(l).replace(/ — .*$/, '')) + mark(l.result)).join('<br>')}${rest ? `<br>+ ${rest} leg${rest === 1 ? '' : 's'} on other games` : ''}</div>`;
   };
   ws.sort((a, b) => (STO[a.status] ?? 9) - (STO[b.status] ?? 9) || b.stake - a.stake || (b.ts || 0) - (a.ts || 0));
   const total = ws.reduce((t, w) => t + (+w.stake || 0), 0);
@@ -1706,7 +1708,8 @@ PAGES.game = function (id) {
     let t = `${cTxt(coachA)}${rn(A)} (${recTxt(A)}) ${g.neutral ? 'meets' : 'visits'} ${cTxt(coachH)}${rn(H)} (${recTxt(H)}) in Week ${g.week}${g.neutral ? ' at a neutral site' : ''}.`;
     if (l && p) t += ` ${fav ? `${fav.name} is a ${Math.abs(l.spread)}-point favorite with a ${Math.max(p.a, p.h)}% chance to win` : 'The line is a pick\'em'}, and the total sits at ${l.total}.`;
     if (same) t += ` Both teams play in the ${dA}, where ${team(divOrder[0]).name} currently leads the division${divOrder.indexOf(A.id) < 2 && divOrder.indexOf(H.id) < 2 ? ', so the division race runs straight through this game' : ''}.`;
-    if (isGotw) t += ` The league voted it Game of the Week, and bets on it get a +10% profit boost.`;
+    if (g.type === 'ccg') t += ` It's the league championship, and bets on it get a +${Math.round((CCG_BOOST - 1) * 100)}% profit boost.`;
+    else if (isGotw) t += ` The league voted it Game of the Week, and bets on it get a +${Math.round((GOTW_BOOST - 1) * 100)}% profit boost.`;
     paras.push(t);
     if (L.phase === PHASES.REG && s === L.season && (g.type || 'reg') === 'reg' && A.conf === L.conference && H.conf === L.conference) {
       const u = nowUpto(), base = simulate(s, u), hW = simulate(s, u, 1500, { [g.id]: true }), aW = simulate(s, u, 1500, { [g.id]: false });
@@ -1781,7 +1784,7 @@ PAGES.game = function (id) {
       ${ko.meta}
       ${l && !g.forfeit ? (done ? probBar(g, l, done) + finalLines(g, l, A, H) : `<div class="gp-odds"><div><span>Spread</span><b>${l.spread === 0 ? 'PK' : esc(fav.abbr || fav.name) + ' ' + fmtLine(-Math.abs(l.spread))}</b></div><div><span>Total</span><b>O/U ${l.total}</b></div>
         <div><span>Moneyline</span><b>${esc(A.abbr)} ${fmtOdds(l.mlAway)}</b><b>${esc(H.abbr)} ${fmtOdds(l.mlHome)}</b></div></div>${l.ttHome != null ? `<p class="muted small" style="margin:6px 0 0;text-align:center">Team totals: <b>${esc(A.abbr)} ${l.ttAway}</b> · <b>${esc(H.abbr)} ${l.ttHome}</b></p>` : ''}`) + (done ? '' : probBar(g, l, done)) : ''}
-      ${canBet ? `<button class="gold" data-betgame="${g.week}" style="margin-top:12px">Bet this game${isGotw ? ' · +10% boost' : ''} →</button>` : ''}${ko.ctl}</div>
+      ${canBet ? `<button class="gold" data-betgame="${g.week}" style="margin-top:12px">Bet this game${g.type === 'ccg' ? ` · +${Math.round((CCG_BOOST - 1) * 100)}% boost` : isGotw ? ` · +${Math.round((GOTW_BOOST - 1) * 100)}% boost` : ''} →</button>` : ''}${ko.ctl}</div>
     ${done ? broadcastCard(g) : ''}
     ${l && !g.forfeit ? winChart(g, A, H) : ''}
     ${(() => { const air = done ? aiRecap(g) : null; if (done && !AI.moms && videosOf(g).length) loadMoments();
