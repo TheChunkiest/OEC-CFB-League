@@ -299,7 +299,16 @@ export const userTeams = () => leagueTeams().filter(isUserTeam);
 export const played = g => g.homeScore != null && g.awayScore != null && g.homeScore !== '' && g.awayScore !== '';
 export const seasonGames = (s = D.league.season) => D.games.filter(g => g.season === s);
 export const isConfGame = g => team(g.home).conf === D.league.conference && team(g.away).conf === D.league.conference;
-export const coachOf = (g, side) => g[side + 'Coach'] || team(g[side]).coach || 'CPU';
+// One spelling per coach: "chunky", "Chunky " and "Chunky" are the same person everywhere (records, head-to-head,
+// pages). The account name wins, then the name on a team.
+let _cKey = '', _cMap = {};
+export const canonCoach = n => {
+  const raw = String(n || '').trim(); if (!raw || raw.toUpperCase() === 'CPU') return raw ? 'CPU' : raw;
+  const sig = (D.users || []).length + '|' + (D.teams || []).length + '|' + (D.users || []).map(u => u.name).join(',');
+  if (sig !== _cKey) { _cKey = sig; _cMap = {}; (D.teams || []).forEach(t => { const c = String(t.coach || '').trim(); if (c && c.toUpperCase() !== 'CPU') _cMap[c.toLowerCase()] = c; }); (D.users || []).forEach(u => { const c = String(u.name || '').trim(); if (c) _cMap[c.toLowerCase()] = c; }); }
+  return _cMap[raw.toLowerCase()] || raw;
+};
+export const coachOf = (g, side) => canonCoach(g[side + 'Coach'] || team(g[side]).coach || 'CPU');
 /* ---------- Playbooks ---------- */
 // team.pb = { "<season>": { off, def, coach } }. A playbook carries into later seasons until it's changed,
 // as long as the same coach still runs the team. Changes are only allowed in the Postseason or Offseason

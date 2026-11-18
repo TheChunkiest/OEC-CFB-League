@@ -5,13 +5,13 @@ import {
   gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonStorylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory, legLabel
 , playbookOf, pbSeason, pbText
 , AWARD_DEFS, awardGames, awardGameLabel, awardCoaches
-} from './core.js?v=81';
+} from './core.js?v=82';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['betting', 'Betting'], ['odds', 'Odds'],
   ['rankings', 'Power Rankings'], ['teams', 'Teams'], ['vote', 'Vote'], ['history', 'History'], ['rules', 'Rules']];
-const UI = { stSort: { key: 'place', dir: 1 }, prSort: { key: 'rank', dir: 1 }, prUsers: false, oddsSort: { key: 'titlePct', dir: -1 }, lbSort: { key: 'balance', dir: -1 }, wkSort: { key: 'ts', dir: -1 }, metric: 'titlePct', acct: 'login', slip: null, msg: '', betWeek: null, mode: 'single', legs: [] };
+const UI = { stSort: { key: 'place', dir: 1 }, prSort: { key: 'rank', dir: 1 }, prUsers: false, oddsSort: { key: 'titlePct', dir: -1 }, lbSort: { key: 'place', dir: 1 }, wkSort: { key: 'ts', dir: -1 }, metric: 'titlePct', acct: 'login', slip: null, msg: '', betWeek: null, mode: 'single', legs: [] };
 
 /* ---------- small renderers ---------- */
 const S = () => D.league.season;
@@ -127,7 +127,7 @@ function showVideoList(gid) {
 // Home page only: the featured game (Game of the Week or the title game) as a big preview card, like the top of a game page.
 function featureCard(g, { ribbon, note = '' } = {}) {
   const L = D.league, s = g.season, A = team(g.away), H = team(g.home), done = played(g), l = lineOf(g);
-  const recs = records(s), rk = t => rankOf(t.id, s, g.week);
+  const recs = records(s, g.week), rk = t => rankOf(t.id, s, g.week);   // record and rank both as of kickoff
   const coach = side => done ? coachOf(g, side) : isUserTeam(side === 'home' ? H : A) ? (side === 'home' ? H : A).coach : 'CPU';
   const hw = +g.homeScore > +g.awayScore;
   const sideHtml = (t, side, won) => `<div class="gp-team ${done && !won ? 'l' : ''}"><i class="sw big" style="background:${esc(teamColor(t))}"></i><div><div class="gp-name">${rk(t) ? `<span class="rk">#${rk(t)}</span>` : ''}${esc(t.name)}</div>
@@ -406,7 +406,7 @@ const PAGES = {
     html += futuresSection();
     html += winsSection();
     const lb = UI.lbSort, ws = UI.wkSort;
-    const board0 = bettors().map(u => ({ u, b: bankroll(u.id) })).sort((a, b) => b.b.balance - a.b.balance)
+    const board0 = bettors().map(u => ({ u, b: bankroll(u.id) })).sort((a, b) => b.b.net - a.b.net || b.b.balance - a.b.balance)   // same order as Betting Leaders on Home
       .map((x, i) => ({ ...x, place: i + 1, name: x.u.name, rec: x.b.w + x.b.l ? x.b.w / (x.b.w + x.b.l) : 0, net: x.b.net, roi: x.b.risked ? x.b.net / x.b.risked : -Infinity, balance: x.b.balance }));
     const board = sortRows(board0, lb, { rec: r => r.rec * 1000 + r.b.w });
     html += `<h2>Season ${seasonNum()} Leaderboard</h2><div class="card"><div class="tablewrap"><table><tr>${sortTh(lb, 'place', '#', '', 'lbSort')}${sortTh(lb, 'name', 'Coach', '', 'lbSort')}${sortTh(lb, 'rec', 'W-L-P', 'num', 'lbSort')}${sortTh(lb, 'net', 'Net', 'num hide-xs', 'lbSort')}${sortTh(lb, 'roi', 'ROI', 'num hide-sm', 'lbSort')}${sortTh(lb, 'balance', 'Balance', 'num', 'lbSort')}</tr>
@@ -1736,13 +1736,13 @@ function coachCareerLine(name, season = null) {
     const home = side === 'home', my = home ? +g.homeScore : +g.awayScore, th = home ? +g.awayScore : +g.homeScore, won = my > th, other = coachOf(g, home ? 'away' : 'home'), l = lineOf(g);
     won ? o.w++ : o.l++;
     if (other && other.toUpperCase() !== 'CPU') won ? o.cw++ : o.cll++;
+    if (g.type === 'ccg') won ? o.tg[0]++ : o.tg[1]++;
     if (g.forfeit) return;
     o.gp++; o.pf += my; o.pa += th;
     if (!g.neutral) { if (home) won ? o.hw++ : o.hl++; else won ? o.aw++ : o.al++; }
     if (Math.abs(my - th) <= 8) won ? o.cl[0]++ : o.cl[1]++;
     if (won && my - th >= 21) o.big++;
     if (won && th === 0) o.sho++;
-    if (g.type === 'ccg') won ? o.tg[0]++ : o.tg[1]++;
     if (!l) return;
     const myLine = home ? l.spread : -l.spread, cov = my - th + myLine, tot = my + th - l.total, pw = home ? l.pHome : 1 - l.pHome;
     o.ats[cov > 0 ? 0 : cov < 0 ? 1 : 2]++; o.ou[tot > 0 ? 0 : tot < 0 ? 1 : 2]++;
@@ -1892,7 +1892,7 @@ PAGES.game = function (id) {
   const g = D.games.find(x => x.id === id); if (!g) return '<div class="card empty">Game not found.</div>';
   const L = D.league, s = g.season, A = team(g.away), H = team(g.home), done = played(g), l = lineOf(g), p = winPct(g, l);
   const rk = t => rankOf(t.id, s, g.week), rn = t => (rk(t) ? '#' + rk(t) + ' ' : '') + t.name;
-  const recs = records(s), ra = recs[A.id], rh = recs[H.id];
+  const recs = records(s, g.week), ra = recs[A.id], rh = recs[H.id];   // record and rank both as of kickoff
   const ca = isUserTeam(A) ? A.coach : (g.awayCoach || 'CPU'), ch = isUserTeam(H) ? H.coach : (g.homeCoach || 'CPU');
   const coachA = done ? coachOf(g, 'away') : ca, coachH = done ? coachOf(g, 'home') : ch;
   const pbA = playbookOf(A, s, coachA), pbH = playbookOf(H, s, coachH);
