@@ -2,10 +2,10 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, batch, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout, PUSH_PREFS, pushDefaults, pushLocal, pushSupported, pushEnable, pushPrefs, pushDisable,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, raceSim, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory, legLabel
+  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonStorylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory, legLabel
 , playbookOf, pbSeason, pbText
 , AWARD_DEFS, awardGames, awardGameLabel, awardCoaches
-} from './core.js?v=80';
+} from './core.js?v=81';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -316,7 +316,9 @@ const PAGES = {
     const L = D.league, s = S(), wk = L.week;
     const games = D.games.filter(g => g.season === s && g.week === wk).sort((a, b) => (isUserTeam(team(b.home)) + isUserTeam(team(b.away))) - (isUserTeam(team(a.home)) + isUserTeam(team(a.away))));
     const gt = gotwTally(s, wk);
-    const stories = storylines();
+    // Offseason (season finalized, next one not published): the past season's biggest storylines, no matchups box.
+    const offseason = L.phase === PHASES.PRE, recap = offseason && D.history.some(h => h.season === L.season);
+    const stories = recap ? seasonStorylines(L.season) : storylines();
     const pr = currentPower().slice(0, 5);
     const leaders = bettors().map(u => ({ u, b: bankroll(u.id) })).sort((a, b) => b.b.net - a.b.net || b.b.balance - a.b.balance).slice(0, 5);
     let html = installTip();
@@ -326,8 +328,9 @@ const PAGES = {
     if (ccgNow && !gt.game) html += featureCard(ccgNow, { ribbon: champRibbon(), note: played(ccgNow) ? 'League champion crowned' : '' });
     if (gt.game) html += featureCard(gt.game, { ribbon: '★ Game of the Week' });
     else if (L.phase === PHASES.REG && games.length) html += `<div class="card gotw"><span class="ribbon">★ Game of the Week</span><div class="muted">No Game of the Week votes were cast for ${esc(weekLabel())}. <a href="#vote">Vote for next week's game →</a></div></div>`;
-    html += `<div class="grid2"><div><h2>This Week's Storylines</h2><div class="card">${stories.length ? stories.map(st => `<${st.href ? `a href="${esc(st.href)}"` : 'div'} class="story${st.href ? ' link' : ''}"><span class="tag">${esc(st.tag)}</span><h3>${esc(st.title)}</h3><p>${esc((() => { const vs = {}; vary(st.title, vs); return vary(st.body, vs); })())}</p>${st.href ? '<span class="go" aria-hidden="true">›</span>' : ''}</${st.href ? 'a' : 'div'}>`).join('') : '<div class="empty">Storylines appear once games are played.</div>'}</div></div>
-      <div><h2>${esc(weekLabel())} Matchups</h2><div class="card matchbox">${games.length ? weekOrder(games.filter(g => g.id !== gt.game?.id && g.id !== ccgNow?.id)).map(g => gameCard(g)).join('') || `<div class="empty">Only the ${ccgNow && !gt.game ? 'championship game' : 'Game of the Week'} is on the slate.</div>` : '<div class="empty">No games scheduled this week.</div>'}</div></div></div>
+    const userWk = games.some(g => isUserTeam(team(g.home)) || isUserTeam(team(g.away)));
+    html += `<div class="${offseason ? '' : 'grid2'}"><div><h2>${recap ? `Season ${seasonNum(L.season)} in Review` : "This Week's Storylines"}</h2><div class="card">${stories.length ? stories.map(st => `<${st.href ? `a href="${esc(st.href)}"` : 'div'} class="story${st.href ? ' link' : ''}"><span class="tag">${esc(st.tag)}</span><h3>${esc(st.title)}</h3><p>${esc((() => { const vs = {}; vary(st.title, vs); return vary(st.body, vs); })())}</p>${st.href ? '<span class="go" aria-hidden="true">›</span>' : ''}</${st.href ? 'a' : 'div'}>`).join('') : '<div class="empty">Storylines appear once games are played.</div>'}</div></div>
+      ${offseason ? '' : `<div><h2>${esc(weekLabel())} Matchups</h2><div class="card matchbox">${userWk ? weekOrder(games.filter(g => g.id !== gt.game?.id && g.id !== ccgNow?.id)).map(g => gameCard(g)).join('') || `<div class="empty">Only the ${ccgNow && !gt.game ? 'championship game' : 'Game of the Week'} is on the slate.</div>` : '<div class="empty">No user games this week.</div>'}</div></div>`}</div>
       <div class="grid home2"><div class="card"><h2>Power Rankings</h2><table>${pr.map(x => `<tr><td class="rank">${x.rank}</td><td>${chip(x.id)}</td><td class="num">${rec(x.rec)}</td><td class="num">${mvHtml(x.move)}</td></tr>`).join('')}</table><p><a href="#rankings">Full rankings →</a></p></div>
       <div class="card"><h2>Betting Leaders</h2>${leaders.length ? `<table>${leaders.map((x, i) => `<tr><td class="rank">${i + 1}</td><td>${esc(x.u.name)}</td><td class="num">${x.b.w}-${x.b.l}${x.b.p ? '-' + x.b.p : ''}</td><td class="num"><b class="${x.b.net >= 0 ? 'win' : 'loss'}">${x.b.net >= 0 ? '+' : ''}${x.b.net.toLocaleString()}</b></td></tr>`).join('')}</table>` : '<div class="muted">No coaches linked yet.</div>'}<p><a href="#betting">Place wagers →</a></p></div></div>`;
     return html;

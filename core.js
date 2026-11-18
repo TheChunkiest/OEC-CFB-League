@@ -1607,3 +1607,47 @@ export function tallyAwards(s, ballots) {
   };
   return AWARD_DEFS.map(cat);
 }
+
+// Offseason home page: the biggest storylines of the season that just ended (no betting talk beyond the lines).
+export function seasonStorylines(s) {
+  const out = [], h = D.history.find(x => x.season === s) || {}, vr = rng(s * 977 + 11), pk = a => a[Math.floor(vr() * a.length)];
+  const poss = n => /s$/i.test(n) ? n + "'" : n + "'s";
+  const sg = D.games.filter(g => g.season === s && played(g)).sort((a, b) => a.week - b.week);
+  const cName = (g, side) => { const c = coachOf(g, side); return c && c.toUpperCase() !== 'CPU' ? c : ''; };
+  const who = (g, side) => { const c = cName(g, side), t = team(g[side]).name; return c ? `${poss(c)} ${t}` : t; };
+  const userG = g => !!(cName(g, 'home') || cName(g, 'away'));
+  const R = records(s), wk = g => g.type === 'ccg' ? 'the title game' : g.type === 'bowl' ? (g.note || 'a bowl game') : `Week ${g.week}`;
+  const res = g => { const hw = +g.homeScore > +g.awayScore; return { w: hw ? 'home' : 'away', l: hw ? 'away' : 'home', ws: Math.max(+g.homeScore, +g.awayScore), ls: Math.min(+g.homeScore, +g.awayScore) }; };
+  // 1. The champion
+  const ccg = sg.find(g => g.type === 'ccg');
+  if (ccg && !ccg.forfeit) {
+    const r = res(ccg), ct = ccg[r.w], rr = R[ct];
+    out.push({ href: '#game/' + ccg.id, tag: 'Champion', title: pk([`${team(ct).name} are your Season ${seasonNum(s)} champions`, `${team(ct).name} win it all`, `The title belongs to ${team(ct).name}`]),
+      body: `${who(ccg, r.w)} beat ${who(ccg, r.l)} ${r.ws}-${r.ls} in the title game${rr ? ` to finish ${rr.w}-${rr.l}` : ''}. ${pk(['Banner goes up.', 'Nobody can take that one back.', 'That is how you close a season.'])}` });
+  }
+  // 2. Best regular season (if it wasn't the champion)
+  const regRec = {}; sg.filter(g => (g.type || 'reg') === 'reg' && !g.forfeit).forEach(g => { const r = res(g); [[g[r.w], 1], [g[r.l], 0]].forEach(([id, w]) => { const t = team(id); if (!isUserTeam(t) && !cName(g, id === g.home ? 'home' : 'away')) return; const x = regRec[id] || (regRec[id] = { w: 0, l: 0 }); w ? x.w++ : x.l++; }); });
+  const best = Object.entries(regRec).filter(([, x]) => x.w + x.l >= 4).sort((a, b) => (b[1].w / (b[1].w + b[1].l)) - (a[1].w / (a[1].w + a[1].l)) || b[1].w - a[1].w)[0];
+  if (best && best[0] !== h.champTeam && !(ccg && ccg[res(ccg).w] === best[0])) {
+    const [id, x] = best, lost = ccg && ccg[res(ccg).l] === id;
+    out.push({ href: '#team/' + id + '/' + s, tag: x.l ? 'Best Record' : 'Perfect Season', title: x.l ? `${team(id).name} owned the regular season` : `${team(id).name} ran the table`, body: `${team(id).name} went ${x.w}-${x.l} in the regular season, the best mark in the league${lost ? ', then came up short in the title game' : ccg ? ', but never got to play for the title' : ''}. ${pk(['So close.', 'Next year, maybe.', 'Still a season worth remembering.'])}` });
+  }
+  // 3. Upset of the year: the biggest underdog to win outright in a coach's game
+  const ups = sg.filter(g => userG(g) && !g.forfeit && lineOf(g)).map(g => { const l = lineOf(g), r = res(g), dogSide = l.spread > 0 ? 'home' : l.spread < 0 ? 'away' : null; return { g, r, pts: Math.abs(l.spread), won: dogSide && r.w === dogSide }; }).filter(x => x.won).sort((a, b) => b.pts - a.pts)[0];
+  if (ups && ups.pts >= 3) out.push({ href: '#game/' + ups.g.id, tag: 'Upset of the Year', title: `${team(ups.g[ups.r.w]).name} stunned ${team(ups.g[ups.r.l]).name}`, body: `${pk(['Nobody saw it coming.', 'The upset of the year.', 'The biggest shock of the season.'])} ${who(ups.g, ups.r.w)} won ${ups.r.ws}-${ups.r.ls} in ${wk(ups.g)} as a ${ups.pts}-point underdog.` });
+  // 4. Longest winning streak by a coach's team
+  const streaks = {}; sg.filter(g => !g.forfeit).forEach(g => { const r = res(g); [['w', r.w], ['l', r.l]].forEach(([k, side]) => { const id = g[side]; if (!cName(g, side)) return; const x = streaks[id] || (streaks[id] = { cur: 0, best: 0, coach: cName(g, side) }); x.cur = k === 'w' ? x.cur + 1 : 0; x.best = Math.max(x.best, x.cur); }); });
+  const st = Object.entries(streaks).sort((a, b) => b[1].best - a[1].best)[0];
+  if (st && st[1].best >= 4) out.push({ href: '#team/' + st[0] + '/' + s, tag: 'Hot Streak', title: `${team(st[0]).name} won ${st[1].best} straight`, body: `${poss(st[1].coach)} ${team(st[0]).name} put together the longest winning streak of the season at ${st[1].best} games. ${pk(['Nobody else came close.', 'Tough to stop once they got rolling.', 'The hottest stretch anyone had.'])}` });
+  // 5. Shootout of the year
+  const sh = sg.filter(g => userG(g) && !g.forfeit && g.id !== ups?.g.id).sort((a, b) => (+b.homeScore + +b.awayScore) - (+a.homeScore + +a.awayScore))[0];
+  if (sh) { const r = res(sh); out.push({ href: '#game/' + sh.id, tag: 'Shootout', title: `${r.ws + r.ls} points in ${wk(sh)}`, body: `${who(sh, r.w)} outlasted ${who(sh, r.l)} ${r.ws}-${r.ls}, the highest-scoring game of the season. ${pk(['Defense optional.', 'Scoreboard operators earned their pay.', 'Pure chaos.'])}` }); }
+  // 6. Bowl season for the coaches' teams
+  const bowls = sg.filter(g => g.type === 'bowl' && userG(g) && !g.forfeit);
+  if (bowls.length) {
+    let w = 0, l = 0; bowls.forEach(g => { const r = res(g); if (cName(g, r.w)) w++; if (cName(g, r.l)) l++; });
+    const b = bowls.slice().sort((x, y) => Math.abs(+y.homeScore - +y.awayScore) - Math.abs(+x.homeScore - +x.awayScore))[0], r = res(b);
+    out.push({ href: '#game/' + b.id, tag: 'Bowl Season', title: `League coaches went ${w}-${l} in bowl games`, body: `${who(b, r.w)} ${cName(b, r.w) ? 'had the most convincing win' : 'had the biggest margin'}, ${r.ws}-${r.ls} over ${who(b, r.l)}${b.note ? ` in the ${b.note}` : ''}.` });
+  }
+  return out;
+}
