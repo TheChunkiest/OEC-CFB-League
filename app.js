@@ -100,11 +100,40 @@ function scoutCard(t, s = D.league.season) {
     <p class="muted small" style="margin:10px 0 0">From the AI's read of this season's broadcasts. Grades are 1-10 per game, averaged.</p></div>`;
 }
 // Broadcasts the commissioner filed as "User vs CPU" (games against teams outside the league), on the team's page.
-function cpuBroadcasts(tid) {
-  const list = Array.isArray(D.league.vidCpu) ? D.league.vidCpu : [], vs = list.filter(x => (x.t || []).includes(tid)).map(x => vidInfo(x.v)).sort((a, b) => b.d - a.d);
+// Each one belongs to a team AND a season: the season saved when it was filed, else "S2" / "Season 2" in the title,
+// else the season whose league broadcasts are closest in date. A past-season page shows that season's; the current
+// page shows every season the current coach has run this team, so a coach's CPU broadcasts stay with the team he
+// played them for and start fresh at a new job.
+let _vr = null, _vrKey = '';
+function seasonVidRanges() {
+  const key = (VIDS?.videos || []).length + '|' + D.games.length; if (_vr && key === _vrKey) return _vr;
+  _vrKey = key; _vr = {};
+  D.games.forEach(g => videosOf(g).forEach(v => { if (!v.d) return; const r = _vr[g.season] || (_vr[g.season] = [v.d, v.d]); r[0] = Math.min(r[0], v.d); r[1] = Math.max(r[1], v.d); }));
+  return _vr;
+}
+function cpuVidSeason(x, v) {
+  const m = String(v.t || '').match(/\bS(?:eason)?\s*(\d{1,2})\b/i); if (m) return (D.league.firstSeason || 2026) + +m[1] - 1;
+  if (x.s) return +x.s;
+  if (!v.d) return null;
+  let best = null, bd = Infinity;
+  Object.entries(seasonVidRanges()).forEach(([se, r]) => { const dist = v.d < r[0] ? r[0] - v.d : v.d > r[1] ? v.d - r[1] : 0; if (dist < bd) { bd = dist; best = +se; } });
+  return best;
+}
+// Who ran a team in a season (most games coached), by the coach recorded on its games.
+function teamCoachIn(tid, s) {
+  const c = {}; D.games.filter(g => g.season === s && (g.home === tid || g.away === tid)).forEach(g => { const k = coachOf(g, g.home === tid ? 'home' : 'away'); c[k] = (c[k] || 0) + 1; });
+  return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+}
+function cpuBroadcasts(tid, s = D.league.season) {
+  const cur = D.league.season, list = Array.isArray(D.league.vidCpu) ? D.league.vidCpu : [];
+  const coachNow = s === cur ? (teamCoachIn(tid, cur) || team(tid).coach || '') : '';
+  const keep = se => s !== cur ? se === s
+    : se == null || se === cur || (coachNow && coachNow !== 'CPU' && teamCoachIn(tid, se).toLowerCase() === coachNow.toLowerCase());
+  const vs = list.filter(x => (x.t || []).includes(tid)).map(x => { const v = vidInfo(x.v); return { ...v, se: cpuVidSeason(x, v) }; }).filter(v => keep(v.se)).sort((a, b) => b.d - a.d);
   if (!vs.length) return '';
   const short = t => String(t || 'OEC on YouTube').replace(/^OEC\s+CFB\s+League\s*/i, '').trim();   // the channel name is on every title
-  return `<div class="card"><h3 style="margin-top:0">Broadcasts vs CPU teams</h3><div class="cpulinks">${vs.slice(0, 12).map(v => `<a href="https://youtu.be/${esc(v.id)}" target="_blank" rel="noopener">▶ ${esc(short(v.t))}</a>`).join('')}</div></div>`;
+  const label = v => { const t = short(v.t); return v.se && s === cur && !/\bS(?:eason)?\s*\d/i.test(t) ? `S${seasonNum(v.se)} · ${t}` : t; };
+  return `<div class="card"><h3 style="margin-top:0">Broadcasts vs CPU teams</h3><div class="cpulinks">${vs.slice(0, 20).map(v => `<a href="https://youtu.be/${esc(v.id)}" target="_blank" rel="noopener">▶ ${esc(label(v))}</a>`).join('')}</div></div>`;
 }
 // YouTube-style red play button (used instead of video thumbnails, which vary too much in look)
 const YT_BTN = '<svg class="ytbtn" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="#fff"/></svg>';
@@ -473,7 +502,7 @@ const PAGES = {
           ${place ? `<div><span>Finish</span><b>${ordinal(place)}</b></div>` : ''}${past ? '' : `<div><span>OVR / OFF / DEF</span><b>${t.ovr || '–'} / ${t.off || '–'} / ${t.def || '–'}</b></div>`}${pb ? `<div><span>Offense playbook</span><b>${esc(pb.off || '–')}</b></div><div><span>Defense playbook</span><b>${esc(pb.def || '–')}</b></div>` : ''}${sim ? `<div><span>Likely record</span><b>${sim.likely}</b></div><div><span>Title odds</span><b>${pctStr(sim.titlePct)}</b></div>` : ''}</div></div>
       ${teamStatsCard(id, s)}
       ${past ? '' : scoutCard(t, s)}
-      ${past ? '' : cpuBroadcasts(id)}
+      ${cpuBroadcasts(id, s)}
       <div class="card"><h3 style="margin-top:0">${s} Schedule</h3><div class="tablewrap"><table><tr><th>Wk</th><th>Opponent</th><th>Line</th><th class="num">Result</th></tr>
       ${games.map(g => {
         const home = g.home === id, opp = home ? g.away : g.home, done = played(g), l = lineOf(g);

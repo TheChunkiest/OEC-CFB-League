@@ -783,7 +783,7 @@ const ACT = {
       const tm = D.teams.find(x => (x.abbr || '').toLowerCase() === ab.trim().toLowerCase() || x.name.toLowerCase() === ab.trim().toLowerCase());
       if (!tm) return alert('No team with that abbreviation.'); teams = [tm.id];
     }
-    await put('meta', 'league', { vidCpu: [...cpuList().filter(x => x.v !== vid), { v: vid, t: teams }] }); stay('Filed as a User vs CPU broadcast.');
+    await put('meta', 'league', { vidCpu: [...cpuList().filter(x => x.v !== vid), { v: vid, t: teams, s: L().season }] }); stay('Filed as a User vs CPU broadcast.');
   },
   async vidCpuUndo(t) { await put('meta', 'league', { vidCpu: cpuList().filter(x => x.v !== t.dataset.vid) }); stay('Back in the "Not linked" list.'); },
   async vidReset() {
