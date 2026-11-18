@@ -1,13 +1,13 @@
 {
  "live": true,
- "videoId": "hNqDgJ5w08g",
- "url": "https://www.youtube.com/watch?v=hNqDgJ5w08g",
- "title": "OEC CFB S3 W13 - WYO (1-10) @ FIU (7-4)",
+ "videoId": "mkzu1AxNdmE",
+ "url": "https://www.youtube.com/watch?v=mkzu1AxNdmE",
+ "title": "PUR @ IU",
  "streams": [
   {
-   "videoId": "hNqDgJ5w08g",
-   "url": "https://www.youtube.com/watch?v=hNqDgJ5w08g",
-   "title": "OEC CFB S3 W13 - WYO (1-10) @ FIU (7-4)"
+   "videoId": "mkzu1AxNdmE",
+   "url": "https://www.youtube.com/watch?v=mkzu1AxNdmE",
+   "title": "PUR @ IU"
   }
  ],
  "notified": "hNqDgJ5w08g",
@@ -17,5 +17,5 @@
   "5qPkG2_ar0Y",
   "hNqDgJ5w08g"
  ],
- "checkedAt": 1794972649269
+ "checkedAt": 1794976299096
 }
