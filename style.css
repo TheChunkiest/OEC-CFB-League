@@ -754,3 +754,14 @@ h3{margin-bottom:10px}
 .chipbtn{background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--txt,#eee);border-radius:999px;padding:5px 10px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:5px;cursor:pointer}
 .chipbtn.on{background:var(--gold);color:#140b00;border-color:var(--gold)}
 .chipbtn .sw{width:9px;height:9px;margin:0}
+/* Finished game: how each betting line finished, as a compact list */
+.linesfinal{margin:14px 0 4px;background:rgba(255,255,255,.04);border-radius:10px;padding:4px 12px}
+.linesfinal .lf-head,.linesfinal .lf-row{display:grid;grid-template-columns:minmax(78px,auto) 1fr auto;gap:10px;align-items:center}
+.linesfinal .lf-head{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;padding:8px 0 4px}
+.linesfinal .lf-head span:last-child{text-align:right}
+.linesfinal .lf-row{padding:9px 0;border-top:1px solid var(--line);font-size:14px}
+.linesfinal .lf-k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;font-weight:700}
+.linesfinal .lf-v{font-weight:600;min-width:0}
+.linesfinal .lf-r{font-weight:800;text-align:right;white-space:nowrap}
+.linesfinal .lf-r.hit{color:#5fd38a}
+.linesfinal .lf-r.push{color:var(--muted)}

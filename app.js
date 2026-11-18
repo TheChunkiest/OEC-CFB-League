@@ -1777,8 +1777,8 @@ PAGES.game = function (id) {
       <div class="muted small" style="text-transform:uppercase;letter-spacing:.8px;font-weight:800">Season ${seasonNum(s)} · ${g.type === 'ccg' ? 'League Championship' : g.type === 'bowl' ? 'Postseason' : 'Week ' + g.week}${done ? ' · Final' : ''}${gameTags(g) ? ' · ' + gameTags(g) : ''}</div>
       <div class="gp-vs">${side(A, coachA, g.awayScore, !hw)}<div class="gp-at">${g.neutral ? 'vs' : '@'}</div>${side(H, coachH, g.homeScore, hw)}</div>
       ${ko.meta}
-      ${l && !g.forfeit ? (done ? finalLines(g, l, A, H) : `<div class="gp-odds"><div><span>Spread</span><b>${l.spread === 0 ? 'PK' : esc(fav.abbr || fav.name) + ' ' + fmtLine(-Math.abs(l.spread))}</b></div><div><span>Total</span><b>O/U ${l.total}</b></div>
-        <div><span>Moneyline</span><b>${esc(A.abbr)} ${fmtOdds(l.mlAway)}</b><b>${esc(H.abbr)} ${fmtOdds(l.mlHome)}</b></div></div>${l.ttHome != null ? `<p class="muted small" style="margin:6px 0 0;text-align:center">Team totals: <b>${esc(A.abbr)} ${l.ttAway}</b> · <b>${esc(H.abbr)} ${l.ttHome}</b></p>` : ''}`) + probBar(g, l, done) : ''}
+      ${l && !g.forfeit ? (done ? probBar(g, l, done) + finalLines(g, l, A, H) : `<div class="gp-odds"><div><span>Spread</span><b>${l.spread === 0 ? 'PK' : esc(fav.abbr || fav.name) + ' ' + fmtLine(-Math.abs(l.spread))}</b></div><div><span>Total</span><b>O/U ${l.total}</b></div>
+        <div><span>Moneyline</span><b>${esc(A.abbr)} ${fmtOdds(l.mlAway)}</b><b>${esc(H.abbr)} ${fmtOdds(l.mlHome)}</b></div></div>${l.ttHome != null ? `<p class="muted small" style="margin:6px 0 0;text-align:center">Team totals: <b>${esc(A.abbr)} ${l.ttAway}</b> · <b>${esc(H.abbr)} ${l.ttHome}</b></p>` : ''}`) + (done ? '' : probBar(g, l, done)) : ''}
       ${canBet ? `<button class="gold" data-betgame="${g.week}" style="margin-top:12px">Bet this game${isGotw ? ' · +10% boost' : ''} →</button>` : ''}${ko.ctl}</div>
     ${done ? broadcastCard(g) : ''}
     ${l && !g.forfeit ? winChart(g, A, H) : ''}
@@ -1997,14 +1997,13 @@ document.addEventListener('submit', async e => {
 
 // Final game: show which side of each line hit. l.spread is the home line (negative = home favored).
 function finalLines(g, l, A, H) {
-  const hs = +g.homeScore, as = +g.awayScore, ab = t => esc(t.abbr || t.name);
-  const m = hs - as + l.spread;
-  const sp = m === 0 ? `<b class="push">Push</b><em>${l.spread === 0 ? 'PK' : ab(l.spread < 0 ? H : A) + ' ' + fmtLine(-Math.abs(l.spread))}</em>`
-    : `<b class="hit">${ab(m > 0 ? H : A)} covered ${l.spread === 0 ? 'PK' : fmtLine(m > 0 ? l.spread : -l.spread)}</b><em>Won by ${Math.abs(hs - as)}</em>`;
-  const t = hs + as - l.total;
-  const tot = t === 0 ? `<b class="push">Push ${l.total}</b>` : `<b class="hit">${t > 0 ? 'Over' : 'Under'} ${l.total} hit</b>`;
-  const win = hs > as ? H : A, ml = hs > as ? l.mlHome : l.mlAway;
-  const ttx = (t, pts, v) => v == null ? '' : `<div><span>${ab(t)} total</span>${pts === v ? `<b class="push">Push ${v}</b>` : `<b class="hit">${pts > v ? 'Over' : 'Under'} ${v} hit</b>`}<em>${ab(t)} scored ${pts}</em></div>`;
-  return `<div class="gp-odds final"><div><span>Spread</span>${sp}</div><div><span>Total</span>${tot}<em>${hs + as} total pts</em></div>${ttx(A, as, l.ttAway)}${ttx(H, hs, l.ttHome)}
-    <div><span>Moneyline</span><b class="hit">${ab(win)} won ${fmtOdds(ml)}</b><em>${ab(win === H ? A : H)} ${fmtOdds(win === H ? l.mlAway : l.mlHome)}</em></div></div>`;
+  // How every line finished, as a compact list: market · the line · result.
+  const hs = +g.homeScore, as = +g.awayScore, ab = t => esc(t.abbr || t.name), win = hs > as ? H : A;
+  const row = (k, v, res, cls = 'hit') => `<div class="lf-row"><span class="lf-k">${k}</span><span class="lf-v">${v}</span><span class="lf-r ${cls}">${res}</span></div>`;
+  const m = hs - as + l.spread, fav = l.spread < 0 ? H : A;
+  const spLine = l.spread === 0 ? 'PK' : `${ab(fav)} ${fmtLine(-Math.abs(l.spread))}`;
+  const sp = m === 0 ? row('Spread', spLine, 'Push', 'push') : row('Spread', spLine, `✓ ${ab(m > 0 ? H : A)} covered`);
+  const ml = row('Moneyline', `${ab(A)} ${fmtOdds(l.mlAway)} · ${ab(H)} ${fmtOdds(l.mlHome)}`, `✓ ${ab(win)} won`);
+  const ou = (k, line, pts) => line == null ? '' : pts === line ? row(k, `${line}`, `Push · ${pts}`, 'push') : row(k, `O/U ${line}`, `✓ ${pts > line ? 'Over' : 'Under'} · ${pts}`);
+  return `<div class="linesfinal"><div class="lf-head"><span>Line</span><span></span><span>Result</span></div>${sp}${ml}${ou('Total', l.total, hs + as)}${ou(ab(A) + ' total', l.ttAway, as)}${ou(ab(H) + ' total', l.ttHome, hs)}</div>`;
 }
