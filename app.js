@@ -1590,6 +1590,13 @@ function finalTeamsPicker(sel) {
     <button type="button" class="chipbtn${sel.length ? '' : ' on'}" data-finteam="">All games</button>
     ${ts.map(t => `<button type="button" class="chipbtn${sel.includes(t.id) ? ' on' : ''}" data-finteam="${esc(t.id)}"><i class="sw" style="background:${esc(teamColor(t))}"></i>${esc(t.abbr || t.name)}</button>`).join('')}</div>`;
 }
+// Tapping a notification while the site is already open: the service worker sends the page to show.
+// Pick up a new version of the notification worker right away (iPhones otherwise keep the old one for a while).
+if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistration().then(r => r && r.update()).catch(() => { });
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => {
+  const h = e.data && e.data.type === 'oec-open' && e.data.hash;
+  if (h && /^#[\w/-]+$/.test(h)) { if (location.hash === h) route(); else location.hash = h; scrollTo(0, 0); }
+});
 // ---- Add to Home Screen ----
 const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);

@@ -20,10 +20,18 @@ self.addEventListener('push', e => {
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   const url = new URL(e.notification.data && e.notification.data.link || './index.html#home', self.registration.scope).href;
+  const u = new URL(url), hash = u.hash || '#home', ext = u.origin !== self.location.origin;
   e.waitUntil((async () => {
+    if (ext) return self.clients.openWindow(url);   // e.g. YouTube
+    // The site is already open (any page of it): bring it forward and tell it which page to show. Changing only
+    // the #part doesn't always reload on iPhones, so the page itself switches over when it gets this message.
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    const same = wins.find(w => w.url.split('#')[0] === url.split('#')[0]);
-    if (same) { await same.focus(); return same.navigate ? same.navigate(url) : null; }
-    return self.clients.openWindow(url);
+    const w = wins.find(c => c.url.startsWith(self.registration.scope)) || wins[0];
+    if (w) {
+      try { await w.focus(); } catch (err) { }
+      w.postMessage({ type: 'oec-open', hash });
+      return;
+    }
+    return self.clients.openWindow(url);   // not open: start it on that page
   })());
 });
