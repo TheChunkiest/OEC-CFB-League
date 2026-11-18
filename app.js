@@ -321,6 +321,7 @@ const PAGES = {
     const leaders = bettors().map(u => ({ u, b: bankroll(u.id) })).sort((a, b) => b.b.net - a.b.net || b.b.balance - a.b.balance).slice(0, 5);
     let html = installTip();
     if (L.desk && L.desk.show && L.desk.text) html += `<div class="card banner"><h2>Commissioner's Desk</h2><div style="white-space:pre-wrap">${esc(L.desk.text)}</div></div>`;
+    html += offseasonAwardsCard();
     const ccgNow = games.find(g => g.type === 'ccg');
     if (ccgNow && !gt.game) html += featureCard(ccgNow, { ribbon: champRibbon(), note: played(ccgNow) ? 'League champion crowned' : '' });
     if (gt.game) html += featureCard(gt.game, { ribbon: '★ Game of the Week' });
@@ -1605,18 +1606,28 @@ function confRecOf(tid, season) {
 // Over/under record as "13 O, 8 U" (plus pushes).
 const fmtOU = a => `${a[0]} O, ${a[1]} U${a[2] ? `, ${a[2]} P` : ''}`;
 // History: one Season Awards card with a centered season picker (newest first).
+function awardWinnerHtml(h, a) {
+  const g = awardGame(h, a);
+  if (g) return `<a class="reclink" href="#game/${esc(g.id)}"><b>${esc(a.winner)}</b><div class="small goty">${esc(team(g.away).abbr || team(g.away).name)} ${g.awayScore} @ ${esc(team(g.home).abbr || team(g.home).name)} ${g.homeScore} · ${g.type === 'ccg' ? 'Title game' : g.type === 'bowl' ? esc(g.note || 'Bowl') : 'Week ' + g.week}</div></a>`;
+  // Coach of the Year links to the coach, with the team they won it with.
+  if (/coach of the year/i.test(a.award || '')) { const c = coachName(a.winner); return `${c ? `<a href="#coach/${slug(c)}">${esc(c)}</a>` : `<b>${esc(a.winner)}</b>`}${a.team ? `<div class="small">${chip(a.team, { season: h.season, rank: false })}</div>` : ''}`; }
+  // Team awards (winner is the team itself): just the team chip, no repeated name.
+  if (a.team && String(a.winner || '').trim().toLowerCase() === String(team(a.team).name || '').toLowerCase()) return `<b>${chip(a.team, { season: h.season, rank: false })}</b>`;
+  return `<b>${esc(a.winner)}</b>${a.team ? `<div class="small">${chip(a.team, { season: h.season, rank: false })}</div>` : ''}`;
+}
+const awardsTable = h => `<div class="tablewrap"><table>${h.awards.map(a => `<tr><td class="wrap">${/coach of the year/i.test(a.award || '') ? '🏅 ' : ''}${esc(a.award)}</td><td class="wrap">${awardWinnerHtml(h, a)}</td></tr>`).join('')}</table></div>`;
 function seasonAwardsCard(H) {
   const hs = H.filter(h => (h.awards || []).length); if (!hs.length) return '';
   const h = hs.find(x => x.season === +UI.awSeason) || hs[0];
-  const winner = a => {
-    const g = awardGame(h, a);
-    if (g) return `<a class="reclink" href="#game/${esc(g.id)}"><b>${esc(a.winner)}</b><div class="small goty">${esc(team(g.away).abbr || team(g.away).name)} ${g.awayScore} @ ${esc(team(g.home).abbr || team(g.home).name)} ${g.homeScore} · ${g.type === 'ccg' ? 'Title game' : 'Week ' + g.week}</div></a>`;
-    // Coach of the Year links to the coach, with the team they won it with.
-    if (/coach of the year/i.test(a.award || '')) { const c = coachName(a.winner); return `${c ? `<a href="#coach/${slug(c)}">${esc(c)}</a>` : `<b>${esc(a.winner)}</b>`}${a.team ? `<div class="small">${chip(a.team, { season: h.season, rank: false })}</div>` : ''}`; }
-    return `<b>${esc(a.winner)}</b>${a.team ? `<div class="small">${chip(a.team, { season: h.season, rank: false })}</div>` : ''}`;
-  };
   return `<h2>Season Awards</h2><div class="card"><div class="row" style="justify-content:center;margin-bottom:6px"><select data-awseason aria-label="Season">${hs.map(x => `<option value="${x.season}" ${x === h ? 'selected' : ''}>Season ${seasonNum(x.season)} · ${x.season}</option>`).join('')}</select></div>
-    <div class="tablewrap"><table>${h.awards.map(a => `<tr><td class="wrap">${/coach of the year/i.test(a.award || '') ? '🏅 ' : ''}${esc(a.award)}</td><td class="wrap">${winner(a)}</td></tr>`).join('')}</table></div></div>`;
+    ${awardsTable(h)}</div>`;
+}
+// Home page in the offseason: the season just finished, its champion and award winners, until the next season is published.
+function offseasonAwardsCard() {
+  const L = D.league; if (L.phase !== PHASES.PRE) return '';
+  const h = D.history.find(x => x.season === L.season); if (!h || !(h.awards || []).length) return '';
+  const champ = h.champTeam ? `<div class="awchamp">🏆 <b>League Champion:</b> ${chip(h.champTeam, { season: h.season, rank: false })}${h.champCoach && h.champCoach !== 'CPU' ? ` · <a href="#coach/${slug(h.champCoach)}">${esc(h.champCoach)}</a>` : ''}</div>` : '';
+  return `<div class="card gotw awhome"><span class="ribbon">🏆 Season ${seasonNum(h.season)} Awards · ${h.season}</span>${champ}${awardsTable(h)}<p class="small" style="margin:8px 0 0;text-align:center"><a href="#history">Every season's winners →</a></p></div>`;
 }
 // Match a typed name to a league coach (case-insensitive).
 const coachName = n => { const k = String(n || '').trim().toLowerCase(); return Object.values(coachStats()).map(c => c.name).find(c => c.toLowerCase() === k) || ''; };

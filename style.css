@@ -1101,3 +1101,5 @@ button.pill.tailpill:hover{background:rgba(245,184,46,.12)}
 .awrev select{max-width:100%}
 .awrev details summary{cursor:pointer;padding:4px 0}
 .awrev ul.clean li{padding:3px 0}
+.awhome .awchamp{text-align:center;margin:4px 0 8px}
+.awhome table td:first-child{color:var(--muted)}
