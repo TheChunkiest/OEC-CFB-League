@@ -945,3 +945,12 @@ th{font-size:12px}
 .gp-story h2.gp-title{text-transform:none;font-size:24px}
 .gp-story h2.gp-title::before{display:none}
 @media (max-width:640px){.gp-story h2.gp-title{font-size:21px}}
+/* Home page featured game (Game of the Week / title game) */
+.card.feature{cursor:pointer;padding:22px 16px 16px;margin-top:20px;background:radial-gradient(120% 90% at 50% 0%,rgba(160,16,26,.45),rgba(26,20,22,.95) 70%);box-shadow:0 0 0 1px rgba(245,184,46,.25),0 10px 30px rgba(211,18,28,.18)}
+.card.feature .gp-name{font-size:26px}
+.card.feature .gp-vs{margin:12px 0 4px}
+.feat-meta{display:flex;justify-content:center;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted);margin:8px 0 2px;padding-top:10px;border-top:1px solid rgba(255,255,255,.08)}
+.feat-meta b{color:var(--text)}
+.feat-act{display:flex;justify-content:center;flex-wrap:wrap;gap:8px;margin-top:12px}
+.feat-act .btn.ghost{padding:9px 16px;border-radius:9px;background:rgba(0,0,0,.3);border:1px solid var(--line)}
+@media (max-width:640px){.card.feature .gp-name{font-size:21px}.card.feature{padding:20px 12px 14px}}
