@@ -617,11 +617,18 @@ function betRows(g) {
 function myWagersHtml(me, s, open) {
     let myW = '';
     if (me) {
-      const mine = D.wagers.filter(w => w.uid === me.id && w.season === s).sort((a, b) => b.week - a.week || (b.ts || 0) - (a.ts || 0));
+      const all = D.wagers.filter(w => w.uid === me.id && w.season === s && !w.deleted).sort((a, b) => b.week - a.week || (b.ts || 0) - (a.ts || 0));
+      // Filter chips: All / Open / Won / Lost / Cashed out / Push (pushes and voids together). Empty groups are hidden.
+      const grp = w => w.status === 'void' ? 'push' : w.status;
+      const FL = [['all', 'All'], ['open', 'Open'], ['won', 'Won'], ['lost', 'Lost'], ['cashed', 'Cashed out'], ['push', 'Push / void']];
+      const cnt = k => k === 'all' ? all.length : all.filter(w => grp(w) === k).length;
+      const cur = FL.some(([k]) => k === UI.betFilter) && cnt(UI.betFilter) ? UI.betFilter : 'all';
+      const mine = cur === 'all' ? all : all.filter(w => grp(w) === cur);
+      myW += all.length ? `<div class="bfilters">${FL.filter(([k]) => cnt(k)).map(([k, l]) => `<button class="bfilter${k === cur ? ' on' : ''}" data-bfilter="${k}">${l} <span>${cnt(k)}</span></button>`).join('')}</div>` : '';
       // One block per wager: the bet gets the full width; stake, time, result and buttons sit underneath.
       const whenOf = (w, g) => w.market === 'future' ? 'Title' : w.market === 'wins' ? 'Win total' : w.market === 'parlay' ? 'Parlay' : 'Week ' + (g ? g.week : w.week);
       const resOf = w => w.status === 'open' ? `Open · to win ${winProfit(w).toLocaleString()}` : w.status === 'cashed' ? `Cashed out +${(w.payout || 0).toLocaleString()}` : (w.status === 'void' ? 'Void · refunded' : w.status === 'won' ? 'Won' : w.status === 'lost' ? 'Lost' : 'Push') + (w.payout ? ' ' + (w.payout > 0 ? '+' : '') + w.payout.toLocaleString() : '');
-      myW = `<div class="card">${mine.length ? `<div class="wlist">${mine.map(w => { const g = D.games.find(x => x.id === w.gameId); const canCancel = w.status === 'open' && w.market !== 'parlay' && (w.market === 'future' || w.market === 'wins' ? futuresOpen() && !(w.market === 'future' && titleOut(w.season).has(w.pick)) : open && g && !played(g));
+      myW += `<div class="card">${mine.length ? `<div class="wlist">${mine.map(w => { const g = D.games.find(x => x.id === w.gameId); const canCancel = w.status === 'open' && w.market !== 'parlay' && (w.market === 'future' || w.market === 'wins' ? futuresOpen() && !(w.market === 'future' && titleOut(w.season).has(w.pick)) : open && g && !played(g));
           return `<div class="wager"><div class="wtop"><div class="wlbl">${esc(wagerLabel(w))}${w.boost ? ` <span class="boosttag">⚡ +${Math.round((w.boost - 1) * 100)}%</span>` : ''}</div><span class="pill ${w.status}">${resOf(w)}</span></div>${legsHtml(w)}
             <div class="wbot"><span class="wmeta"><b>${w.stake.toLocaleString()}</b> staked · ${whenOf(w, g)} · ${fmtTime(w.ts)}</span><span class="wact"><button class="sm ghost" data-slip="${esc(w.id)}" title="Bet slip image" aria-label="Bet slip image">🧾</button>${canCancel ? `<button class="sm ghost" data-cancel="${esc(w.id)}">Cancel</button>` : ''}${(() => { const co = cashOutValue(w); return co ? `<button class="sm gold" data-cashout="${esc(w.id)}">Cash out ${co.total.toLocaleString()}</button>` : ''; })()}</span></div></div>`; }).join('')}</div>` : '<div class="muted">No wagers yet this season.</div>'}</div>`;
     }
@@ -635,7 +642,7 @@ function futuresSection() {
   const open = futuresOpen() && futuresPosted();
   h += `<div class="card"><p class="muted small" style="margin-top:0">Pick who wins the ${esc(L.conference)} Championship Game. Odds update after every advance${board[0].posted ? '' : ' (projected until the commissioner posts this week\'s lines)'}. A bet keeps the odds it was placed at, and it pays out when the title game is final. A bet on a team that's eliminated from the title race closes as a loss right away. Closes at the end of the regular season.</p>
     <div class="tablewrap"><table><tr><th>Team</th><th class="hide-sm">Coach</th><th class="num">Chance</th><th class="num">Odds</th></tr>
-    ${board.map(r => { const t = team(r.id); return `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td>${chip(r.id)}${subSm(isUserTeam(t) ? esc(t.coach) : 'CPU')}</td><td class="hide-sm">${isUserTeam(t) ? esc(t.coach) : '<span class="muted">CPU</span>'}</td><td class="num">${pctStr(r.p)}</td>
+    ${board.slice().sort((a, b) => (a.odds == null) - (b.odds == null)).map(r => { const t = team(r.id); return `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td>${chip(r.id)}${subSm(isUserTeam(t) ? esc(t.coach) : 'CPU')}</td><td class="hide-sm">${isUserTeam(t) ? esc(t.coach) : '<span class="muted">CPU</span>'}</td><td class="num">${pctStr(r.p)}</td>
       <td class="num">${r.out ? '<span class="muted small">Eliminated</span>' : r.odds == null ? '<span class="muted small">Off the board</span>' : open && r.id !== myTeam()?.id ? `<button class="pick${UI.mode === 'parlay' && UI.legs.some(x => x.market === 'future' && x.pick === r.id) ? ' sel' : ''}" data-fut="${esc(r.id)}"><b>${fmtOdds(r.odds)}</b></button>` : `<b>${fmtOdds(r.odds)}</b>`}</td></tr>`; }).join('')}
     </table></div>${open ? '' : futuresOpen() ? '<p class="muted small">Futures odds open once the commissioner posts this week\'s lines.</p>' : '<p class="muted small">Betting is locked right now.</p>'}</div>`;
   return h;
@@ -649,7 +656,7 @@ function winsSection() {
     return open && r.id !== myTeam()?.id ? `<button class="pick${UI.mode === 'parlay' && UI.legs.some(x => x.market === 'wins' && x.team === r.id && x.pick === pick) ? ' sel' : ''}" data-wins="${esc(r.id)}|${pick}">${pick === 'over' ? 'O' : 'U'} ${o.line} <b>${fmtOdds(odds)}</b></button>` : `${pick === 'over' ? 'O' : 'U'} ${o.line} <b>${fmtOdds(odds)}</b>`; };
   h += `<div class="card">
     <div class="tablewrap"><table><tr><th>Team</th><th class="num hide-sm">Record</th><th class="num hide-sm">Proj.</th><th class="num">Over</th><th class="num">Under</th></tr>
-    ${rows.map(r => `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td>${chip(r.id)} <span class="muted small hide-sm">${esc(team(r.id).coach || '')}</span>${subSm(`${esc(team(r.id).coach || '')} · ${r.w}-${regRec(r.id).l} · proj ${r.proj.toFixed(1)}`)}</td><td class="num hide-sm">${r.w}-${(regRec(r.id)).l}</td><td class="num hide-sm">${r.proj.toFixed(1)}</td>
+    ${rows.slice().sort((a, b) => (!a.o) - (!b.o)).map(r => `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td>${chip(r.id)} <span class="muted small hide-sm">${esc(team(r.id).coach || '')}</span>${subSm(`${esc(team(r.id).coach || '')} · ${r.w}-${regRec(r.id).l} · proj ${r.proj.toFixed(1)}`)}</td><td class="num hide-sm">${r.w}-${(regRec(r.id)).l}</td><td class="num hide-sm">${r.proj.toFixed(1)}</td>
       ${r.o ? `<td class="num">${btn(r, 'over')}</td><td class="num">${btn(r, 'under')}</td>` : '<td class="num muted small" colspan="2">Off the board</td>'}</tr>`).join('')}
     </table></div>${open ? '' : futuresOpen() ? '<p class="muted small">Win totals open once the commissioner posts this week\'s lines.</p>' : '<p class="muted small">Betting is locked right now.</p>'}</div>`;
   return h;
@@ -1696,7 +1703,8 @@ PAGES.game = function (id) {
   const PA = teamProfile(A.id, s, upto), PH = teamProfile(H.id, s, upto);
   const R = ratings(s, done ? g.week : nowUpto()), formOf = t => { const r = R[t.id]; if (!r || !r.perf.length) return null; const x = r.perf.slice(-3); return x.reduce((a, b) => a + b.v, 0) / x.length; };
   const fav = l ? (l.spread <= 0 ? H : A) : null, dog = fav ? (fav === H ? A : H) : null;
-  const meets = coachMeetings(coachA, coachH, g.id);
+  // A finished game is written as of the day it went final: only meetings played before it count.
+  const meets = coachMeetings(coachA, coachH, g.id).filter(x => !done || x.season < s || (x.season === s && x.week < g.week));
   const mw = meets.reduce((o, m) => { const w = meetingWinner(m).coach; o[w] = (o[w] || 0) + 1; return o; }, {});
   const isGotw = gotwTally(s, g.week).game?.id === g.id;
   const dA = divOf(A, s), dH = divOf(H, s);
@@ -1782,7 +1790,7 @@ PAGES.game = function (id) {
     const sTot = D.games.filter(x => x.season === s && played(x) && !x.forfeit && x.id !== g.id && x.week <= g.week).map(x => +x.homeScore + +x.awayScore);
     if (sTot.length >= 5 && tot > Math.max(...sTot)) F.push([62, `The ${tot} combined points make it the highest-scoring game of the season.`]);
     if (rk(lo) && !rk(w)) F.push([60, `${w.name} took down a ranked opponent in #${rk(lo)} ${lo.name}.`]);
-    if (cw !== 'CPU') { const n = careerWins(cw, false); if (n && (n % 5 === 0 || n === 1)) F.push([50, `It's career win No. ${n} for ${cw} in the league.`]); }
+    if (cw !== 'CPU') { const n = careerWins(cw, true) + 1; if (n && (n % 5 === 0 || n === 1)) F.push([50, `It's career win No. ${n} for ${cw} in the league.`]); }
     if (same && lastPlayedWeek(s) === g.week) { const ord2 = orderGroup(leagueTeams().filter(t => divOf(t, s) === dA).map(t => t.id), s); const pos = ord2.indexOf(w.id) + 1; if (pos) F.push([48, pos === 1 ? `${w.name} sits atop the ${dA} after this one.` : `${w.name} is ${ord(pos)} in the ${dA} now.`]); }
     // Always-true background facts so every recap has some depth.
     const rAfter = records(s, g.week + 1), rw = rAfter[w.id], rl = rAfter[lo.id];
@@ -2006,6 +2014,7 @@ async function reload() { await loadAll(); refreshProfile(); if (D.league.awards
 
 document.addEventListener('click', async e => {
   const vl = e.target.closest('[data-vidlist]'); if (vl) { e.preventDefault(); showVideoList(vl.dataset.vidlist); return; }
+  const bfl = e.target.closest('[data-bfilter]'); if (bfl) { UI.betFilter = bfl.dataset.bfilter; route(); return; }
   const rdv = e.target.closest('[data-racediv]');
   if (rdv) { UI.raceDiv = UI.raceDiv === rdv.dataset.racediv ? null : rdv.dataset.racediv; const box = $('#race'); if (box) box.innerHTML = raceSection(); return; }
   const rp = e.target.closest('[data-rpick]'), rr = e.target.closest('[data-rreset]');

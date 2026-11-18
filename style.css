@@ -989,3 +989,14 @@ a.reclink .goty{color:var(--muted)}
 .card.feature .feat-tags{margin-bottom:0}
 .card.feature .gp-vs{margin:2px 0 4px;padding-bottom:10px}
 .card.feature .pbar{margin-top:10px}
+/* My Bets filters */
+.bfilters{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:2px 0 10px;margin-bottom:2px}
+.bfilters::-webkit-scrollbar{display:none}
+.bfilter{flex:none;background:var(--card2);border:1px solid var(--line);color:var(--soft);font-weight:800;font-size:13px;padding:7px 12px;border-radius:999px;min-height:0}
+.bfilter span{color:var(--muted);font-weight:700;margin-left:3px}
+.bfilter.on{background:var(--red);border-color:var(--red);color:#fff}
+.bfilter.on span{color:#fff}
+/* Smaller "Watch the broadcast" button */
+.vidcard,.vidcard.card{padding:8px 18px;gap:8px;font-size:14px;border-radius:999px;background:#c8161e;border-color:#c8161e}
+.vidcard svg{width:14px;height:14px}
+.vidcard b{font-size:14px}
