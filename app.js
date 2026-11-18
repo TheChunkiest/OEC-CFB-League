@@ -672,6 +672,7 @@ function valuePick(games) {
     };
     add('spread', 'home', margin + l.spread, 'spread'); add('spread', 'away', -(margin + l.spread), 'spread');
     add('total', 'over', tot - l.total, 'total'); add('total', 'under', l.total - tot, 'total');
+    if (l.ttHome != null) { add('tth', 'over', projH - l.ttHome, 'tt'); add('tth', 'under', l.ttHome - projH, 'tt'); add('tta', 'over', projA - l.ttAway, 'tt'); add('tta', 'under', l.ttAway - projA, 'tt'); }
     // Underdog moneyline when the averages say the dog wins outright.
     if (l.mlAway >= 120 && margin < 0) add('ml', 'away', -margin + 1, 'ml');
     if (l.mlHome >= 120 && margin > 0) add('ml', 'home', margin + 1, 'ml');
@@ -691,7 +692,15 @@ function valueCard(games) {
   const rec3 = a => `${a[0]}-${a[1]}${a[2] ? '-' + a[2] : ''}`;
   const row = slipRows({ gameId: g.id, market, pick, odds, line: lineVal(l, market), season: s })[0];
   const why = [];
-  if (market === 'total') {
+  if (market === 'tth' || market === 'tta') {
+    // Team total: that team's projected points vs its line, from its scoring and the opponent's defense.
+    const home = market === 'tth', TT = team(home ? g.home : g.away), OO = team(home ? g.away : g.home), PT = home ? PH : PA, PO = home ? PA : PH;
+    const line = home ? l.ttHome : l.ttAway, proj = home ? projH : projA, over = pick === 'over';
+    why.push(`${nm(TT)} projects to <b>${f1(proj)}</b> points (it scores ${f1(PT.pf / PT.gp)} a game; ${nm(OO)} allows ${f1(PO.pa / PO.gp)}), ${over ? 'above' : 'below'} its team total of ${line} by ${f1(edge)}.`);
+    const pts = D.games.filter(x => x.season === s && played(x) && !x.forfeit && (x.home === TT.id || x.away === TT.id)).map(x => x.home === TT.id ? +x.homeScore : +x.awayScore);
+    const hit = pts.filter(p => over ? p > line : p < line).length;
+    if (pts.length) why.push(`${nm(TT)} has ${over ? 'scored more than' : 'been held under'} ${line} in <b>${hit} of ${pts.length}</b> games this season.`);
+  } else if (market === 'total') {
     why.push(`${nm(team(g.away))} and ${nm(team(g.home))} project to <b>${f1(projH + projA)}</b> combined points on season averages, ${pick === 'over' ? 'above' : 'below'} the total of ${l.total} by ${f1(edge)}.`);
     const oh = PH.ou, oa = PA.ou, ov = pick === 'over' ? oh[0] + oa[0] : oh[1] + oa[1], gp = oh[0] + oh[1] + oa[0] + oa[1];
     if (gp) why.push(`Their games have gone <b>${pick} in ${ov} of ${gp}</b> this season.`);
