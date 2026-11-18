@@ -316,7 +316,9 @@ jobs:
                     accepted_now = {i['gameId'] for i in resp if i.get('status') == 'accepted'}
                     for i in resp:
                         g = game(i['gameId']); m = f"{ab(g.get('away'))} @ {ab(g.get('home'))}" if g else 'your game'
-                        if i.get('status') == 'accepted':
+                        if i.get('status') == 'accepted' and i.get('byCommish'):
+                            to('invites', '✅ Kickoff time set', f'The commissioner set the kickoff for {m}.', f"{link}#game/{i['gameId']}", uids={uid_of(g.get('home')), uid_of(g.get('away'))} - {None} if g else set(), tag='i' + i['gameId'])
+                        elif i.get('status') == 'accepted':
                             to('invites', '✅ Kickoff time set', f"Coach {i.get('toName') or ''} picked a time for {m}.", f"{link}#game/{i['gameId']}", uids={i.get('from')}, tag='i' + i['gameId'])
                         elif i.get('status') == 'cancelled' and i.get('time') and i['gameId'] not in accepted_now:
                             # An agreed time was cleared (Reschedule): tell both coaches.
