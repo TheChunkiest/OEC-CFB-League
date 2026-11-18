@@ -1,8 +1,19 @@
 {
- "live": false,
+ "live": true,
+ "videoId": "5qPkG2_ar0Y",
+ "url": "https://www.youtube.com/watch?v=5qPkG2_ar0Y",
+ "title": "UNC @ LA Tech",
+ "streams": [
+  {
+   "videoId": "5qPkG2_ar0Y",
+   "url": "https://www.youtube.com/watch?v=5qPkG2_ar0Y",
+   "title": "UNC @ LA Tech"
+  }
+ ],
  "notified": "ed5hjhcJqaA",
  "notifiedIds": [
   "qwkTlJND-FM",
   "ed5hjhcJqaA"
- ]
+ ],
+ "checkedAt": 1794966549963
 }
