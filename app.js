@@ -363,7 +363,7 @@ const PAGES = {
     const open = L.bettingOpen && L.phase !== PHASES.PRE && L.phase !== PHASES.POST;
     const bk = me ? bankroll(me.id) : null;
     let html = `<div class="sbhead"><h2>Sportsbook · ${esc(weekLabel())}</h2>${bk ? `<div class="bkmini"><div><span>Balance</span><b>${bk.balance.toLocaleString()}</b></div><div class="hide-sm"><span>In play</span><b>${bk.open}</b></div><div><span>Record</span><b>${bk.w}-${bk.l}${bk.p ? '-' + bk.p : ''}</b></div><div><span>Net</span><b class="${bk.net >= 0 ? 'win' : 'loss'}">${bk.net >= 0 ? '+' : ''}${bk.net}</b></div></div>` : ''}</div>`;
-    if (!me) html += `<div class="notice">Every coach gets <b>${START_CREDITS.toLocaleString()} Crackers</b> per season. <a href="#account">Log in</a> to place wagers.</div>`;
+    if (!me) html += `<div class="notice">Everyone with an account gets <b>${START_CREDITS.toLocaleString()} Crackers</b> per season. <a href="#account">Log in or sign up</a> to place wagers.</div>`;
     else if (!me.teamId) html += `<div class="notice">You're a spectator: you can bet with your ${START_CREDITS.toLocaleString()} Crackers like everyone else. If you join the league, the commissioner will link you to your team.</div>`;
     html += !open ? `<div class="card empty">Betting is ${L.phase === PHASES.PRE ? 'closed until the season is published' : 'locked right now'}.</div>` :
       games.length ? `<div class="row" style="margin-bottom:10px"><div class="seg"><button data-mode="single" class="${UI.mode === 'single' ? 'on' : ''}">Single bets</button><button data-mode="parlay" class="${UI.mode === 'parlay' ? 'on' : ''}">Parlay</button></div>
@@ -562,7 +562,7 @@ const PAGES = {
         ${p && !p.teamId ? `<div class="notice">You're a <b>spectator</b>: you can follow everything and bet with ${START_CREDITS.toLocaleString()} Crackers a season. If you join the league, the commissioner will link your account to your team.</div>` : ''}<button class="ghost" data-act="logout">Log out</button></div>${pushCard()}`;
     }
     const m = UI.acct;
-    return `<h2>Coach Login</h2><div class="card" style="max-width:440px">${DEMO ? '<div class="notice">Demo mode: any email works. Password <b>coach</b> logs in as a regular coach; anything else logs in as the commissioner.</div>' : ''}
+    return `<h2>Log In</h2><div class="card" style="max-width:440px">${DEMO ? '<div class="notice">Demo mode: any email works. Password <b>coach</b> logs in as a regular coach; anything else logs in as the commissioner.</div>' : ''}
       <div class="seg" style="margin-bottom:8px"><button data-acct="login" class="${m === 'login' ? 'on' : ''}">Log in</button><button data-acct="signup" class="${m === 'signup' ? 'on' : ''}">Create account</button><button data-acct="reset" class="${m === 'reset' ? 'on' : ''}">Forgot password</button></div>
       <form id="acctForm">${m === 'signup' ? '<label>Coach name (how you appear in the league)</label><input name="name" required style="width:100%">' : ''}
         <label>Email</label><input name="email" type="email" required style="width:100%" autocomplete="email">
@@ -1809,7 +1809,7 @@ function header() {
   if (adv) { $('#bAdvT').textContent = new Date(adv).setHours(23, 59, 59, 999) < Date.now() ? 'Any day now' : fmtAdvance(adv); $('#bAdv').title = `Projected: about 3 days after the last advance${L.advExt ? ` (+${L.advExt}h extension this week)` : ''}. Can change if a coach needs more time.`; }
   $('#sub').textContent = `College Football 27 Online Dynasty · ${L.conference} · ${L.phase}${DEMO ? ' · DEMO DATA' : ''}`;
   const p = auth.profile;
-  $('#acct').innerHTML = auth.user ? acctHtml(p) : '<a class="btn" href="#account">Coach Login</a>';
+  $('#acct').innerHTML = auth.user ? acctHtml(p) : '<a class="btn" href="#account">Log In</a>';
   $('#footAdmin').innerHTML = isCommish() ? ' · <a href="admin.html">Commissioner Tools</a>' : '';
 }
 // Header greeting: time of day on the viewer's device, their balance and next game.
