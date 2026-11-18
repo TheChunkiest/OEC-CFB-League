@@ -2,9 +2,9 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, batch, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout, PUSH_PREFS, pushDefaults, pushLocal, pushSupported, pushEnable, pushPrefs, pushDisable,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, raceSim, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, divOf, oneConference, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
+  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory
 , playbookOf, pbSeason, pbText
-} from './core.js?v=67';
+} from './core.js?v=68';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -582,7 +582,8 @@ function betRows(g) {
   return `<div class="betgame${isG || champ ? ' gotw' : ''}${own ? ' own' : ''}">${isG ? `<span class="ribbon">★ Game of the Week · +${Math.round((GOTW_BOOST - 1) * 100)}% profit boost</span>` : champ ? `<span class="ribbon">${champRibbon()}</span>` : ''}<div class="tm matchup">${chip(a.id, { season: g.season, week: g.week, href: '#game/' + g.id })}<span class="at">${g.neutral ? 'vs' : '@'}</span>${chip(h.id, { season: g.season, week: g.week, href: '#game/' + g.id })}${gameTags(g)}</div>${own ? '<span class="ownnote">Your game · no betting</span>' : ''}${probBar(g, l, false, 'tm')}
     <div style="display:grid;gap:4px">${b('spread', 'away', esc(a.abbr) + ' ' + fmtLine(-l.spread), juiceOf(l, 'spread', 'away'))}${b('spread', 'home', esc(h.abbr) + ' ' + fmtLine(l.spread), juiceOf(l, 'spread', 'home'))}</div>
     <div style="display:grid;gap:4px">${b('ml', 'away', esc(a.abbr), l.mlAway)}${b('ml', 'home', esc(h.abbr), l.mlHome)}</div>
-    <div style="display:grid;gap:4px">${b('total', 'over', 'O ' + l.total, juiceOf(l, 'total', 'over'))}${b('total', 'under', 'U ' + l.total, juiceOf(l, 'total', 'under'))}</div></div>`;
+    <div style="display:grid;gap:4px">${b('total', 'over', 'O ' + l.total, juiceOf(l, 'total', 'over'))}${b('total', 'under', 'U ' + l.total, juiceOf(l, 'total', 'under'))}</div>
+    ${l.ttHome != null ? `<div class="ttrow">${[['tta', a, l.ttAway], ['tth', h, l.ttHome]].map(([m, t, v]) => `<span class="ttname">${esc(t.abbr)} team total</span>${b(m, 'over', 'O ' + v, juiceOf(l, m, 'over'))}${b(m, 'under', 'U ' + v, juiceOf(l, m, 'under'))}`).join('')}</div>` : ''}</div>`;
 }
 function futuresSection() {
   const L = D.league, n = seasonNum();
@@ -688,7 +689,7 @@ function valueCard(games) {
   const side = pick === 'home' ? g.home : g.away, other = pick === 'home' ? g.away : g.home, T = team(side), O = team(other);
   const nm = t => esc(t.name), f1 = x => x.toFixed(1), P = pick === 'home' ? PH : PA;
   const rec3 = a => `${a[0]}-${a[1]}${a[2] ? '-' + a[2] : ''}`;
-  const row = slipRows({ gameId: g.id, market, pick, odds, line: market === 'spread' ? l.spread : market === 'total' ? l.total : null, season: s })[0];
+  const row = slipRows({ gameId: g.id, market, pick, odds, line: lineVal(l, market), season: s })[0];
   const why = [];
   if (market === 'total') {
     why.push(`${nm(team(g.away))} and ${nm(team(g.home))} project to <b>${f1(projH + projA)}</b> combined points on season averages, ${pick === 'over' ? 'above' : 'below'} the total of ${l.total} by ${f1(edge)}.`);
@@ -740,7 +741,7 @@ onLiveChange(what => {
 /* ---------- Shareable bet slip image ---------- */
 async function placeWager(data) {
   const id = newId();
-  const legs = data.market === 'parlay' ? (data.legs || []) : (['ml', 'spread', 'total'].includes(data.market) ? [data] : []);
+  const legs = data.market === 'parlay' ? (data.legs || []) : (GAME_MARKETS.includes(data.market) ? [data] : []);
   const b = boostFor(legs); if (b) data.boost = b;
   await put('wagers', id, data, false);
   UI.placed = { ...data, id };
@@ -754,6 +755,7 @@ function slipRows(w) {
     if (l.market === 'ml') return { t: `${rn(side)} Moneyline`, s: match, o: l.odds };
     if (l.market === 'spread') return { t: `${rn(side)} ${fmtLine(l.pick === 'home' ? l.line : -l.line)}`, s: 'Spread · ' + match, o: l.odds };
     if (l.market === 'total') return { t: `${l.pick === 'over' ? 'Over' : 'Under'} ${l.line} points`, s: 'Total · ' + match, o: l.odds };
+    if (l.market === 'tth' || l.market === 'tta') return { t: `${rn(l.market === 'tth' ? g.home : g.away)} ${l.pick === 'over' ? 'Over' : 'Under'} ${l.line} points`, s: 'Team total · ' + match, o: l.odds };
     if (l.market === 'future') return { t: `${rankName(l.pick)} to win the title`, s: `League Champion · Season ${seasonNum(w.season)}`, o: l.odds };
     if (l.market === 'wins') return { t: `${rankName(l.team)} ${l.pick === 'over' ? 'Over' : 'Under'} ${l.line} wins`, s: `Regular-season win total · Season ${seasonNum(w.season)}`, o: l.odds };
     return { t: wagerLabel(l), s: '', o: l.odds };
@@ -908,7 +910,7 @@ function lastResults(tid, s, n = 3) {
 }
 function betAction(g) {
   const legs = D.wagers.filter(w => w.status !== 'void' && !w.deleted).flatMap(w => (w.market === 'parlay' ? (w.legs || []) : [w]).map(l => ({ ...l, coach: w.coach })))
-    .filter(l => l.gameId === g.id && ['ml', 'spread', 'total'].includes(l.market));
+    .filter(l => l.gameId === g.id && GAME_MARKETS.includes(l.market));
   if (!legs.length) return null;
   const by = {}; legs.forEach(l => { const k = l.market + '|' + l.pick; (by[k] = by[k] || []).push(l); });
   const top = Object.values(by).sort((a, b) => b.length - a.length)[0];
@@ -1088,7 +1090,8 @@ function legFor(gid, market, pick, tid) {
   if (market === 'wins') { const r = winsBoard().find(x => x.id === tid); return r && r.o ? { gameId: '', market, pick, team: tid, line: r.o.line, odds: pick === 'over' ? r.o.over : r.o.under } : null; }
   if (market === 'future') { const r = futuresBoard().find(x => x.id === pick); return r && r.odds != null ? { gameId: '', market, pick, line: null, odds: r.odds } : null; }
   const g = D.games.find(x => x.id === gid), l = g && lineOf(g); if (!l) return null;
-  return { gameId: gid, market, pick, line: market === 'spread' ? l.spread : market === 'total' ? l.total : null, odds: market === 'ml' ? (pick === 'home' ? l.mlHome : l.mlAway) : juiceOf(l, market, pick) };
+  if ((market === 'tth' || market === 'tta') && lineVal(l, market) == null) return null;
+  return { gameId: gid, market, pick, line: lineVal(l, market), odds: market === 'ml' ? (pick === 'home' ? l.mlHome : l.mlAway) : juiceOf(l, market, pick) };
 }
 // One spread-or-moneyline pick and one total per game; one League Champion pick per parlay.
 function toggleLeg(gid, market, pick, tid) {
@@ -1137,7 +1140,7 @@ function showSlip(gid, market, pick) {
   const g = D.games.find(x => x.id === gid), l = lineOf(g);
   if (ownGame(g)) return;
   const odds = market === 'ml' ? (pick === 'home' ? l.mlHome : l.mlAway) : juiceOf(l, market, pick);
-  const line = market === 'spread' ? l.spread : market === 'total' ? l.total : null;
+  const line = lineVal(l, market);
   const boost = boostFor([{ gameId: gid, market }]);
   UI.slip = { g, market, pick, odds, line, boost };
   const bal = bankroll(me.id).balance;
@@ -1756,7 +1759,7 @@ PAGES.game = function (id) {
       <div class="gp-vs">${side(A, coachA, g.awayScore, !hw)}<div class="gp-at">${g.neutral ? 'vs' : '@'}</div>${side(H, coachH, g.homeScore, hw)}</div>
       ${ko.meta}
       ${l && !g.forfeit ? (done ? finalLines(g, l, A, H) : `<div class="gp-odds"><div><span>Spread</span><b>${l.spread === 0 ? 'PK' : esc(fav.abbr || fav.name) + ' ' + fmtLine(-Math.abs(l.spread))}</b></div><div><span>Total</span><b>O/U ${l.total}</b></div>
-        <div><span>Moneyline</span><b>${esc(A.abbr)} ${fmtOdds(l.mlAway)}</b><b>${esc(H.abbr)} ${fmtOdds(l.mlHome)}</b></div></div>`) + probBar(g, l, done) : ''}
+        <div><span>Moneyline</span><b>${esc(A.abbr)} ${fmtOdds(l.mlAway)}</b><b>${esc(H.abbr)} ${fmtOdds(l.mlHome)}</b></div></div>${l.ttHome != null ? `<p class="muted small" style="margin:6px 0 0;text-align:center">Team totals: <b>${esc(A.abbr)} ${l.ttAway}</b> · <b>${esc(H.abbr)} ${l.ttHome}</b></p>` : ''}`) + probBar(g, l, done) : ''}
       ${canBet ? `<button class="gold" data-betgame="${g.week}" style="margin-top:12px">Bet this game${isGotw ? ' · +10% boost' : ''} →</button>` : ''}${ko.ctl}</div>
     ${done ? broadcastCard(g) : ''}
     ${l && !g.forfeit ? winChart(g, A, H) : ''}
@@ -1976,6 +1979,7 @@ function finalLines(g, l, A, H) {
   const t = hs + as - l.total;
   const tot = t === 0 ? `<b class="push">Push ${l.total}</b>` : `<b class="hit">${t > 0 ? 'Over' : 'Under'} ${l.total} hit</b>`;
   const win = hs > as ? H : A, ml = hs > as ? l.mlHome : l.mlAway;
-  return `<div class="gp-odds final"><div><span>Spread</span>${sp}</div><div><span>Total</span>${tot}<em>${hs + as} total pts</em></div>
+  const ttx = (t, pts, v) => v == null ? '' : `<div><span>${ab(t)} total</span>${pts === v ? `<b class="push">Push ${v}</b>` : `<b class="hit">${pts > v ? 'Over' : 'Under'} ${v} hit</b>`}<em>${ab(t)} scored ${pts}</em></div>`;
+  return `<div class="gp-odds final"><div><span>Spread</span>${sp}</div><div><span>Total</span>${tot}<em>${hs + as} total pts</em></div>${ttx(A, as, l.ttAway)}${ttx(H, hs, l.ttHome)}
     <div><span>Moneyline</span><b class="hit">${ab(win)} won ${fmtOdds(ml)}</b><em>${ab(win === H ? A : H)} ${fmtOdds(win === H ? l.mlAway : l.mlHome)}</em></div></div>`;
 }

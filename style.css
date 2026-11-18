@@ -746,3 +746,6 @@ h3{margin-bottom:10px}
 .vidcard,.vidcard.card{width:fit-content;max-width:100%;margin-left:auto;margin-right:auto;padding:12px 26px;border-radius:999px}
 .cpulinks{display:flex;flex-direction:column;gap:10px}.cpulinks a{color:var(--gold);font-weight:700;text-decoration:none;font-size:15px;line-height:1.35}.cpulinks a:active{opacity:.7}
 .pedit{color:var(--muted);text-decoration:none;font-size:13px;margin-left:4px}
+/* Team totals rows under each game's lines in the sportsbook: [UK team total] [O 23.5] [U 23.5] */
+.betgame .ttrow{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;align-items:center;margin-top:4px;padding-top:8px;border-top:1px dashed var(--line)}
+.betgame .ttname{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;line-height:1.2;text-align:center}

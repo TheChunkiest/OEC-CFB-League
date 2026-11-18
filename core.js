@@ -395,7 +395,7 @@ export function ratings(season, upto) {
 //  1) how far the posted line sits from the model's projected margin/total,
 //  2) key numbers (3, 7, 10, 14) where games land more often, so pushes are likelier,
 //  3) recent form — teams beating expectations draw "public" money, so their side costs more.
-const KEYS = { 3: 0.09, 7: 0.06, 10: 0.04, 14: 0.035 }, SIG_T = 15.5;
+const KEYS = { 3: 0.09, 7: 0.06, 10: 0.04, 14: 0.035 }, SIG_T = 15.5, SIG_TT = 10.5;
 const avgLast = (arr, n = 3) => { const a = arr.slice(-n); return a.length ? a.reduce((s, x) => s + x.v, 0) / a.length : 0; };
 function juicePair(q) {
   const one = x => { const v = clamp(x + 0.0238, 0.43, 0.6); return v >= 0.5 ? -Math.max(100, round5(100 * v / (1 - v))) : Math.max(100, round5(100 * (1 - v) / v)); };
@@ -421,13 +421,25 @@ export function lineFrom(R, g) {
   const total = half(T);
   const qo = clamp(1 - Phi((total - T) / SIG_T) + clamp(0.004 * (avgLast(H.perfT) + avgLast(A.perfT)) / 2, -0.03, 0.03), 0.3, 0.7);
   const [spreadOddsHome, spreadOddsAway] = juicePair(qh), [overOdds, underOdds] = juicePair(qo);
-  return { spread, total, mlHome: american(p), mlAway: american(1 - p), pHome: p, spreadOddsHome, spreadOddsAway, overOdds, underOdds };
+  // Team totals: each team's own points, on a half-point line so they never push.
+  const tt = x => Math.max(3.5, Math.floor(x) + 0.5), ttHome = tt(e.h), ttAway = tt(e.a);
+  const qt = (line, exp) => clamp(1 - Phi((line - exp) / SIG_TT), 0.3, 0.7);
+  const [ttHomeOver, ttHomeUnder] = juicePair(qt(ttHome, e.h)), [ttAwayOver, ttAwayUnder] = juicePair(qt(ttAway, e.a));
+  return { spread, total, mlHome: american(p), mlAway: american(1 - p), pHome: p, spreadOddsHome, spreadOddsAway, overOdds, underOdds,
+    ttHome, ttAway, ttHomeOver, ttHomeUnder, ttAwayOver, ttAwayUnder };
 }
 // Payout for a spread/total pick (older posted lines without juice fields pay -110).
 export function juiceOf(l, market, pick) {
-  const k = market === 'spread' ? (pick === 'home' ? 'spreadOddsHome' : 'spreadOddsAway') : (pick === 'over' ? 'overOdds' : 'underOdds');
+  const k = market === 'spread' ? (pick === 'home' ? 'spreadOddsHome' : 'spreadOddsAway')
+    : market === 'tth' ? (pick === 'over' ? 'ttHomeOver' : 'ttHomeUnder')
+    : market === 'tta' ? (pick === 'over' ? 'ttAwayOver' : 'ttAwayUnder')
+    : (pick === 'over' ? 'overOdds' : 'underOdds');
   return l && l[k] != null ? l[k] : -110;
 }
+// Markets on one game: moneyline, spread, game total, and each team's own total (tth = home, tta = away).
+export const GAME_MARKETS = ['ml', 'spread', 'total', 'tth', 'tta'];
+export const lineVal = (l, market) => !l ? null : market === 'spread' ? l.spread : market === 'total' ? l.total
+  : market === 'tth' ? (l.ttHome ?? null) : market === 'tta' ? (l.ttAway ?? null) : null;
 // Line shown for a game: frozen line if posted, else projection from the latest results.
 // "Now" for the model: every result entered so far this season, including games already finished this week.
 export const nowUpto = () => D.league.phase === PHASES.REG ? D.league.week + 1 : 999;
@@ -777,7 +789,7 @@ export function gotwGameId() {
 }
 export function boostFor(legs) {
   const id = gotwGameId(); if (!id || !legs.length) return null;
-  return legs.every(l => l.gameId === id && ['ml', 'spread', 'total'].includes(l.market)) ? GOTW_BOOST : null;
+  return legs.every(l => l.gameId === id && GAME_MARKETS.includes(l.market)) ? GOTW_BOOST : null;
 }
 // Profit a bet pays if it wins, including any boost.
 export function winProfit(w) { return boosted(w.market === 'parlay' ? parlayProfit(w.stake, w.legs || []) : profit(w.stake, w.odds), w); }
@@ -787,7 +799,7 @@ export function grade(w, g) {
   let edge;
   if (w.market === 'ml') edge = w.pick === 'home' ? hs - as : as - hs;
   else if (w.market === 'spread') { const m = hs - as + w.line; edge = w.pick === 'home' ? m : -m; }
-  else { const t = hs + as - w.line; edge = w.pick === 'over' ? t : -t; }
+  else { const pts = w.market === 'tth' ? hs : w.market === 'tta' ? as : hs + as, t = pts - w.line; edge = w.pick === 'over' ? t : -t; }
   return edge > 0 ? 'won' : edge < 0 ? 'lost' : 'push';
 }
 export function settleOps(gameIds) {
@@ -1047,6 +1059,7 @@ export function wagerLabel(w) {
   const g = D.games.find(x => x.id === w.gameId) || {}, side = w.pick === 'home' ? g.home : g.away;
   if (w.market === 'ml') return `${team(side).name} ML ${fmtOdds(w.odds)}`;
   if (w.market === 'spread') return `${team(side).name} ${fmtLine(w.pick === 'home' ? w.line : -w.line)} (${fmtOdds(w.odds)})`;
+  if (w.market === 'tth' || w.market === 'tta') return `${team(w.market === 'tth' ? g.home : g.away).name} ${w.pick === 'over' ? 'Over' : 'Under'} ${w.line} team total (${fmtOdds(w.odds)})`;
   return `${w.pick === 'over' ? 'Over' : 'Under'} ${w.line} (${fmtOdds(w.odds)}) — ${team(g.away).abbr || team(g.away).name} @ ${team(g.home).abbr || team(g.home).name}`;
 }
 
@@ -1284,6 +1297,7 @@ export function storylines() {
     const hs = +g.homeScore, as = +g.awayScore;
     if (l.market === 'spread') { const v = hs - as + l.line; return Math.abs(v); }
     if (l.market === 'total') return Math.abs(hs + as - l.line);
+    if (l.market === 'tth' || l.market === 'tta') return Math.abs((l.market === 'tth' ? hs : as) - l.line);
     if (l.market === 'ml') return Math.abs(hs - as);
     return null;
   };

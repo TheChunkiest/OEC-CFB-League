@@ -44,7 +44,10 @@ service cloud.firestore {
       return g.home != t && g.away != t && g.season == L.season && g.week >= L.week && g.get('homeScore', null) == null
         && ((d.market == 'ml' && ((d.pick == 'home' && d.odds == ln.get('mlHome', null)) || (d.pick == 'away' && d.odds == ln.get('mlAway', null))))
           || (d.market == 'spread' && d.line == ln.get('spread', null) && ((d.pick == 'home' && d.odds == ln.get('spreadOddsHome', -110)) || (d.pick == 'away' && d.odds == ln.get('spreadOddsAway', -110))))
-          || (d.market == 'total' && d.line == ln.get('total', null) && ((d.pick == 'over' && d.odds == ln.get('overOdds', -110)) || (d.pick == 'under' && d.odds == ln.get('underOdds', -110)))));
+          || (d.market == 'total' && d.line == ln.get('total', null) && ((d.pick == 'over' && d.odds == ln.get('overOdds', -110)) || (d.pick == 'under' && d.odds == ln.get('underOdds', -110))))
+          // Team totals: tth = home team's points, tta = away team's points.
+          || (d.market == 'tth' && d.line == ln.get('ttHome', null) && d.line != null && ((d.pick == 'over' && d.odds == ln.get('ttHomeOver', -110)) || (d.pick == 'under' && d.odds == ln.get('ttHomeUnder', -110))))
+          || (d.market == 'tta' && d.line == ln.get('ttAway', null) && d.line != null && ((d.pick == 'over' && d.odds == ln.get('ttAwayOver', -110)) || (d.pick == 'under' && d.odds == ln.get('ttAwayUnder', -110)))));
     }
     function validFuture(d, L, t) {
       return d.pick != t && L.phase == 'Regular Season' && L.futures.season == L.season && L.futures.open == true
@@ -70,7 +73,7 @@ service cloud.firestore {
     // Game of the Week +10% profit boost: only on single bets on the GOTW, or parlays made only of its lines.
     function validBoost(d, L) {
       return !('boost' in d) || (d.boost == 1.1 && L.gotw.season == L.season && L.gotw.week == L.week && L.gotw.gameId != ''
-        && ((d.market in ['ml', 'spread', 'total'] && d.gameId == L.gotw.gameId)
+        && ((d.market in ['ml', 'spread', 'total', 'tth', 'tta'] && d.gameId == L.gotw.gameId)
           || (d.market == 'parlay' && d.legs.size() <= 3 && d.legs[0].gameId == L.gotw.gameId
             && (d.legs.size() < 2 || d.legs[1].gameId == L.gotw.gameId)
             && (d.legs.size() < 3 || d.legs[2].gameId == L.gotw.gameId))));
