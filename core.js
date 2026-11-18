@@ -1311,7 +1311,9 @@ export function storylines() {
     }
     return { href: '#game/' + g.id, tag: isG ? 'Game of the Week' : 'Up Next', title: `Week ${L.week}: ${team(g.away).name} at ${team(g.home).name}`, body: `${name(g.away)} visits ${name(g.home)}. ${l.spread === 0 ? "Pick'em" : `${team(fav).name} ${fmtLine(-Math.abs(l.spread))}`}, total ${l.total}.` };
   };
-  if (lw == null) {
+  // Preview until a week with a coach's game is in the books (Week 0 can be all CPU games).
+  const userPlayed = D.games.some(g => g.season === s && (g.type || 'reg') === 'reg' && played(g) && (isUserTeam(team(g.home)) || isUserTeam(team(g.away))));
+  if (lw == null || !userPlayed) {
     // Season preview (published, Week 1 not finished): who to watch, the best roster, who has to do a lot with a
     // little, the underdog, the hardest schedule.
     const sim = simulate(s, L.week), used = new Set();
