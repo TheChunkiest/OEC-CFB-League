@@ -371,7 +371,7 @@ const PAGES = {
       <p class="muted small">${pre ? 'Built from team overall, offense and defense ratings and the full schedule, before any Week 0 games.' : 'Re-simulated 1,500 times after every advance using results so far.'}</p>
       <div class="card"><div class="tablewrap"><table>
         <tr>${sortTh(st, 'name', 'Team')}${sortTh(st, 'coach', 'Coach', 'hide-sm')}${sortTh(st, 'likely', 'Likely', 'num')}${sortTh(st, 'expW', 'Proj. W', 'num hide-xs')}${sortTh(st, 'divPct', divLbl.replace('Reg. Season Title', '1st').replace('Division', 'Div'), 'num')}${sortTh(st, 'ccgPct', 'Make Title Game', 'num hide-sm')}${sortTh(st, 'titlePct', 'Title', 'num')}</tr>
-        ${rows.map(r => `<tr id="odds-${esc(r.id)}" class="${myTeam()?.id === r.id ? 'me' : ''}${focus === r.id ? ' focus' : ''}"><td>${chip(r.id)}${subSm(isUserTeam(team(r.id)) ? esc(r.coach) + ' · ' + r.expW.toFixed(1) + ' proj. W' : 'CPU')}</td><td class="hide-sm">${isUserTeam(team(r.id)) ? esc(r.coach) : '<span class="muted">CPU</span>'}</td><td class="num">${r.likely}</td><td class="num hide-xs">${r.expW.toFixed(1)}</td><td class="num">${pctStr(r.divPct)}</td><td class="num hide-sm">${pctStr(r.ccgPct)}</td><td class="num"><b>${pctStr(r.titlePct)}</b></td></tr>`).join('')}
+        ${rows.map(r => `<tr id="odds-${esc(r.id)}" class="${myTeam()?.id === r.id ? 'me' : ''}${focus === r.id ? ' focus' : ''}"><td>${chip(r.id)}${subSm(isUserTeam(team(r.id)) ? esc(r.coach) : 'CPU')}</td><td class="hide-sm">${isUserTeam(team(r.id)) ? esc(r.coach) : '<span class="muted">CPU</span>'}</td><td class="num">${r.likely}</td><td class="num hide-xs">${r.expW.toFixed(1)}</td><td class="num">${pctStr(r.divPct)}</td><td class="num hide-sm">${pctStr(r.ccgPct)}</td><td class="num"><b>${pctStr(r.titlePct)}</b></td></tr>`).join('')}
       </table></div></div>
       <h2>Coach Odds Trend</h2><div class="card chart"><div class="row spread"><div class="seg">
         ${[['titlePct', 'League Title %', 'Title %'], ['divPct', divLbl + ' %', 'Div %'], ['expW', 'Projected Wins', 'Proj. W']].map(([k, l, sm]) => `<button data-metric="${k}" class="${UI.metric === k ? 'on' : ''}"><span class="hide-sm">${l}</span><span class="show-sm">${sm}</span></button>`).join('')}
@@ -1476,7 +1476,7 @@ function trendReadout(D0, i) {
       <div class="trstats"><span>${chg(t, i) || '<span class="muted">–</span>'} <em>vs prior week</em></span><span>${r0 === 0 ? '<span class="muted">–</span>' : `<span class="${r0 > 0 ? 'up' : 'down'}">${r0 > 0 ? '▲' : '▼'}${Math.abs(r0)}</span>`} <em>since preseason</em></span><span><b>#${rank}</b> <em>of ${D0.teams.length} coaches</em></span></div></div>`;
   }
   const rows = [...D0.teams].sort((a, b) => b.v[i] - a.v[i]);
-  return `<div class="muted small" style="margin-bottom:6px">${esc(when)}</div><ol class="trlist">${rows.map(t => `<li data-trend="${esc(t.id)}"><i class="sw" style="background:${t.c}"></i><span class="ab">${esc(t.ab)}</span><b>${trendFmt(t.v[i], D0.isW)}</b>${chg(t, i)}</li>`).join('')}</ol>`;
+  return `<div class="muted small" style="margin-bottom:6px">${esc(when)}</div><ol class="trlist" style="grid-template-rows:repeat(${Math.ceil(rows.length / 2)},auto)">${rows.map(t => `<li data-trend="${esc(t.id)}"><i class="sw" style="background:${t.c}"></i><span class="ab">${esc(t.ab)}</span><b>${trendFmt(t.v[i], D0.isW)}</b>${chg(t, i)}</li>`).join('')}</ol>`;
 }
 function trHover(e) {
   const card = e.target.closest('.trchart'), svg = card.querySelector('svg'), D0 = JSON.parse(card.dataset.tr), r = svg.getBoundingClientRect();

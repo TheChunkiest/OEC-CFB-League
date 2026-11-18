@@ -1016,3 +1016,13 @@ table.compact button.pick{padding:4px 8px;min-height:36px;font-size:12.5px;line-
 .card.game .teams>.meta:first-of-type{margin-top:0}
 table.compact td{white-space:normal}
 table.compact td:first-child{line-height:1.25}
+/* Odds trend list: two tight columns, read top-to-bottom (1-6 left, 7-12 right) */
+.trlist,.trlist[style]{grid-auto-flow:column;grid-template-columns:repeat(2,max-content);gap:4px 34px;justify-content:start}
+@media (max-width:640px){.trlist,.trlist[style]{grid-template-columns:repeat(2,max-content);gap:4px 22px}}
+/* Home feature card: even spacing tag -> teams -> win bar -> button */
+.card.feature .gp-vs{margin:6px 0 0;padding-bottom:0;border-bottom:0}
+.card.feature .pbar{margin-top:12px}
+.card.feature .feat-act{margin-top:14px}
+.card.feature .feat-meta{margin-top:10px}
+/* Schedule: room between the Game of the Week ribbon and the team names */
+.card.game.gotw{padding-top:22px}
