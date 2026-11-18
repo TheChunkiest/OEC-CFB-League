@@ -1551,6 +1551,8 @@ function confRecOf(tid, season) {
     .forEach(g => ((g.home === tid) === (+g.homeScore > +g.awayScore) ? w++ : l++));
   return { w, l };
 }
+// Over/under record as "13 O, 8 U" (plus pushes).
+const fmtOU = a => `${a[0]} O, ${a[1]} U${a[2] ? `, ${a[2]} P` : ''}`;
 function teamProfile(tid, s, upto = Infinity) {
   const out = { gp: 0, pf: 0, pa: 0, ats: [0, 0, 0], ou: [0, 0, 0], dog: [0, 0], fav: [0, 0] };
   D.games.filter(g => g.season === s && g.week < upto && played(g) && !g.forfeit && (g.home === tid || g.away === tid)).forEach(g => {
@@ -1587,7 +1589,7 @@ function teamStatLine(tid, s) {
     home: { v: pct(ha.hw, ha.hl), f: `${ha.hw}-${ha.hl}` }, away: { v: pct(ha.aw, ha.al), f: `${ha.aw}-${ha.al}` },
     close: { v: pct(ha.close[0], ha.close[1]), f: `${ha.close[0]}-${ha.close[1]}` },
     ats: { v: pct(P.ats[0], P.ats[1]), f: `${P.ats[0]}-${P.ats[1]}${P.ats[2] ? '-' + P.ats[2] : ''}` },
-    ou: { v: null, f: `${P.ou[0]}-${P.ou[1]}${P.ou[2] ? '-' + P.ou[2] : ''}` },
+    ou: { v: null, f: fmtOU(P.ou) },
     fav: { v: pct(P.fav[0], P.fav[1]), f: `${P.fav[0]}-${P.fav[1]}` }, dog: { v: pct(P.dog[0], P.dog[1]), f: `${P.dog[0]}-${P.dog[1]}` },
     sos: { v: avg(ha.opp), f: ha.opp.length ? (avg(ha.opp) > 0 ? '+' : '') + avg(ha.opp).toFixed(1) : '–' },
     ovr: { v: t.ovr || null, f: t.ovr || '–' }, off: { v: t.off || null, f: t.off || '–' }, def: { v: t.def || null, f: t.def || '–' },
@@ -1669,7 +1671,7 @@ function coachCareerLine(name) {
     ppg: { v: o.gp ? o.pf / o.gp : null, f: o.gp ? (o.pf / o.gp).toFixed(1) : '–' }, papg: { v: o.gp ? o.pa / o.gp : null, f: o.gp ? (o.pa / o.gp).toFixed(1) : '–' },
     diff: { v: o.gp ? (o.pf - o.pa) / o.gp : null, f: o.gp ? ((o.pf - o.pa) / o.gp > 0 ? '+' : '') + ((o.pf - o.pa) / o.gp).toFixed(1) : '–' },
     big: { v: o.big, f: String(o.big) }, sho: { v: o.sho, f: String(o.sho) },
-    ats: { v: pct(o.ats[0], o.ats[1]), f: r2(...o.ats) }, ou: { v: null, f: r2(...o.ou) },
+    ats: { v: pct(o.ats[0], o.ats[1]), f: r2(...o.ats) }, ou: { v: null, f: fmtOU(o.ou) },
     fav: { v: pct(o.fav[0], o.fav[1]), f: r2(o.fav[0], o.fav[1]) }, dog: { v: pct(o.dog[0], o.dog[1]), f: r2(o.dog[0], o.dog[1]) },
   };
 }
@@ -1935,7 +1937,7 @@ PAGES.game = function (id) {
       if (P.gp && ppgRank[t.id] && papgRank[o.id] && ppgRank[t.id] <= 3 && papgRank[o.id] <= 3) F.push([78, `Strength on strength: ${possN(t.name)} offense (${ord(ppgRank[t.id])} in scoring) against ${possN(o.name)} defense (${ord(papgRank[o.id])} in points allowed).`]);
       const f = formOf(t); if (f != null && Math.abs(f) >= 5) F.push([50, f > 0 ? pick([`${Cap(nick(t))} have been playing ${f.toFixed(1)} points a game better than expected over their last three.`, `Nobody's been hotter than ${t.name} lately: ${f.toFixed(1)} points a game better than the model expected over three weeks.`]) : `${t.name} has been ${Math.abs(f).toFixed(1)} points a game worse than expected over its last three.`]);
       if (P.ats[0] + P.ats[1] >= 4 && Math.abs(P.ats[0] - P.ats[1]) >= 2) F.push([40, P.ats[0] > P.ats[1] ? `${t.name} has been a bettor's friend at ${P.ats[0]}-${P.ats[1]} against the spread.` : `${t.name} is ${P.ats[0]}-${P.ats[1]} against the spread, which bettors have noticed.`]);
-      if (P.ou[0] + P.ou[1] >= 4 && Math.abs(P.ou[0] - P.ou[1]) >= 3) F.push([38, `${P.ou[0] > P.ou[1] ? 'Overs' : 'Unders'} are ${Math.max(P.ou[0], P.ou[1])}-${Math.min(P.ou[0], P.ou[1])} in ${possN(t.name)} games.`]);
+      if (P.ou[0] + P.ou[1] >= 4 && Math.abs(P.ou[0] - P.ou[1]) >= 3) F.push([38, `${possN(t.name)} games have gone ${fmtOU(P.ou)} against the total.`]);
       if (dog === t && P.dog[0] + P.dog[1] >= 2) F.push([45, `As an underdog, ${t.name} is ${P.dog[0]}-${P.dog[1]} straight up this season.`]);
       if (hasCoach(t)) { const n = careerWins(coachOfT(t), true); if (n >= 5) F.push([28, `${coachOfT(t)} has ${n} career wins in the league${(n + 1) % 5 === 0 ? `, so a win here would be No. ${n + 1}` : ''}.`]); }
     });
@@ -1975,7 +1977,7 @@ PAGES.game = function (id) {
   const is = done ? 'was' : 'is', has = done ? 'had' : 'has';
   [[A, PA], [H, PH]].forEach(([t, P]) => {
     if (P.ats[0] + P.ats[1] >= 3) trends.push(`${t.name} ${is} <b>${P.ats[0]}-${P.ats[1]}${P.ats[2] ? '-' + P.ats[2] : ''}</b> against the spread this season${done ? ' going in' : ''}.`);
-    if (P.ou[0] + P.ou[1] >= 3 && Math.abs(P.ou[0] - P.ou[1]) >= 2) trends.push(`The ${P.ou[0] > P.ou[1] ? 'Over' : 'Under'} ${is} <b>${Math.max(P.ou[0], P.ou[1])}-${Math.min(P.ou[0], P.ou[1])}</b> in ${t.name} games.`);
+    if (P.ou[0] + P.ou[1] >= 3 && Math.abs(P.ou[0] - P.ou[1]) >= 2) trends.push(`${t.name} games ${done ? 'had gone' : 'have gone'} <b>${fmtOU(P.ou)}</b> against the total.`);
     if (P.dog[0] + P.dog[1] >= 2) trends.push(`${t.name} ${is} <b>${P.dog[0]}-${P.dog[1]}</b> straight up as an underdog.`);
     const st = streak(recs0[t.id]); if (/^[WL]\d+$/.test(st) && +st.slice(1) >= 3) trends.push(`${t.name} ${has} ${st[0] === 'W' ? 'won' : 'lost'} <b>${st.slice(1)} straight</b>.`);
   });
@@ -2027,7 +2029,7 @@ PAGES.game = function (id) {
     <div class="card"><h3 style="margin-top:0">Tale of the tape</h3><p class="muted small" style="margin-top:0">${done ? 'How the teams stacked up going in. ' : ''}<span class="tb">✓ Green</span> = the edge in that category, <span class="tw">red</span> = behind.</p><div class="tablewrap"><table class="gp-tape">
       <tr><td class="num"><b>${esc(A.abbr || A.name)}</b></td><th></th><td><b>${esc(H.abbr || H.name)}</b></td></tr>
       ${row('Record', rec(recs0[A.id]), rec(recs0[H.id]), wpct(recs0[A.id]), wpct(recs0[H.id]), 1)}${row('Points / game', ppg(PA), ppg(PH), num(PA, 'pf'), num(PH, 'pf'), 1)}${row('Allowed / game', papg(PA), papg(PH), num(PA, 'pa'), num(PH, 'pa'), -1)}
-      ${row('Against the spread', rec3(PA.ats), rec3(PH.ats), ap(PA.ats), ap(PH.ats), 1)}${row('Over-Under', rec3(PA.ou), rec3(PH.ou))}${row('Streak', streak(recs0[A.id]), streak(recs0[H.id]), stv(recs0[A.id]), stv(recs0[H.id]), 1)}
+      ${row('Against the spread', rec3(PA.ats), rec3(PH.ats), ap(PA.ats), ap(PH.ats), 1)}${row('Over-Under', fmtOU(PA.ou), fmtOU(PH.ou))}${row('Streak', streak(recs0[A.id]), streak(recs0[H.id]), stv(recs0[A.id]), stv(recs0[H.id]), 1)}
       ${row('Top 25', rk(A) ? '#' + rk(A) : '–', rk(H) ? '#' + rk(H) : '–', rk(A) || rk(H) ? rkv(rk(A)) : null, rkv(rk(H)), -1)}${row('Power rank', prOf(A) ? '#' + prOf(A) : '–', prOf(H) ? '#' + prOf(H) : '–', prOf(A), prOf(H), -1)}
       ${row('Overall', A.ovr || '–', H.ovr || '–', nz(A.ovr), nz(H.ovr), 1)}${row('Offense', A.off || '–', H.off || '–', nz(A.off), nz(H.off), 1)}${row('Defense', A.def || '–', H.def || '–', nz(A.def), nz(H.def), 1)}${pbA || pbH ? row('Offense playbook', esc(pbA?.off || '–'), esc(pbH?.off || '–')) + row('Defense playbook', esc(pbA?.def || '–'), esc(pbH?.def || '–')) : ''}
       ${!done && sim && sim[A.id] && sim[H.id] ? row('Title odds', pctStr(sim[A.id].titlePct), pctStr(sim[H.id].titlePct), sim[A.id].titlePct, sim[H.id].titlePct, 1) : ''}
