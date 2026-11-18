@@ -1002,3 +1002,17 @@ a.reclink .goty{color:var(--muted)}
 .vidcard b{font-size:14px}
 /* Coach names are links: a touch bolder with a soft dotted underline so they read as tappable */
 a[href^="#coach/"]{font-weight:700;text-decoration:underline;text-decoration-style:dotted;text-decoration-color:rgba(255,255,255,.45);text-underline-offset:3px}
+/* Compact futures / win-total tables */
+table.compact td{padding:6px 4px}
+table.compact td .muted.small,table.compact .show-sm.muted.small{font-size:12px;line-height:1.25}
+table.compact button.pick{padding:4px 8px;min-height:36px;font-size:12.5px;line-height:1.2;min-width:72px}
+.offboard{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:13px}
+.offboard>span{color:var(--muted);font-weight:800;font-size:11px;text-transform:uppercase;letter-spacing:.6px;margin-right:2px}
+.offboard .chip{font-size:13px;gap:5px;padding:2px 0}
+.offboard .chip .sw{width:9px;height:9px}
+/* Game cards: tighter gap under the team names */
+.card.game .teams{gap:2px}
+.card.game .matchup .chip{padding:0}
+.card.game .teams>.meta:first-of-type{margin-top:0}
+table.compact td{white-space:normal}
+table.compact td:first-child{line-height:1.25}

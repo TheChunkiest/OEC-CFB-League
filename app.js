@@ -650,11 +650,13 @@ function futuresSection() {
   let h = `<h2>Season ${n} League Champion</h2>`;
   if (!board.length) return h + `<div class="card empty">Futures are open during the regular season. ${L.phase === PHASES.PRE ? 'They open when the season is published.' : 'Betting has closed for this season; open bets settle when the championship is decided.'}</div>`;
   const open = futuresOpen() && futuresPosted();
-  h += `<div class="card"><p class="muted small" style="margin-top:0">Pick who wins the ${esc(L.conference)} Championship Game. Odds update after every advance${board[0].posted ? '' : ' (projected until the commissioner posts this week\'s lines)'}. A bet keeps the odds it was placed at, and it pays out when the title game is final. A bet on a team that's eliminated from the title race closes as a loss right away. Closes at the end of the regular season.</p>
-    <div class="tablewrap"><table><tr><th>Team</th><th class="hide-sm">Coach</th><th class="num">Chance</th><th class="num">Odds</th></tr>
-    ${board.slice().sort((a, b) => (a.odds == null) - (b.odds == null)).map(r => { const t = team(r.id); return `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td>${chip(r.id)}${subSm(isUserTeam(t) ? esc(t.coach) : 'CPU')}</td><td class="hide-sm">${isUserTeam(t) ? esc(t.coach) : '<span class="muted">CPU</span>'}</td><td class="num">${pctStr(r.p)}</td>
-      <td class="num">${r.out ? '<span class="muted small">Eliminated</span>' : r.odds == null ? '<span class="muted small">Off the board</span>' : open && r.id !== myTeam()?.id ? `<button class="pick${UI.mode === 'parlay' && UI.legs.some(x => x.market === 'future' && x.pick === r.id) ? ' sel' : ''}" data-fut="${esc(r.id)}"><b>${fmtOdds(r.odds)}</b></button>` : `<b>${fmtOdds(r.odds)}</b>`}</td></tr>`; }).join('')}
-    </table></div>${open ? '' : futuresOpen() ? '<p class="muted small">Futures odds open once the commissioner posts this week\'s lines.</p>' : '<p class="muted small">Betting is locked right now.</p>'}</div>`;
+  const live = board.filter(r => r.odds != null), dead = board.filter(r => r.odds == null);
+  const deadLine = (list, label) => list.length ? `<div class="offboard"><span>${label}</span>${list.map(r => chip(r.id, { abbr: true, rank: false })).join('')}</div>` : '';
+  h += `<div class="card"><p class="muted small" style="margin-top:0">Pick the ${esc(L.conference)} champion${board[0].posted ? '' : ' (odds projected until this week\'s lines post)'}. Your odds lock when you bet, it pays when the title game is final, and a team that's eliminated loses right away.</p>
+    <div class="tablewrap"><table class="compact"><tr><th>Team</th><th class="num">Chance</th><th class="num">Odds</th></tr>
+    ${live.map(r => { const t = team(r.id); return `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td>${chip(r.id)} <span class="muted small">${isUserTeam(t) ? esc(t.coach) : 'CPU'}</span></td><td class="num">${pctStr(r.p)}</td>
+      <td class="num">${open && r.id !== myTeam()?.id ? `<button class="pick${UI.mode === 'parlay' && UI.legs.some(x => x.market === 'future' && x.pick === r.id) ? ' sel' : ''}" data-fut="${esc(r.id)}"><b>${fmtOdds(r.odds)}</b></button>` : `<b>${fmtOdds(r.odds)}</b>`}</td></tr>`; }).join('')}
+    </table></div>${deadLine(dead.filter(r => r.out), 'Eliminated')}${deadLine(dead.filter(r => !r.out), 'Off the board')}${open ? '' : futuresOpen() ? '<p class="muted small">Futures odds open once the commissioner posts this week\'s lines.</p>' : '<p class="muted small">Betting is locked right now.</p>'}</div>`;
   return h;
 }
 function winsSection() {
@@ -664,11 +666,12 @@ function winsSection() {
   const open = futuresOpen() && winsPosted();
   const btn = (r, pick) => { const o = r.o; if (!o) return ''; const odds = pick === 'over' ? o.over : o.under;
     return open && r.id !== myTeam()?.id ? `<button class="pick${UI.mode === 'parlay' && UI.legs.some(x => x.market === 'wins' && x.team === r.id && x.pick === pick) ? ' sel' : ''}" data-wins="${esc(r.id)}|${pick}">${pick === 'over' ? 'O' : 'U'} ${o.line} <b>${fmtOdds(odds)}</b></button>` : `${pick === 'over' ? 'O' : 'U'} ${o.line} <b>${fmtOdds(odds)}</b>`; };
+  const live = rows.filter(r => r.o), dead = rows.filter(r => !r.o);
   h += `<div class="card">
-    <div class="tablewrap"><table><tr><th>Team</th><th class="num hide-sm">Record</th><th class="num hide-sm">Proj.</th><th class="num">Over</th><th class="num">Under</th></tr>
-    ${rows.slice().sort((a, b) => (!a.o) - (!b.o)).map(r => `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td>${chip(r.id)} <span class="muted small hide-sm">${esc(team(r.id).coach || '')}</span>${subSm(`${esc(team(r.id).coach || '')} · ${r.w}-${regRec(r.id).l} · proj ${r.proj.toFixed(1)}`)}</td><td class="num hide-sm">${r.w}-${(regRec(r.id)).l}</td><td class="num hide-sm">${r.proj.toFixed(1)}</td>
-      ${r.o ? `<td class="num">${btn(r, 'over')}</td><td class="num">${btn(r, 'under')}</td>` : '<td class="num muted small" colspan="2">Off the board</td>'}</tr>`).join('')}
-    </table></div>${open ? '' : futuresOpen() ? '<p class="muted small">Win totals open once the commissioner posts this week\'s lines.</p>' : '<p class="muted small">Betting is locked right now.</p>'}</div>`;
+    <div class="tablewrap"><table class="compact"><tr><th>Team</th><th class="num hide-sm">Record</th><th class="num hide-sm">Proj.</th><th class="num">Over</th><th class="num">Under</th></tr>
+    ${live.map(r => `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td>${chip(r.id)} <span class="muted small hide-sm">${esc(team(r.id).coach || '')}</span>${subSm(`${esc(team(r.id).coach || '')} · ${r.w}-${regRec(r.id).l} · proj ${r.proj.toFixed(1)}`)}</td><td class="num hide-sm">${r.w}-${(regRec(r.id)).l}</td><td class="num hide-sm">${r.proj.toFixed(1)}</td>
+      <td class="num">${btn(r, 'over')}</td><td class="num">${btn(r, 'under')}</td></tr>`).join('')}
+    </table></div>${dead.length ? `<div class="offboard"><span>Off the board</span>${dead.map(r => chip(r.id, { abbr: true, rank: false })).join('')}</div>` : ''}${open ? '' : futuresOpen() ? '<p class="muted small">Win totals open once the commissioner posts this week\'s lines.</p>' : '<p class="muted small">Betting is locked right now.</p>'}</div>`;
   return h;
 }
 function regRec(tid) {
