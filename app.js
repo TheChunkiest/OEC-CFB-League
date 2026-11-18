@@ -540,7 +540,17 @@ const PAGES = {
         <td>${x.ccg ? `<a href="#game/${esc(x.ccg.g.id)}">${finishTag(x.finish)}</a>` : placeTag(x)}</td></tr>`).join('')}
       </table></div>` : '<div class="muted">No games on record yet.</div>'}</div>`;
     if (teamAwards.length) html += `<div class="card"><h3 style="margin-top:0">Team awards</h3><ul class="clean">${teamAwards.map(({ h, a }) => `<li><b>S${seasonNum(h.season)}</b> · ${/coach of the year/i.test(a.award || '') ? '🏅 ' : ''}${esc(a.award)}: ${esc(a.winner)}${String(a.winner || '').toLowerCase() === team(a.team).name.toLowerCase() ? '' : ' ' + chip(a.team, { abbr: true, rank: false, season: h.season })}</li>`).join('')}</ul></div>`;
-    html += `<div class="card"><h3 style="margin-top:0">Head-to-head vs coaches</h3>${vs.length ? `<table><tr><th>Opponent</th><th class="num">W-L</th><th class="num">Win %</th></tr>${vs.map(([o, r]) => `<tr><td><a href="#coach/${slug(o)}">${esc(o)}</a></td><td class="num">${r.w}-${r.l}</td><td class="num">${pct(r.w, r.l)}</td></tr>`).join('')}</table>` : '<div class="muted">No coach-vs-coach games yet.</div>'}</div>`;
+    // Head-to-head: tap a row to see every game against that coach (newest first), each linking to its game page.
+    const h2hGames = o => coachMeetings(name, o).map(g => {
+      const side = coachOf(g, 'home').toLowerCase() === String(name).toLowerCase() ? 'home' : 'away', op = side === 'home' ? 'away' : 'home';
+      const my = +g[side + 'Score'], th = +g[op + 'Score'], won = my > th, ab = id => esc(team(id).abbr || team(id).name);
+      const when = g.type === 'ccg' ? 'Title game' : g.type === 'bowl' ? esc(g.note || 'Bowl') : 'Wk ' + g.week;
+      return `<a class="h2hg" href="#game/${esc(g.id)}"><span class="muted">S${seasonNum(g.season)} · ${when}</span><b class="${won ? 'win' : 'loss'}">${g.forfeit ? (won ? 'FW' : 'FL') : won ? 'W' : 'L'}</b><span>${ab(g[side])} ${g.forfeit ? '' : my}<span class="muted"> – </span>${ab(g[op])} ${g.forfeit ? '' : th}</span><span class="go" aria-hidden="true">›</span></a>`;
+    }).join('');
+    const h2hOpen = UI.h2h || (UI.h2h = {});
+    html += `<div class="card"><h3 style="margin-top:0">Head-to-head vs coaches</h3>${vs.length ? `<table class="h2h"><tr><th>Opponent</th><th class="num">W-L</th><th class="num">Win %</th><th aria-hidden="true"></th></tr>${vs.map(([o, r]) => { const k = name + '|' + o, on = !!h2hOpen[k];
+      return `<tr class="clickable h2hrow${on ? ' on' : ''}" data-h2h="${esc(k)}" aria-expanded="${on}"><td><a href="#coach/${slug(o)}">${esc(o)}</a></td><td class="num">${r.w}-${r.l}</td><td class="num">${pct(r.w, r.l)}</td><td class="num muted h2hcar">${on ? '▴' : '▾'}</td></tr>${on ? `<tr class="h2hx"><td colspan="4">${h2hGames(o) || '<span class="muted small">No games found.</span>'}</td></tr>` : ''}`; }).join('')}</table>
+      <p class="muted small" style="margin:6px 0 0">Tap a row to see every game against that coach.</p>` : '<div class="muted">No coach-vs-coach games yet.</div>'}</div>`;
     // Sportsbook: its own section, by season.
     if (u) {
       const bs = [...new Set(D.wagers.filter(w => w.uid === u.id).map(w => w.season))].sort((a, b) => b - a).map(se => {
@@ -2282,6 +2292,7 @@ document.addEventListener('click', async e => {
   const lx = e.target.closest('[data-livex]');
   if (lx) { try { localStorage.setItem('oecLiveDismissed', lx.dataset.livex); } catch (err) { /* ignore */ } showLive(); return; }
   const tf = e.target.closest('[data-tsflip]'); if (tf) { UI.tsFlip = !UI.tsFlip; route(); return; }
+  const hh = e.target.closest('[data-h2h]'); if (hh && !e.target.closest('a')) { const k = hh.dataset.h2h; UI.h2h = { ...(UI.h2h || {}), [k]: !(UI.h2h || {})[k] }; const y = scrollY; route(); scrollTo(0, y); return; }
   const cf = e.target.closest('[data-cbflip]'); if (cf) { UI.cbFlip = !UI.cbFlip; route(); return; }
   const cb = e.target.closest('[data-cbspan]'); if (cb) { UI.cbSpan = cb.dataset.cbspan; route(); return; }
   const tr = e.target.closest('tr[data-team]'); if (tr && !e.target.closest('a')) { location.hash = '#team/' + tr.dataset.team; return; }

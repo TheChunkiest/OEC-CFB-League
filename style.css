@@ -1104,3 +1104,12 @@ button.pill.tailpill:hover{background:rgba(245,184,46,.12)}
 .awrev ul.clean li{padding:3px 0}
 .awhome .awchamp{text-align:center;margin:4px 0 8px}
 .awhome table td:first-child{color:var(--muted)}
+/* fix207: head-to-head game list on coach pages */
+table.h2h .h2hrow{cursor:pointer}
+table.h2h .h2hcar{width:24px;font-size:12px}
+table.h2h tr.h2hx td{padding:2px 0 8px;background:transparent}
+table.h2h .h2hrow.on td{border-bottom-color:transparent}
+.h2hg{display:grid;grid-template-columns:minmax(92px,auto) 28px 1fr 14px;align-items:center;gap:8px;padding:7px 10px;margin:4px 0;border:1px solid var(--line);border-radius:8px;background:var(--card2);color:var(--text);font-size:14px;text-decoration:none}
+.h2hg:hover{border-color:var(--gold);text-decoration:none}
+.h2hg b{text-align:center}
+.h2hg .go{color:var(--muted)}
