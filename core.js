@@ -1146,9 +1146,13 @@ export function awardGame(h, a) {
 /* ---------------- Storylines ---------------- */
 /* ---------- AI game recaps (moments.json from the Game moments workflow; loaded by app.js) ---------- */
 export const AI = { moms: null, loading: null };
+// Switched off: the broadcast-watching bot didn't work well enough, so the site is back to its own recaps,
+// previews and storylines. Nothing here fetches moments.json or uses AI data while this is false.
+export const AI_ON = false;
 // moments.json is a static file from GitHub (no database reads). Loading it re-runs the model, because the
 // broadcast scouting nudges team ratings a little (see ratings()).
 export function loadAI() {
+  if (!AI_ON) { AI.moms ||= { games: {} }; return Promise.resolve(AI.moms); }
   if (AI.moms) return Promise.resolve(AI.moms);
   return AI.loading ||= fetch('moments.json?t=' + Math.floor(Date.now() / 600000), { cache: 'no-cache' })
     .then(r => r.ok ? r.json() : null).catch(() => null).then(j => { AI.moms = j && j.games ? j : { games: {} }; clearCache(); return AI.moms; });
@@ -1156,6 +1160,7 @@ export function loadAI() {
 const aiHidden = (gid, k) => ((D.league.momHide || {})[gid] || []).includes(k);
 // The written recap for a final, unless the commissioner hid it.
 export const aiRecap = g => {
+  if (!AI_ON) return null;
   const rec = g && AI.moms?.games?.[g.id], r = (rec && rec.ok && !aiHidden(g.id, 'recap') && rec.r) || null;   // ok = the bot confirmed it got the video
   if (!r || !(D.league.pnames && (D.league.pnames[g.home] || D.league.pnames[g.away]))) return r;
   const f = t => fixText(t, [g.home, g.away]);   // commissioner name fixes, applied to the written text too
