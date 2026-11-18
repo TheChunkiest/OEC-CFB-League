@@ -356,7 +356,7 @@ const PAGES = {
     const games = D.games.filter(g => g.season === s && g.week === wk);
     const gt = gotwTally(s, wk).game;
     return `<div class="row spread schedhead"><h2 style="margin:0">Schedule &amp; Scores</h2>
-      <select data-nav="schedule">${weeks.map(w => `<option value="${w}" ${w === wk ? 'selected' : ''}>Week ${w}</option>`).join('')}</select></div>
+      <select data-nav="schedule" aria-label="Week">${weeks.map(w => `<option value="${w}" ${w === wk ? 'selected' : ''}>Week ${w}</option>`).join('')}</select></div>
       ${games.length ? weekOrder(games, gt && gt.id).map(g => gameCard(g, { gotw: gt && gt.id === g.id })).join('') : '<div class="card empty">No games for this week.</div>'}`;
   },
 
@@ -458,10 +458,12 @@ const PAGES = {
     const champ = ccg && (+ccg.homeScore > +ccg.awayScore ? ccg.home : ccg.away) === id;
     const place = past && sc ? seasonPlaces(s).places[sc.toLowerCase()] : null;
     const coachLine = past ? (sc ? `Coach <a href="#coach/${slug(sc)}">${esc(sc)}</a>` : 'CPU') : isUserTeam(t) ? `Coach <a href="#coach/${slug(t.coach)}">${esc(t.coach)}</a>` : 'CPU';
+    const tAw = (D.history.find(h => h.season === s)?.awards || []).filter(a => a.team === id);
     return `<p><a href="${past ? '#history' : '#teams'}">← ${past ? 'History' : 'All teams'}</a></p>
       ${seasonsOf.length > 1 ? `<div class="bfilters">${seasonsOf.map(x => `<a class="bfilter${x === s ? ' on' : ''}" href="#team/${esc(id)}${x === cur ? '' : '/' + x}">S${seasonNum(x)} <span>${x}</span></a>`).join('')}</div>` : ''}
       <div class="card" style="border-left:6px solid ${esc(teamColor(t))}"><h2>${pr ? '#' + pr.rank + ' ' : ''}${esc(t.name)}${past ? ` <span class="muted" style="font-size:.7em">· Season ${seasonNum(s)}</span>` : ''}</h2>
         <div class="muted">${esc(past ? (seasonMembers(s).has(t.id) ? D.league.conference : t.conf) : t.conf)}${divOf(t, s) && !past ? ' ' + esc(divOf(t, s)) : ''} · ${coachLine}${champ ? ' · <span class="tag gold">🏆 League champion</span>' : ccg ? ' · <span class="tag">Title game</span>' : ''}</div>
+        ${tAw.length ? `<div class="small" style="margin-top:6px">${tAw.map(a => `<span class="tag">${/coach of the year/i.test(a.award || '') ? '🏅' : '🏆'} ${esc(a.award)}${/coach of the year/i.test(a.award || '') && coachName(a.winner) ? ` · <a href="#coach/${slug(coachName(a.winner))}">${esc(coachName(a.winner))}</a>` : ''}</span>`).join(' ')}</div>` : ''}
         <div class="stat" style="margin-top:10px"><div><span>Record</span><b>${rec(r)}</b></div><div><span>Conf</span><b>${(() => { const c = confRecOf(t.id, s); return c.w + '-' + c.l; })()}</b></div><div><span>PF / PA</span><b>${r.pf} / ${r.pa}</b></div><div><span>${past ? 'Finished on' : 'Streak'}</span><b>${streak(r)}</b></div>
           ${place ? `<div><span>Finish</span><b>${ordinal(place)}</b></div>` : ''}${past ? '' : `<div><span>OVR / OFF / DEF</span><b>${t.ovr || '–'} / ${t.off || '–'} / ${t.def || '–'}</b></div>`}${pb ? `<div><span>Offense playbook</span><b>${esc(pb.off || '–')}</b></div><div><span>Defense playbook</span><b>${esc(pb.def || '–')}</b></div>` : ''}${sim ? `<div><span>Likely record</span><b>${sim.likely}</b></div><div><span>Title odds</span><b>${pctStr(sim.titlePct)}</b></div>` : ''}</div></div>
       ${teamStatsCard(id, s)}
@@ -503,7 +505,7 @@ const PAGES = {
         <td class="num hide-sm">${x.gp ? (x.pf / x.gp).toFixed(1) : '–'}</td><td class="num hide-sm">${x.gp ? (x.pa / x.gp).toFixed(1) : '–'}</td>
         <td>${x.ccg ? `<a href="#game/${esc(x.ccg.g.id)}">${finishTag(x.finish)}</a>` : placeTag(x)}</td></tr>`).join('')}
       </table></div>` : '<div class="muted">No games on record yet.</div>'}</div>`;
-    if (teamAwards.length) html += `<div class="card"><h3 style="margin-top:0">Team awards</h3><ul class="clean">${teamAwards.map(({ h, a }) => `<li><b>S${seasonNum(h.season)}</b> · ${esc(a.award)}: ${esc(a.winner)}${String(a.winner || '').toLowerCase() === team(a.team).name.toLowerCase() ? '' : ' ' + chip(a.team, { abbr: true, rank: false, season: h.season })}</li>`).join('')}</ul></div>`;
+    if (teamAwards.length) html += `<div class="card"><h3 style="margin-top:0">Team awards</h3><ul class="clean">${teamAwards.map(({ h, a }) => `<li><b>S${seasonNum(h.season)}</b> · ${/coach of the year/i.test(a.award || '') ? '🏅 ' : ''}${esc(a.award)}: ${esc(a.winner)}${String(a.winner || '').toLowerCase() === team(a.team).name.toLowerCase() ? '' : ' ' + chip(a.team, { abbr: true, rank: false, season: h.season })}</li>`).join('')}</ul></div>`;
     html += `<div class="card"><h3 style="margin-top:0">Head-to-head vs coaches</h3>${vs.length ? `<table><tr><th>Opponent</th><th class="num">W-L</th><th class="num">Win %</th></tr>${vs.map(([o, r]) => `<tr><td><a href="#coach/${slug(o)}">${esc(o)}</a></td><td class="num">${r.w}-${r.l}</td><td class="num">${pct(r.w, r.l)}</td></tr>`).join('')}</table>` : '<div class="muted">No coach-vs-coach games yet.</div>'}</div>`;
     // Sportsbook: its own section, by season.
     if (u) {
@@ -556,7 +558,6 @@ const PAGES = {
       html += `<div class="card"><p class="muted small" style="margin-top:0">Pick one of the three finalists in each category. You can change your ballot until voting closes after the league championship game.</p>
         ${(A.categories || []).map(c => `<h3>${esc(c.label)}</h3>${c.options.map((o, i) => `<label class="vote-opt ${ballot.picks[c.key] === i ? 'on' : ''}"><input type="radio" name="aw_${esc(c.key)}" value="${i}" ${ballot.picks[c.key] === i ? 'checked' : ''} ${canVote ? '' : 'disabled'}>
           <span>${esc(o.name)}${o.team ? ' · ' + chip(o.team) : ''}</span></label>`).join('')}`).join('')}
-        <h3>Your "Holy Shit" moment of the season</h3><textarea id="hsm" rows="3" maxlength="600" ${canVote ? '' : 'disabled'} placeholder="The play, the comeback, the meltdown…">${esc(ballot.moment || '')}</textarea>
         ${canVote ? `<button data-act="ballot" style="margin-top:10px">${ballot.id ? 'Update ballot' : 'Submit ballot'}</button>` : ''} <span id="bmsg" class="muted"></span></div>`;
     }
     return html;
@@ -576,12 +577,12 @@ const PAGES = {
     const H = D.history.slice().sort((a, b) => b.season - a.season), C = Object.values(coachStats()).sort((a, b) => b.titles - a.titles || (b.w / Math.max(1, b.w + b.l)) - (a.w / Math.max(1, a.w + a.l)));
     const champLine = h => h.champCoach ? `${esc(h.champCoach)} over ${esc(h.runnerCoach || 'CPU')} — ${esc(team(h.champTeam).name)} ${h.champScore ?? ''}, ${esc(team(h.runnerTeam).name)} ${h.runnerScore ?? ''}` : esc(h.summary || '');
     return `<h2>League Champions</h2><div class="card">${H.length ? H.map(h => `<div class="champ"><div class="yr">S${seasonNum(h.season)}<div class="muted small" style="font-family:system-ui">${h.season}</div></div><div>${(() => { const g = D.games.find(x => x.season === h.season && x.type === 'ccg' && played(x)); return g ? `<a class="reclink" href="#game/${esc(g.id)}"><b>${champLine(h)}</b></a>` : `<b>${champLine(h)}</b>`; })()}${h.notes ? `<div class="muted small">${esc(h.notes)}</div>` : ''}</div></div>`).join('') : '<div class="muted">No completed seasons yet.</div>'}</div>
+      ${seasonAwardsCard(H)}
       <h2>All-Time Coaches</h2><div class="card"><div class="tablewrap"><table><tr><th>Coach</th><th class="num hide-sm">Seasons</th><th class="num">W-L</th><th class="num">Win %</th><th class="num">Titles</th></tr>
         ${C.map(c => `<tr><td><a href="#coach/${slug(c.name)}">${esc(c.name)}</a></td><td class="num hide-sm">${c.seasons.size}</td><td class="num">${c.w}-${c.l}</td><td class="num">${c.w + c.l ? (c.w / (c.w + c.l) * 100).toFixed(1) + '%' : '–'}</td><td class="num">${c.titles ? '🏆'.repeat(Math.min(c.titles, 5)) : '–'}</td></tr>`).join('')}
       </table></div><p class="muted small">Tap a coach for their profile: season-by-season records, every team they've coached, head-to-head and betting.</p></div>
-      ${carousel(C)}
-      <h2>Season Awards</h2>${H.filter(h => (h.awards || []).length).map(h => `<div class="card"><h3 style="margin-top:0">${h.season}</h3><div class="tablewrap"><table>${h.awards.map(a => `<tr><td class="wrap">${esc(a.award)}</td><td class="wrap">${(() => { const g = awardGame(h, a); return g ? `<a class="reclink" href="#game/${esc(g.id)}"><b>${esc(a.winner)}</b><div class="small goty">${esc(team(g.away).abbr || team(g.away).name)} ${g.awayScore} @ ${esc(team(g.home).abbr || team(g.home).name)} ${g.homeScore} · ${g.type === 'ccg' ? 'Title game' : 'Week ' + g.week}</div></a>` : `<b>${esc(a.winner)}</b>`; })()}${subSm(a.team ? esc(team(a.team).name) : '')}</td><td class="hide-sm">${a.team ? chip(a.team, { season: h.season, rank: false }) : ''}</td><td class="num muted small hide-sm">${a.votes != null ? a.votes + (a.votes === 1 ? ' vote' : ' votes') : ''}</td></tr>`).join('')}</table></div></div>`).join('') || '<div class="card muted">No awards yet.</div>'}
-      <h2>"Holy Shit" Moments</h2>${H.filter(h => (h.moments || []).length).map(h => `<div class="card"><h3 style="margin-top:0">${h.season}</h3>${h.moments.map(m => `<div class="story"><p>${esc(m.text)}</p>${m.coach ? `<div class="muted small">— ${esc(m.coach)}</div>` : ''}</div>`).join('')}</div>`).join('') || '<div class="card muted">None yet.</div>'}`;
+      ${coachBoard()}
+      ${carousel(C)}`;
   },
 
   rules() {
@@ -1593,6 +1594,22 @@ function confRecOf(tid, season) {
 }
 // Over/under record as "13 O, 8 U" (plus pushes).
 const fmtOU = a => `${a[0]} O, ${a[1]} U${a[2] ? `, ${a[2]} P` : ''}`;
+// History: one Season Awards card with a centered season picker (newest first).
+function seasonAwardsCard(H) {
+  const hs = H.filter(h => (h.awards || []).length); if (!hs.length) return '';
+  const h = hs.find(x => x.season === +UI.awSeason) || hs[0];
+  const winner = a => {
+    const g = awardGame(h, a);
+    if (g) return `<a class="reclink" href="#game/${esc(g.id)}"><b>${esc(a.winner)}</b><div class="small goty">${esc(team(g.away).abbr || team(g.away).name)} ${g.awayScore} @ ${esc(team(g.home).abbr || team(g.home).name)} ${g.homeScore} · ${g.type === 'ccg' ? 'Title game' : 'Week ' + g.week}</div></a>`;
+    // Coach of the Year links to the coach, with the team they won it with.
+    if (/coach of the year/i.test(a.award || '')) { const c = coachName(a.winner); return `${c ? `<a href="#coach/${slug(c)}">${esc(c)}</a>` : `<b>${esc(a.winner)}</b>`}${a.team ? `<div class="small">${chip(a.team, { season: h.season, rank: false })}</div>` : ''}`; }
+    return `<b>${esc(a.winner)}</b>${a.team ? `<div class="small">${chip(a.team, { season: h.season, rank: false })}</div>` : ''}`;
+  };
+  return `<h2>Season Awards</h2><div class="card"><div class="row" style="justify-content:center;margin-bottom:6px"><select data-awseason aria-label="Season">${hs.map(x => `<option value="${x.season}" ${x === h ? 'selected' : ''}>Season ${seasonNum(x.season)} · ${x.season}</option>`).join('')}</select></div>
+    <div class="tablewrap"><table>${h.awards.map(a => `<tr><td class="wrap">${/coach of the year/i.test(a.award || '') ? '🏅 ' : ''}${esc(a.award)}</td><td class="wrap">${winner(a)}</td></tr>`).join('')}</table></div></div>`;
+}
+// Match a typed name to a league coach (case-insensitive).
+const coachName = n => { const k = String(n || '').trim().toLowerCase(); return Object.values(coachStats()).map(c => c.name).find(c => c.toLowerCase() === k) || ''; };
 function teamProfile(tid, s, upto = Infinity) {
   const out = { gp: 0, pf: 0, pa: 0, ats: [0, 0, 0], ou: [0, 0, 0], dog: [0, 0], fav: [0, 0] };
   D.games.filter(g => g.season === s && g.week < upto && played(g) && !g.forfeit && (g.home === tid || g.away === tid)).forEach(g => {
@@ -1685,9 +1702,9 @@ function teamStatsCard(tid, s) {
     <p class="muted small" style="margin:8px 0 0"><span class="srk top">Green</span> = top quarter of the league, <span class="srk bot">red</span> = bottom quarter. One-score games are decided by 8 or fewer. Schedule strength is the average model rating of opponents played (1st = toughest).</p></div>`;
 }
 // Coach page: career stats across every team a coach has run (each game counts for whoever coached that side).
-function coachCareerLine(name) {
+function coachCareerLine(name, season = null) {
   const o = { w: 0, l: 0, hw: 0, hl: 0, aw: 0, al: 0, cl: [0, 0], gp: 0, pf: 0, pa: 0, ats: [0, 0, 0], ou: [0, 0, 0], fav: [0, 0], dog: [0, 0], cw: 0, cll: 0, big: 0, sho: 0, tg: [0, 0] };
-  D.games.filter(g => played(g) && !g.forfeit).forEach(g => ['home', 'away'].forEach(side => {
+  D.games.filter(g => played(g) && !g.forfeit && (season == null || g.season === season)).forEach(g => ['home', 'away'].forEach(side => {
     if (coachOf(g, side) !== name) return;
     const home = side === 'home', my = home ? +g.homeScore : +g.awayScore, th = home ? +g.awayScore : +g.homeScore, won = my > th, other = coachOf(g, home ? 'away' : 'home'), l = lineOf(g);
     won ? o.w++ : o.l++; o.gp++; o.pf += my; o.pa += th;
@@ -1733,6 +1750,32 @@ function coachStatsCard(name) {
   return `<div class="card"><div class="row spread"><h3 style="margin:0">Career stats</h3><span class="muted small">Every team, every season · rank among ${n} coaches</span></div>
     <div class="tstats">${COACH_STATS.map(([grp, rows]) => `<div class="tsg"><div class="tsh">${grp}</div><table>${rows.map(([k, label, dir]) => `<tr><td>${label}</td><td class="num"><b>${me[k].f}</b></td><td class="num">${pill(k, dir)}</td></tr>`).join('')}</table></div>`).join('')}</div>
     <p class="muted small" style="margin:8px 0 0"><span class="srk top">Green</span> = top quarter of league coaches, <span class="srk bot">red</span> = bottom quarter. Forfeits aren't counted.</p></div>`;
+}
+// History page: coach leaderboard. Span buttons (All-time / each season), a stat dropdown, tap the header to flip.
+function coachBoard() {
+  const seas = [...new Set(D.games.filter(played).map(g => g.season))].sort((a, b) => b - a); if (!seas.length) return '';
+  const se = seas.includes(+UI.cbSpan) ? +UI.cbSpan : null;
+  const names = [...new Set(D.games.filter(g => played(g) && !g.forfeit && (se == null || g.season === se)).flatMap(g => [coachOf(g, 'home'), coachOf(g, 'away')]))].filter(c => c && c !== 'CPU');
+  const opts = COACH_STATS.map(([g, rows]) => [g, rows.filter(r => r[0] !== 'ou').map(r => r[0] === 'vsc' && se != null ? ['vsc', 'Record', 1] : r)]);
+  const flat = opts.flatMap(([, rows]) => rows), key = flat.some(r => r[0] === UI.cbKey) ? UI.cbKey : 'vsc';
+  const [, label, dir0] = flat.find(r => r[0] === key), dir = (dir0 || 1) * (UI.cbFlip ? -1 : 1);
+  const lines = names.map(n => ({ n, x: coachCareerLine(n, se)[key], cs: coachSeasons(n).filter(c => se == null || c.season === se) })).filter(l => l.cs.length);
+  const has = lines.filter(l => l.x.v != null).sort((p, q) => (q.x.v - p.x.v) * dir || p.n.localeCompare(q.n)), none = lines.filter(l => l.x.v == null).sort((p, q) => p.n.localeCompare(q.n));
+  const rankOf2 = v => has.filter(l => (l.x.v - v) * (dir0 || 1) > 1e-9).length + 1, top = has.length ? Math.max(...has.map(l => Math.abs(l.x.v))) : 1;
+  const me = (myTeam()?.coach || '').toLowerCase();
+  const rows = [...has, ...none].map(l => {
+    const r = l.x.v == null ? null : rankOf2(l.x.v), tie = r && has.filter(o => Math.abs(o.x.v - l.x.v) <= 1e-9).length > 1;
+    const latest = l.cs[l.cs.length - 1], col = latest.teams[0] ? teamColor(team(latest.teams[0])) : "#888";
+    const seen = new Set(), chips = l.cs.slice().reverse().flatMap(c => c.teams.map(id => [id, c.season])).filter(([id]) => !seen.has(id) && seen.add(id));
+    const w = l.x.v == null ? 0 : Math.max(4, Math.abs(l.x.v) / (top || 1) * 100);
+    return `<tr class="${l.n.toLowerCase() === me ? 'me' : ''}"><td class="rank">${r ? (tie ? 'T-' : '') + r : '–'}</td><td><a href="#coach/${slug(l.n)}"><b>${esc(l.n)}</b></a><div class="small cbteams">${chips.map(([id, ss]) => chip(id, { abbr: true, rank: false, season: ss })).join(' ')}</div></td>
+      <td class="num tsv"><b>${l.x.f}</b>${w ? `<i style="width:${w.toFixed(0)}%;background:${esc(liftColor(col))}"></i>` : ''}</td></tr>`; }).join('');
+  return `<h2>Coach Stats</h2><div class="card"><div class="row" style="gap:8px;flex-direction:column;align-items:center;text-align:center">
+      <div class="seg segscroll" role="group" aria-label="Stats span"><button data-cbspan="all" class="${se == null ? 'on' : ''}">All-time</button>${seas.map(x => `<button data-cbspan="${x}" class="${se === x ? 'on' : ''}" aria-label="Season ${seasonNum(x)}, ${x}">S${seasonNum(x)}</button>`).join('')}</div>
+      <select data-cbstat aria-label="Stat">${opts.map(([g, rows]) => `<optgroup label="${g}">${rows.map(([k, l]) => `<option value="${k}" ${k === key ? 'selected' : ''}>${l}</option>`).join('')}</optgroup>`).join('')}</select>
+      <span class="muted small">${se == null ? 'Every season' : `Season ${seasonNum(se)} · ${se}`}${key === 'vsc' ? ' · games vs league coaches' : ''}</span></div>
+    <div class="tablewrap" style="margin-top:8px"><table class="tsboard"><tr><th>#</th><th>Coach</th><th class="num sortable" data-cbflip="1">${esc(label)} ${UI.cbFlip ? '▲' : '▼'}</th></tr>${rows}</table></div>
+    <p class="muted small" style="margin:8px 0 0">Tap the stat header to flip the order. Forfeits aren't counted.</p></div>`;
 }
 function coachMeetings(c1, c2, exceptId) {
   if (!c1 || !c2 || c1 === 'CPU' || c2 === 'CPU') return [];
@@ -2119,6 +2162,19 @@ function acctHtml(p) {
   return `<div class="greet"><div class="hello">${hello}</div>${bits.length ? `<div class="gsub">${bits.join('')}</div>` : ''}</div>
     <div class="acctbtns">${isCommish() ? '<a class="btn gold" href="admin.html">Commissioner</a>' : ''}<a class="btn ghost" href="#account">Account</a></div>`;
 }
+// Screen readers need a name for every input and menu. Fields without a <label> get one from the nearest
+// visible caption (a preceding label/heading/span), falling back to their placeholder or first option.
+function nameFields(root) {
+  if (!root) return;
+  root.querySelectorAll('input:not([type=hidden]),select,textarea').forEach(el => {
+    if (el.labels?.length || el.getAttribute('aria-label')) return;
+    let cap = '', p = el.previousElementSibling;
+    while (p && !cap) { if (!p.matches('input,select,button')) cap = p.textContent.trim(); p = p.previousElementSibling; }
+    cap = cap || el.getAttribute('placeholder') || el.getAttribute('title') || (el.tagName === 'SELECT' ? el.options[0]?.textContent : '') || el.dataset.k || el.name || '';
+    if (cap) el.setAttribute('aria-label', cap.slice(0, 60));
+  });
+}
+window.nameFields = nameFields;
 function route() {
   // A shared tail link (#tail/<betId>) opens the sportsbook with that bet's slip in a pop-up, not a separate page.
   if (location.hash.startsWith('#tail/')) {
@@ -2132,7 +2188,7 @@ function route() {
   // Keep the selected tab in view when the tab bar scrolls sideways (phones).
   requestAnimationFrame(() => { const on = $('#nav a.on'), n = $('#nav'); if (on && n.scrollWidth > n.clientWidth) n.scrollLeft = Math.max(0, on.offsetLeft - (n.clientWidth - on.offsetWidth) / 2); });
   header();
-  try { $('#view').innerHTML = (PAGES[page] || PAGES.home)(decodeURIComponent(arg || '')); parlayBar(); }
+  try { $('#view').innerHTML = (PAGES[page] || PAGES.home)(decodeURIComponent(arg || '')); parlayBar(); nameFields($('#view')); }
   catch (e) { console.error(e); $('#view').innerHTML = `<div class="card err">Something went wrong rendering this page: ${esc(e.message)}</div>`; }
   // New page: start at the top, or at the row a storyline pointed to.
   if (route.last !== location.hash) {
@@ -2166,6 +2222,8 @@ document.addEventListener('click', async e => {
   const lx = e.target.closest('[data-livex]');
   if (lx) { try { localStorage.setItem('oecLiveDismissed', lx.dataset.livex); } catch (err) { /* ignore */ } showLive(); return; }
   const tf = e.target.closest('[data-tsflip]'); if (tf) { UI.tsFlip = !UI.tsFlip; route(); return; }
+  const cf = e.target.closest('[data-cbflip]'); if (cf) { UI.cbFlip = !UI.cbFlip; route(); return; }
+  const cb = e.target.closest('[data-cbspan]'); if (cb) { UI.cbSpan = cb.dataset.cbspan; route(); return; }
   const tr = e.target.closest('tr[data-team]'); if (tr && !e.target.closest('a')) { location.hash = '#team/' + tr.dataset.team; return; }
   const t = e.target.closest('[data-finteam],[data-pname],[data-momhide],[data-sort],[data-metric],[data-trend],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-slip],[data-popular],[data-res],[data-act],[data-close],[data-stake],[data-acct],[data-cancel],[data-cashout],[data-value],[data-kinv],[data-kacc],[data-kdec],[data-kcan]');
   if (!t) return;
@@ -2239,7 +2297,7 @@ document.addEventListener('click', async e => {
     const picks = {}, cats = D.league.awards.categories || [];
     for (const c of cats) { const v = $(`input[name="aw_${c.key}"]:checked`); if (!v) return alert('Pick a finalist for ' + c.label + '.'); picks[c.key] = +v.value; }
     const s = S(), uid = auth.profile.id;
-    try { await put('ballots', `${s}_${uid}`, { season: s, uid, coach: auth.profile.name, picks, moment: $('#hsm').value.trim(), ts: Date.now() }, false); await reload(); $('#bmsg').textContent = 'Ballot saved ✓'; }
+    try { await put('ballots', `${s}_${uid}`, { season: s, uid, coach: auth.profile.name, picks, ts: Date.now() }, false); await reload(); $('#bmsg').textContent = 'Ballot saved ✓'; }
     catch (err) { alert('Could not save ballot: ' + err.message); }
   }
 });
@@ -2253,6 +2311,8 @@ document.addEventListener('change', e => {
   }
   if (e.target.dataset.betweek) { UI.betWeek = +e.target.value; route(); }
   if (e.target.dataset.nav) location.hash = '#' + e.target.dataset.nav + '/' + e.target.value;
+  if (e.target.matches('[data-awseason]')) { UI.awSeason = e.target.value; route(); }
+  if (e.target.matches('[data-cbstat]')) { UI.cbKey = e.target.value; UI.cbFlip = false; route(); }
   if (e.target.matches('[data-tstat]')) { UI.tsKey = e.target.value; UI.tsFlip = false; route(); }
   if (e.target.type === 'radio') { const grp = $$(`input[name="${e.target.name}"]`); grp.forEach(r => r.closest('.vote-opt')?.classList.toggle('on', r.checked)); }
 });

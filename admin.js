@@ -23,6 +23,8 @@ const saveView = () => { try { sessionStorage.setItem('oecAdminView', JSON.strin
 addEventListener('pagehide', saveView);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveView(); });
 setTimeout(() => { restoreY = 0; }, 8000);   // stop trying to restore the scroll spot once things have settled
+// Coach of the Year starts with the 2029 season (Season 4).
+const awardsFor = season => season >= 2029 ? [...DEFAULT_AWARDS, 'Coach of the Year'] : DEFAULT_AWARDS;
 const DEFAULT_AWARDS = ['MVP', 'Offensive Player of the Year', 'Defensive Player of the Year', 'Best Offense', 'Best Defense', 'Game of the Year'];
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -295,7 +297,7 @@ const views = {
       const ccg = D.games.find(g => g.season === s && g.type === 'ccg');
       if (!ccg) {
         const divs = divisions(s), finals = divs.length > 1 ? divs.map(d => orderGroup(leagueTeams().filter(t => divOf(t, s) === d).map(t => t.id), s)[0]) : orderGroup(leagueTeams().map(t => t.id), s).slice(0, 2);
-        const cats = (lg.awards?.season === s && lg.awards.categories?.length) ? lg.awards.categories : DEFAULT_AWARDS.map(l => ({ key: slug(l), label: l, options: [{ name: '', team: '' }, { name: '', team: '' }, { name: '', team: '' }] }));
+        const cats = (lg.awards?.season === s && lg.awards.categories?.length) ? lg.awards.categories : awardsFor(s).map(l => ({ key: slug(l), label: l, options: [{ name: '', team: '' }, { name: '', team: '' }, { name: '', team: '' }] }));
         return `<div class="card"><h2>End of Regular Season</h2><p class="muted">Set the ${esc(lg.conference)} Championship Game and the awards ballot. Submitting opens championship-week betting and awards voting. Voting closes automatically when you submit the championship result.</p>
           <h3>League Championship Game</h3><div class="row"><select id="ccgA">${teamOpts(finals[1] || '', true, t => t.conf === lg.conference)}</select> vs <select id="ccgH">${teamOpts(finals[0] || '', true, t => t.conf === lg.conference)}</select>
           <label class="row" style="margin:0"><input type="checkbox" id="ccgN" checked style="width:auto"> Neutral site</label></div>
@@ -413,13 +415,13 @@ const views = {
 
   awards() {
     const lg = L(), A = lg.awards || {}, s = lg.season, ballots = D.ballots.filter(b => b.season === s);
-    const cats = A.categories?.length ? A.categories : DEFAULT_AWARDS.map(l => ({ key: slug(l), label: l, options: [{ name: '', team: '' }, { name: '', team: '' }, { name: '', team: '' }] }));
+    const cats = A.categories?.length ? A.categories : awardsFor(s).map(l => ({ key: slug(l), label: l, options: [{ name: '', team: '' }, { name: '', team: '' }, { name: '', team: '' }] }));
     const t = tally();
     return `<div class="card"><h2>Season Awards Voting</h2><p>Voting is <b>${A.open ? 'OPEN' : 'CLOSED'}</b>. ${ballots.length} ballot${ballots.length === 1 ? '' : 's'} in for ${s}.</p>
       <p class="muted small">Normally this opens with the End of Regular Season form and closes with the championship result. These buttons are manual overrides.</p>
       <div class="row"><button class="ghost" data-act="awardsToggle">${A.open ? 'Close voting now' : 'Open voting now'}</button></div></div>
       ${ballots.length ? `<div class="card"><h3 style="margin-top:0">Live tally (only you can see this)</h3><table>${t.results.map(r => `<tr><td>${esc(r.award)}</td><td><b>${esc(r.winner)}</b></td><td class="num">${r.votes}</td></tr>`).join('')}</table>
-        <h3>Holy Shit moments</h3>${t.moments.map(m => `<p>“${esc(m.text)}” <span class="muted">— ${esc(m.coach)}</span></p>`).join('') || '<p class="muted">None yet.</p>'}</div>` : ''}
+</div>` : ''}
       <div class="card"><h3 style="margin-top:0">Ballot</h3><div id="cats">${catEditor(cats)}</div><div class="row"><button class="ghost sm" data-act="addCat">+ Add category</button><button data-act="saveCats">Save ballot</button></div></div>`;
   },
 
@@ -486,12 +488,14 @@ function teamRow(t) {
 }
 function catEditor(cats) {
   return cats.map((c, ci) => `<div class="card" data-cat="${ci}" style="background:#120e0f"><div class="row"><input data-ck="label" value="${esc(c.label)}" style="flex:1;font-weight:700"><button class="sm danger" data-delcat="${ci}">✕</button></div>
-    ${c.options.map((o, i) => `<div class="row" style="margin-top:6px"><span class="muted">${i + 1}.</span><input data-on="${i}" value="${esc(o.name)}" placeholder="Player or team name" style="flex:1"><select data-ot="${i}">${teamOpts(o.team, 'Team (optional)')}</select></div>`).join('')}</div>`).join('');
+    ${c.options.map((o, i) => `<div class="row" style="margin-top:6px"><span class="muted">${i + 1}.</span><input data-on="${i}" value="${esc(o.name)}" placeholder="${/coach of the year/i.test(c.label) ? 'Coach (or pick the team)' : 'Player or team name'}" style="flex:1"><select data-ot="${i}">${teamOpts(o.team, 'Team (optional)')}</select></div>`).join('')}</div>`).join('');
 }
 function readCats() {
   return $$('[data-cat]').map(el => {
     const label = el.querySelector('[data-ck=label]').value.trim();
-    return { key: slug(label), label, options: [0, 1, 2].map(i => ({ name: el.querySelector(`[data-on="${i}"]`).value.trim() || (el.querySelector(`[data-ot="${i}"]`).value ? team(el.querySelector(`[data-ot="${i}"]`).value).name : ''), team: el.querySelector(`[data-ot="${i}"]`).value })) };
+    // Coach of the Year: a blank name fills in that team's coach (other awards fill in the team name).
+    const coy = /coach of the year/i.test(label);
+    return { key: slug(label), label, options: [0, 1, 2].map(i => { const tid = el.querySelector(`[data-ot="${i}"]`).value; return { name: el.querySelector(`[data-on="${i}"]`).value.trim() || (tid ? (coy ? team(tid).coach || team(tid).name : team(tid).name) : ''), team: tid }; }) };
   }).filter(c => c.label);
 }
 function tally() {
@@ -882,6 +886,19 @@ function syncTeams() {
 }
 const KEEP = ['deskText', 'psSeason', 'psFinal', 'psConf', 'sNotes'];
 document.addEventListener('toggle', e => { const k = e.target?.dataset?.keepopen; if (k) { ST.open = ST.open || {}; ST.open[k] = e.target.open; saveView(); } }, true);
+// Give every unlabeled field an accessible name from its nearest caption (see the same helper in app.js).
+function nameFields(root) {
+  if (!root) return;
+  root.querySelectorAll('input:not([type=hidden]),select,textarea').forEach(el => {
+    if (el.labels?.length || el.getAttribute('aria-label')) return;
+    let cap = '', p = el.previousElementSibling;
+    while (p && !cap) { if (!p.matches('input,select,button')) cap = p.textContent.trim(); p = p.previousElementSibling; }
+    if (!cap && el.dataset.kick) cap = 'Kickoff time';
+    if (!cap && el.dataset.ff) cap = 'Game result';
+    cap = cap || el.getAttribute('placeholder') || el.getAttribute('title') || (el.tagName === 'SELECT' ? el.options[0]?.textContent : '') || el.id || '';
+    if (cap) el.setAttribute('aria-label', cap.slice(0, 60));
+  });
+}
 function render() {
   syncTeams();
   const kept = {}; KEEP.forEach(id => { const el = document.getElementById(id); if (el) kept[id] = el.value; });
@@ -889,6 +906,7 @@ function render() {
   $('#tabs').innerHTML = T.map(([k, l]) => `<a href="#" data-tab="${k}" class="${k === ST.tab ? 'on' : ''}">${l}</a>`).join('');
   $('#sub').textContent = `${L().season} · ${weekLabel()} · ${L().phase}${DEMO ? ' · DEMO (changes are not saved)' : ''}`;
   $('#panel').innerHTML = (ST.msg ? `<div class="notice">${esc(ST.msg)}</div>` : '') + views[ST.tab]();
+  nameFields($('#panel'));
   if (!ST.clear) KEEP.forEach(id => { const el = document.getElementById(id); if (el && kept[id] != null) el.value = kept[id]; });
   ST.msg = ''; ST.clear = false;
   saveView();

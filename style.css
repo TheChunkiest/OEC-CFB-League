@@ -1068,3 +1068,24 @@ button.pill.tailpill:hover{background:rgba(245,184,46,.12)}
   table.bets .pill,table.bets button.pill.tailpill{padding:2px 7px;font-size:11.5px}
   table.bets td:first-child{max-width:64px;overflow-wrap:anywhere}
 }
+/* ---- Audit fixes (Nov 2026) ---- */
+/* 11px floor for small labels */
+.gp-odds span,.linesfinal .lf-head{font-size:11px}
+/* Bigger touch area for inline coach / recap links on phones and tablets (layout unchanged) */
+@media (pointer:coarse){
+  a[href^="#coach/"],a.reclink,.cseason a,td a.chip,.offboard .chip{padding-top:6px;padding-bottom:6px;margin-top:-6px;margin-bottom:-6px;display:inline-block}
+  .chip{min-height:24px}
+}
+/* Very narrow screens (Galaxy Fold closed, ~280px) */
+@media (max-width:300px){
+  .trlist,.trlist[style]{gap:3px 6px}.trlist li{font-size:11px}
+  .tstats td{padding:5px 2px;font-size:12.5px}
+  .tstats .srk{padding:1px 4px;font-size:11px}
+  .pollrow{flex-wrap:wrap}
+}
+.pollrow input{max-width:100%}
+/* fix201b: coach stats board on History */
+.segscroll{max-width:100%;overflow-x:auto;scrollbar-width:none}
+.segscroll::-webkit-scrollbar{display:none}
+.segscroll button{white-space:nowrap;flex:0 0 auto}
+.cbteams{margin-top:3px;display:flex;flex-wrap:wrap;gap:4px}
