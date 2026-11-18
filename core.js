@@ -1545,3 +1545,65 @@ export async function freshGames(ids) {
   clearCache();
   return out.filter(Boolean);
 }
+
+/* ---------- Season awards ballot (2028 on: open entry, no finalists) ----------
+   Types: player = typed name + team, team = a conference team, game = a game from that season, coach = an active league coach. */
+export const AWARD_DEFS = [
+  { key: 'mvp', label: 'MVP', type: 'player' },
+  { key: 'opoy', label: 'Offensive Player of the Year', type: 'player' },
+  { key: 'dpoy', label: 'Defensive Player of the Year', type: 'player' },
+  { key: 'offense', label: 'Best Offense', type: 'team' },
+  { key: 'defense', label: 'Best Defense', type: 'team' },
+  { key: 'special', label: 'Best Special Teams', type: 'team' },
+  { key: 'goty', label: 'Game of the Year', type: 'game' },
+  { key: 'coty', label: 'Coach of the Year', type: 'coach' },
+];
+export const awardDefs = () => AWARD_DEFS;
+export const awardGames = s => D.games.filter(g => g.season === s && played(g) && (team(g.home).conf === D.league.conference || team(g.away).conf === D.league.conference))
+  .sort((a, b) => b.week - a.week || String(a.id).localeCompare(String(b.id)));
+export const awardGameLabel = g => `${g.type === 'ccg' ? 'Title game' : g.type === 'bowl' ? (g.note || 'Bowl') : 'Wk ' + g.week} · ${team(g.away).abbr || team(g.away).name} ${g.awayScore} @ ${team(g.home).abbr || team(g.home).name} ${g.homeScore}`;
+export const awardCoaches = () => [...new Set(userTeams().map(t => t.coach.trim()))].sort((a, b) => a.localeCompare(b));
+// Player names: forgive case, punctuation, initials ("A. Carlisle" = "Aaron Carlisle") and small typos.
+const normName = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\b(jr|sr|ii|iii|iv)\b/g, '').replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
+function editDist(a, b) {
+  if (a === b) return 0; const m = a.length, n = b.length; if (!m || !n) return m + n;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) { const cur = [i]; for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = cur; }
+  return prev[n];
+}
+export function sameName(x, y) {
+  const a = normName(x), b = normName(y); if (!a || !b) return false; if (a === b) return true;
+  const A = a.split(' '), B = b.split(' '), la = A[A.length - 1], lb = B[B.length - 1];
+  const lastOk = la === lb || (Math.min(la.length, lb.length) >= 4 && editDist(la, lb) <= 1);
+  if (lastOk && (A.length === 1 || B.length === 1 || A[0][0] === B[0][0])) return true;
+  return editDist(a, b) <= Math.max(1, Math.floor(Math.min(a.length, b.length) / 6));
+}
+// Count every ballot. Player entries that look like the same person are grouped; the most common spelling wins the label.
+export function tallyAwards(s, ballots) {
+  const cat = def => {
+    const picks = ballots.map(b => ({ coach: b.coach, v: b.picks?.[def.key] })).filter(p => p.v && (def.type !== 'player' || (p.v.name || '').trim()));
+    let groups = [];
+    if (def.type === 'player') {
+      picks.forEach(p => { const g = groups.find(g => g.entries.some(e => sameName(e.v.name, p.v.name))); g ? g.entries.push(p) : groups.push({ entries: [p] }); });
+      groups = groups.map(g => {
+        const most = arr => { const c = {}; arr.forEach(x => { if (x) c[x] = (c[x] || 0) + 1; }); return Object.entries(c).sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)[0]?.[0] || ''; };
+        const name = most(g.entries.map(e => e.v.name.trim().replace(/\s+/g, ' '))), tm = most(g.entries.map(e => e.v.team));
+        const spellings = [...new Set(g.entries.map(e => e.v.name.trim()))].filter(x => x !== name), teams = [...new Set(g.entries.map(e => e.v.team).filter(Boolean))];
+        return { winner: name, team: tm, votes: g.entries.length, voters: g.entries.map(e => e.coach), spellings, teamsSplit: teams.length > 1 ? teams : null };
+      });
+    } else {
+      const by = {}; picks.forEach(p => { (by[p.v] = by[p.v] || []).push(p.coach); });
+      groups = Object.entries(by).map(([v, voters]) => {
+        if (def.type === 'team') return { winner: team(v).name, team: v, votes: voters.length, voters };
+        if (def.type === 'game') { const g = D.games.find(x => x.id === v); return { winner: g ? `${team(g.away).abbr || team(g.away).name} @ ${team(g.home).abbr || team(g.home).name}` : v, team: '', gameId: v, detail: g ? awardGameLabel(g) : '', votes: voters.length, voters }; }
+        const t = D.teams.find(t => (t.coach || '').trim().toLowerCase() === v.toLowerCase()) || {};
+        const sc = coachSeasons(v).find(x => x.season === s);
+        return { winner: v, team: sc?.team || t.id || '', votes: voters.length, voters };
+      });
+    }
+    groups.sort((a, b) => b.votes - a.votes || a.winner.localeCompare(b.winner));
+    const top = groups[0]?.votes || 0, leaders = groups.filter(g => g.votes === top && top > 0);
+    return { ...def, groups, leaders, tie: leaders.length > 1 };
+  };
+  return AWARD_DEFS.map(cat);
+}

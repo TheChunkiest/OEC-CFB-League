@@ -4,7 +4,8 @@ import {
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, raceSim, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
   gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory, legLabel
 , playbookOf, pbSeason, pbText
-} from './core.js?v=79';
+, AWARD_DEFS, awardGames, awardGameLabel, awardCoaches
+} from './core.js?v=80';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -552,13 +553,22 @@ const PAGES = {
     // Season awards
     const A = L.awards || {};
     html += `<h2>${s} Season Awards</h2>`;
-    if (!A.open) html += `<div class="card empty">Awards voting opens at the end of the regular season and closes after the league championship game.${D.history.find(h => h.season === s) ? ' <a href="#history">See this season\'s winners →</a>' : ''}</div>`;
+    if (!A.open) html += `<div class="card empty">Awards voting opens during conference championship week and closes after bowl season.${D.history.find(h => h.season === s) ? ' <a href="#history">See this season\'s winners →</a>' : ''}</div>`;
     else {
-      const ballot = D.ballots.find(b => b.season === s && b.uid === me?.id) || { picks: {}, moment: '' };
-      html += `<div class="card"><p class="muted small" style="margin-top:0">Pick one of the three finalists in each category. You can change your ballot until voting closes after the league championship game.</p>
-        ${(A.categories || []).map(c => `<h3>${esc(c.label)}</h3>${c.options.map((o, i) => `<label class="vote-opt ${ballot.picks[c.key] === i ? 'on' : ''}"><input type="radio" name="aw_${esc(c.key)}" value="${i}" ${ballot.picks[c.key] === i ? 'checked' : ''} ${canVote ? '' : 'disabled'}>
-          <span>${esc(o.name)}${o.team ? ' · ' + chip(o.team) : ''}</span></label>`).join('')}`).join('')}
-        ${canVote ? `<button data-act="ballot" style="margin-top:10px">${ballot.id ? 'Update ballot' : 'Submit ballot'}</button>` : ''} <span id="bmsg" class="muted"></span></div>`;
+      const ballot = D.ballots.find(b => b.season === s && b.uid === me?.id) || { picks: {} }, P = ballot.picks || {}, dis = canVote ? '' : 'disabled';
+      const confTeams = leagueTeams().slice().sort((x, y) => x.name.localeCompare(y.name));
+      const teamSel = (key, v, ph) => `<select data-aw="${key}" data-awf="team" ${dis} aria-label="${esc(ph)}"><option value="">${esc(ph)}</option>${confTeams.map(t => `<option value="${esc(t.id)}" ${v === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>`;
+      const games = awardGames(s), coaches = awardCoaches();
+      const field = d => {
+        const v = P[d.key];
+        if (d.type === 'player') return `<div class="awrow"><input data-aw="${d.key}" data-awf="name" value="${esc(v?.name || '')}" placeholder="Player name" autocomplete="off" maxlength="40" ${dis} aria-label="${esc(d.label)} player name">${teamSel(d.key, v?.team || '', 'Team')}</div>`;
+        if (d.type === 'team') return teamSel(d.key, v || '', 'Pick a team');
+        if (d.type === 'game') return `<select data-aw="${d.key}" ${dis} aria-label="${esc(d.label)}"><option value="">Pick a game</option>${games.map(g => `<option value="${esc(g.id)}" ${v === g.id ? 'selected' : ''}>${esc(awardGameLabel(g))}</option>`).join('')}</select>`;
+        return `<select data-aw="${d.key}" ${dis} aria-label="${esc(d.label)}"><option value="">Pick a coach</option>${coaches.map(c => `<option ${v === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`;
+      };
+      html += `<div class="card awballot"><p class="muted small" style="margin-top:0">Type in player names and pick their team; pick from the lists for the rest. Skip any you're not sure about. You can change your ballot until voting closes after bowl season.</p>
+        ${AWARD_DEFS.map(d => `<div class="awcat"><h3>${d.key === 'coty' ? '🏅 ' : ''}${esc(d.label)}</h3>${field(d)}</div>`).join('')}
+        ${canVote ? `<button data-act="ballot" style="margin-top:12px">${ballot.id ? 'Update ballot' : 'Submit ballot'}</button>` : ''} <span id="bmsg" class="muted"></span></div>`;
     }
     return html;
   },
@@ -2294,8 +2304,13 @@ document.addEventListener('click', async e => {
     const s = S(), w = D.league.week + 1, uid = auth.profile.id;
     try { await put('gotw', `${s}_${w}_${uid}`, { season: s, week: w, uid, gameId: v.value }, false); await reload(); } catch (err) { alert('Vote failed: ' + err.message); }
   } else if (t.dataset.act === 'ballot') {
-    const picks = {}, cats = D.league.awards.categories || [];
-    for (const c of cats) { const v = $(`input[name="aw_${c.key}"]:checked`); if (!v) return alert('Pick a finalist for ' + c.label + '.'); picks[c.key] = +v.value; }
+    const picks = {};
+    for (const d of AWARD_DEFS) {
+      if (d.type === 'player') { const n = $(`[data-aw="${d.key}"][data-awf="name"]`).value.trim().replace(/\s+/g, ' '), tm = $(`[data-aw="${d.key}"][data-awf="team"]`).value;
+        if (n && !tm) return alert(`Pick ${n}'s team for ${d.label}.`); if (n) picks[d.key] = { name: n, team: tm }; }
+      else { const v = $(`[data-aw="${d.key}"]`).value; if (v) picks[d.key] = v; }
+    }
+    if (!Object.keys(picks).length) return alert('Fill in at least one award.');
     const s = S(), uid = auth.profile.id;
     try { await put('ballots', `${s}_${uid}`, { season: s, uid, coach: auth.profile.name, picks, ts: Date.now() }, false); await reload(); $('#bmsg').textContent = 'Ballot saved ✓'; }
     catch (err) { alert('Could not save ballot: ' + err.message); }

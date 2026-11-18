@@ -1089,3 +1089,15 @@ button.pill.tailpill:hover{background:rgba(245,184,46,.12)}
 .segscroll::-webkit-scrollbar{display:none}
 .segscroll button{white-space:nowrap;flex:0 0 auto}
 .cbteams{margin-top:3px;display:flex;flex-wrap:wrap;gap:4px}
+/* fix202: open-entry awards ballot + commissioner review */
+.awcat{padding:10px 0;border-top:1px solid var(--line)}
+.awcat:first-of-type{border-top:0}
+.awcat h3{margin:0 0 6px;font-size:15px}
+.awcat select,.awcat input{width:100%;max-width:100%}
+.awrow{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+@media (max-width:420px){.awrow{grid-template-columns:1fr}}
+.awrev{padding:10px 0;border-top:1px solid var(--line)}
+.awrev:first-of-type{border-top:0}
+.awrev select{max-width:100%}
+.awrev details summary{cursor:pointer;padding:4px 0}
+.awrev ul.clean li{padding:3px 0}

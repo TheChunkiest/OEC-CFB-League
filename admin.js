@@ -3,7 +3,8 @@ import {
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum, divOf, oneConference, playbookOf, pbSeason, pbOpen, pbLocked
 , loadAI, kickoffOf, fmtKick
-} from './core.js?v=79';
+, AWARD_DEFS, tallyAwards, awardGames, awardGameLabel, awardCoaches, sameName
+} from './core.js?v=80';
 // Broadcast scouting nudges the ratings a little, so load it before any lines get posted from here.
 loadAI();
 import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
@@ -23,12 +24,6 @@ const saveView = () => { try { sessionStorage.setItem('oecAdminView', JSON.strin
 addEventListener('pagehide', saveView);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveView(); });
 setTimeout(() => { restoreY = 0; }, 8000);   // stop trying to restore the scroll spot once things have settled
-// Coach of the Year starts with the 2028 season (Season 3). A ballot saved before it existed gets it added.
-const COTY_FROM = 2028, blankCat = l => ({ key: slug(l), label: l, options: [{ name: '', team: '' }, { name: '', team: '' }, { name: '', team: '' }] });
-const awardsFor = season => season >= COTY_FROM ? [...DEFAULT_AWARDS, 'Coach of the Year'] : DEFAULT_AWARDS;
-const withCoty = (cats, season) => season >= COTY_FROM && !cats.some(c => /coach of the year/i.test(c.label || '')) ? [...cats, blankCat('Coach of the Year')] : cats;
-const DEFAULT_AWARDS = ['MVP', 'Offensive Player of the Year', 'Defensive Player of the Year', 'Best Offense', 'Best Defense', 'Game of the Year'];
-
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 const L = () => D.league;
 const teamOpts = (sel, blank, filter = () => true) => (blank ? `<option value="">${blank === true ? '—' : esc(blank)}</option>` : '') +
@@ -299,26 +294,24 @@ const views = {
       const ccg = D.games.find(g => g.season === s && g.type === 'ccg');
       if (!ccg) {
         const divs = divisions(s), finals = divs.length > 1 ? divs.map(d => orderGroup(leagueTeams().filter(t => divOf(t, s) === d).map(t => t.id), s)[0]) : orderGroup(leagueTeams().map(t => t.id), s).slice(0, 2);
-        const cats = (lg.awards?.season === s && lg.awards.categories?.length) ? withCoty(lg.awards.categories, s) : awardsFor(s).map(blankCat);
-        return `<div class="card"><h2>End of Regular Season</h2><p class="muted">Set the ${esc(lg.conference)} Championship Game and the awards ballot. Submitting opens championship-week betting and awards voting. Voting closes automatically when you submit the championship result.</p>
+        return `<div class="card"><h2>End of Regular Season</h2><p class="muted">Set the ${esc(lg.conference)} Championship Game. Submitting opens championship-week betting and season awards voting. Voting stays open through bowl season and closes when you finalize the season.</p>
           <h3>League Championship Game</h3><div class="row"><select id="ccgA">${teamOpts(finals[1] || '', true, t => t.conf === lg.conference)}</select> vs <select id="ccgH">${teamOpts(finals[0] || '', true, t => t.conf === lg.conference)}</select>
           <label class="row" style="margin:0"><input type="checkbox" id="ccgN" checked style="width:auto"> Neutral site</label></div>
           <p class="muted small">Pre-filled with the ${divs.length > 1 ? 'division winners' : 'top two teams'} from the standings. Second team listed is the "home" team.</p>
           <div class="row"><label style="margin:0">Week number</label><input id="ccgW" type="number" value="${lg.week}" style="width:80px"></div></div>
-          <div class="card"><h3 style="margin-top:0">Season Awards Ballot</h3><p class="muted small">Three finalists per category: a player name (with team) or just a team.</p><div id="cats">${catEditor(cats)}</div>
-          <button class="ghost sm" data-act="addCat">+ Add category</button></div>
+          <div class="card"><h3 style="margin-top:0">Season Awards Ballot</h3><p class="muted small" style="margin:0">Nothing to set up. Coaches type in players (with team) for ${AWARD_DEFS.filter(d => d.type === 'player').map(d => d.label).join(', ')}; pick a team for ${AWARD_DEFS.filter(d => d.type === 'team').map(d => d.label).join(', ')}; pick a game for Game of the Year; and pick a league coach for Coach of the Year.</p></div>
           ${deskBlock()}<div class="card"><button data-act="openCcg">Open championship week & awards voting</button></div>`;
       }
       const wkGames = D.games.filter(g => g.season === s && g.week === ccg.week);
-      return `<div class="card"><h2>${esc(lg.conference)} Championship Results</h2><p class="muted">Enter the championship score (and any other games this week). Submitting settles wagers, <b>closes awards voting</b> and tallies the winners. Betting is <b>${lg.bettingOpen ? 'OPEN' : 'LOCKED'}</b> <button class="sm ghost" data-act="toggleBet">${lg.bettingOpen ? 'Lock betting' : 'Unlock betting'}</button></p>
+      return `<div class="card"><h2>${esc(lg.conference)} Championship Results</h2><p class="muted">Enter the championship score (and any other games this week). Submitting settles wagers and moves to bowl season. Awards voting stays open until you finalize the season. Betting is <b>${lg.bettingOpen ? 'OPEN' : 'LOCKED'}</b> <button class="sm ghost" data-act="toggleBet">${lg.bettingOpen ? 'Lock betting' : 'Unlock betting'}</button></p>
         <p class="muted small">Ballots submitted: ${D.ballots.filter(b => b.season === s).length} of ${D.users.filter(u => u.teamId).length} coaches.</p></div>
-        ${scoreRows(wkGames)}${deskBlock()}<div class="card"><button data-act="finishCcg">Submit championship & close voting</button></div>`;
+        ${scoreRows(wkGames)}${deskBlock()}<div class="card"><button data-act="finishCcg">Submit championship result</button></div>`;
     }
     // Postseason
     const post = D.games.filter(g => g.season === s && g.type === 'bowl');
-    const res = lg.awards?.results || [];
-    return `<div class="card"><h2>End of Season</h2><p class="muted">Add any bowl / playoff results you want on record (optional), then finalize. Finalizing writes the champion, award winners and "Holy Shit" moments to History and moves the league to the offseason.</p>
-      <h3>Awards results</h3>${res.length ? `<table>${res.map(r => `<tr><td>${esc(r.award)}</td><td><b>${esc(r.winner)}</b></td><td class="num muted">${r.votes} votes</td></tr>`).join('')}</table>` : '<p class="muted">No ballots were cast.</p>'}</div>
+    return `<div class="card"><h2>End of Season</h2><p class="muted">Add any bowl / playoff results (optional), check the award winners, then finalize. Finalizing closes awards voting, writes the champion and award winners to History and moves the league to the offseason.</p>
+      ${votingLine()}</div>
+      ${awardsReview(true)}
       <div class="card"><h3 style="margin-top:0">Postseason games</h3>${post.length ? scoreRows(post) : '<p class="muted">None added.</p>'}
         <div class="row"><input id="pW" type="number" value="${lg.week + 1}" style="width:70px" title="Week"><select id="pA">${teamOpts('', 'Away/Team 1')}</select> vs <select id="pH">${teamOpts('', 'Home/Team 2')}</select><input id="pNote" placeholder="Bowl name (optional)"><button class="ghost" data-act="addBowl">Add</button></div>
         <p class="muted small">Opponent missing? Add it as a Non-Conf team on the New Season tab first.</p></div>
@@ -416,19 +409,10 @@ const views = {
   },
 
   awards() {
-    const lg = L(), A = lg.awards || {}, s = lg.season, ballots = D.ballots.filter(b => b.season === s);
-    const cats = A.categories?.length ? withCoty(A.categories, s) : awardsFor(s).map(blankCat);
-    const needsSave = A.categories?.length && cats.length > A.categories.length;
-    const t = tally();
-    return `<div class="card"><h2>Season Awards Voting</h2><p>Voting is <b>${A.open ? 'OPEN' : 'CLOSED'}</b>. ${ballots.length} ballot${ballots.length === 1 ? '' : 's'} in for ${s}.</p>
-      <p class="muted small">Normally this opens with the End of Regular Season form and closes with the championship result. These buttons are manual overrides.</p>
-      <div class="row"><button class="ghost" data-act="awardsToggle">${A.open ? 'Close voting now' : 'Open voting now'}</button></div></div>
-      ${ballots.length ? `<div class="card"><h3 style="margin-top:0">Live tally (only you can see this)</h3><table>${t.results.map(r => `<tr><td>${esc(r.award)}</td><td><b>${esc(r.winner)}</b></td><td class="num">${r.votes}</td></tr>`).join('')}</table>
-</div>` : ''}
-      <div class="card"><h3 style="margin-top:0">Ballot</h3>${needsSave ? '<p class="small" style="color:var(--gold)">🏅 Coach of the Year was added to this season\'s ballot. Fill in the nominees and tap <b>Save ballot</b> so coaches can vote on it.</p>' : ''}<div id="cats">${catEditor(cats)}</div><div class="row"><button class="ghost sm" data-act="addCat">+ Add category</button><button data-act="saveCats">Save ballot</button></div></div>`;
+    return `<div class="card"><h2>Season Awards Voting</h2>${votingLine()}
+      <p class="muted small" style="margin-bottom:0">Opens with championship week and closes when you finalize the season after bowls. The button is a manual override.</p></div>
+      ${awardsReview(false)}${ballotList()}`;
   },
-
-
 
   settings() {
     const lg = L(), H = D.history.slice().sort((a, b) => b.season - a.season);
@@ -489,26 +473,59 @@ function teamRow(t) {
     ${['ovr', 'off', 'def'].map(k => `<td data-l="${k.toUpperCase()}"><input data-k="${k}" type="number" inputmode="numeric" min="40" max="99" value="${t[k] ?? ''}" style="width:62px"></td>`).join('')}
     <td data-l=""><button class="sm danger" data-delteam="${esc(t.id)}">✕ Remove</button></td></tr>`;
 }
-function catEditor(cats) {
-  return cats.map((c, ci) => `<div class="card" data-cat="${ci}" style="background:#120e0f"><div class="row"><input data-ck="label" value="${esc(c.label)}" style="flex:1;font-weight:700"><button class="sm danger" data-delcat="${ci}">✕</button></div>
-    ${c.options.map((o, i) => `<div class="row" style="margin-top:6px"><span class="muted">${i + 1}.</span><input data-on="${i}" value="${esc(o.name)}" placeholder="${/coach of the year/i.test(c.label) ? 'Coach (or pick the team)' : 'Player or team name'}" style="flex:1"><select data-ot="${i}">${teamOpts(o.team, 'Team (optional)')}</select></div>`).join('')}</div>`).join('');
+// ---------- Season awards: voting status, live review (winners built from the ballots) and every entry ----------
+function votingLine() {
+  const lg = L(), s = lg.season, A = lg.awards || {}, ballots = D.ballots.filter(b => b.season === s), coaches = D.users.filter(u => u.teamId);
+  const missing = coaches.filter(u => !ballots.some(b => b.uid === u.id)).map(u => u.name).sort();
+  return `<p style="margin:8px 0 4px">Voting is <b>${A.open ? 'OPEN' : 'CLOSED'}</b> · ${ballots.length} of ${coaches.length} coaches have voted <button class="sm ghost" data-act="awardsToggle">${A.open ? 'Close voting now' : 'Open voting now'}</button></p>
+    ${missing.length && A.open ? `<p class="muted small" style="margin:0">Still waiting on: ${esc(missing.join(', '))}</p>` : ''}`;
 }
-function readCats() {
-  return $$('[data-cat]').map(el => {
-    const label = el.querySelector('[data-ck=label]').value.trim();
-    // Coach of the Year: a blank name fills in that team's coach (other awards fill in the team name).
-    const coy = /coach of the year/i.test(label);
-    return { key: slug(label), label, options: [0, 1, 2].map(i => { const tid = el.querySelector(`[data-ot="${i}"]`).value; return { name: el.querySelector(`[data-on="${i}"]`).value.trim() || (tid ? (coy ? team(tid).coach || team(tid).name : team(tid).name) : ''), team: tid }; }) };
-  }).filter(c => c.label);
+function awardsReview(editable) {
+  const lg = L(), s = lg.season, ballots = D.ballots.filter(b => b.season === s), T = tallyAwards(s, ballots);
+  const games = awardGames(s), coaches = awardCoaches(), conf = t => t.conf === lg.conference;
+  const pickField = (c, L0) => {
+    const k = c.key;
+    if (c.type === 'player') return `<div class="row" style="margin:6px 0 0"><input data-rv="${k}" data-rvf="name" value="${esc(L0?.winner || '')}" placeholder="Winner's name" style="flex:1;min-width:140px"><select data-rv="${k}" data-rvf="team">${teamOpts(L0?.team || '', 'Team')}</select></div>`;
+    if (c.type === 'team') return `<select data-rv="${k}" style="margin-top:6px">${teamOpts(L0?.team || '', 'No award', conf)}</select>`;
+    if (c.type === 'game') return `<select data-rv="${k}" style="margin-top:6px"><option value="">No award</option>${games.map(g => `<option value="${esc(g.id)}" ${L0?.gameId === g.id ? 'selected' : ''}>${esc(awardGameLabel(g))}</option>`).join('')}</select>`;
+    return `<select data-rv="${k}" style="margin-top:6px"><option value="">No award</option>${coaches.map(x => `<option ${L0?.winner === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select>`;
+  };
+  const abbr = id => id ? esc(team(id).abbr || team(id).name) : '';
+  const rows = T.map(c => {
+    const L0 = c.tie ? null : c.leaders[0];
+    const status = !c.groups.length ? '<span class="muted">No votes</span>' : c.tie ? `<b style="color:var(--gold)">Tie</b> · ${c.leaders.map(l => esc(l.winner)).join(' / ')} (${c.leaders[0].votes} each)${editable ? ' — pick the winner below' : ''}` : `<b>${esc(L0.winner)}</b>${c.type === 'player' || c.type === 'coach' ? ` <span class="muted">${abbr(L0.team)}</span>` : ''} · ${L0.votes} vote${L0.votes === 1 ? '' : 's'}`;
+    const breakdown = c.groups.map(g => `<li>${esc(g.winner)}${c.type === 'player' || c.type === 'coach' ? ` <span class="muted">${abbr(g.team)}</span>` : ''}${g.detail ? ` <span class="muted">(${esc(g.detail)})</span>` : ''} — <b>${g.votes}</b> <span class="muted">· ${esc(g.voters.join(', '))}</span>
+      ${g.spellings?.length ? `<div class="muted">Also typed: ${esc(g.spellings.join(', '))}</div>` : ''}${g.teamsSplit ? `<div style="color:var(--gold)">Team picks differ: ${g.teamsSplit.map(abbr).join(', ')}</div>` : ''}</li>`).join('');
+    return `<div class="awrev" data-revcat="${c.key}"><div class="row spread" style="margin:0"><b>${c.key === 'coty' ? '🏅 ' : ''}${esc(c.label)}</b></div><div class="small">${status}</div>
+      ${c.groups.length ? `<details class="small"><summary class="muted">All entries (${c.groups.reduce((n, g) => n + g.votes, 0)})</summary><ul class="clean" style="margin:4px 0 0">${breakdown}</ul></details>` : ''}
+      ${editable ? pickField(c, L0) : ''}</div>`;
+  }).join('');
+  return `<div class="card"><h3 style="margin-top:0">${editable ? 'Award winners' : 'Live results'} <span class="muted small">(only you can see this)</span></h3>
+    <p class="muted small" style="margin-top:0">${editable ? 'Built from the ballots. Similar spellings of the same player are counted together; open “All entries” to check them. Fix any name, break ties or set “No award”, then finalize.' : 'Similar spellings of the same player are grouped together. You confirm the final winners on the This Week tab when you finalize the season.'}</p>${rows}</div>`;
 }
-function tally() {
-  const lg = L(), s = lg.season, cats = lg.awards?.categories || [], ballots = D.ballots.filter(b => b.season === s);
-  const results = cats.map(c => {
-    const n = c.options.map((_, i) => ballots.filter(b => b.picks && b.picks[c.key] === i).length), max = Math.max(0, ...n);
-    const win = c.options.filter((_, i) => n[i] === max && max > 0);
-    return { award: c.label, winner: win.length ? win.map(o => o.name).join(' / ') + (win.length > 1 ? ' (tie)' : '') : '—', team: win.length === 1 ? win[0].team : '', votes: max };
-  });
-  return { results, moments: ballots.filter(b => b.moment).map(b => ({ coach: b.coach, text: b.moment })) };
+function ballotList() {
+  const s = L().season, ballots = D.ballots.filter(b => b.season === s).sort((a, b) => (a.coach || '').localeCompare(b.coach || ''));
+  if (!ballots.length) return '';
+  const show = (d, v) => !v ? '<span class="muted">–</span>' : d.type === 'player' ? `${esc(v.name)} <span class="muted">${esc(team(v.team).abbr || '')}</span>` : d.type === 'team' ? esc(team(v).abbr || team(v).name) : d.type === 'game' ? (() => { const g = D.games.find(x => x.id === v); return g ? esc(awardGameLabel(g)) : esc(v); })() : esc(v);
+  return `<details class="card" data-keepopen="ballots" ${ST.open?.ballots ? 'open' : ''}><summary><b>Every ballot</b> <span class="muted small">${ballots.length}</span></summary>
+    ${ballots.map(b => `<div class="awrev"><b>${esc(b.coach)}</b> <span class="muted small">${fmtTime(b.ts)}</span><div class="small">${AWARD_DEFS.map(d => `<div><span class="muted">${esc(d.label)}:</span> ${show(d, b.picks?.[d.key])}</div>`).join('')}</div></div>`).join('')}</details>`;
+}
+// Final winners from the review form. Returns null (after an alert) if something needs fixing.
+function readReview() {
+  const s = L().season, T = tallyAwards(s, D.ballots.filter(b => b.season === s)), out = [];
+  for (const c of T) {
+    const el = k => $(`[data-rv="${c.key}"]${k ? `[data-rvf="${k}"]` : ''}`); if (!el(c.type === 'player' ? 'name' : '')) continue;
+    if (c.type === 'player') {
+      const name = el('name').value.trim(), tm = el('team').value; if (!name) continue; if (!tm) { alert(`Pick a team for the ${c.label} winner.`); return null; }
+      const g = c.groups.find(g => sameName(g.winner, name)); out.push({ award: c.label, winner: name, team: tm, votes: g ? g.votes : 0 });
+    } else {
+      const v = el('').value; if (!v) continue;
+      if (c.type === 'team') out.push({ award: c.label, winner: team(v).name, team: v, votes: c.groups.find(g => g.team === v)?.votes || 0 });
+      else if (c.type === 'game') { const g = D.games.find(x => x.id === v); out.push({ award: c.label, winner: `${team(g.away).abbr || team(g.away).name} @ ${team(g.home).abbr || team(g.home).name}`, team: '', gameId: v, votes: c.groups.find(x => x.gameId === v)?.votes || 0 }); }
+      else { const grp = c.groups.find(x => x.winner === v), tm = grp?.team || (D.teams.find(t => (t.coach || '').trim() === v) || {}).id || ''; out.push({ award: c.label, winner: v, team: tm, votes: grp?.votes || 0 }); }
+    }
+  }
+  return out;
 }
 
 /* ---------- actions ---------- */
@@ -588,11 +605,10 @@ const ACT = {
   async openCcg() {
     const lg = L(), h = $('#ccgH').value, a = $('#ccgA').value, wk = +$('#ccgW').value;
     if (!h || !a || h === a) return alert('Pick two different teams for the championship game.');
-    const cats = readCats(); if (cats.some(c => c.options.some(o => !o.name))) return alert('Every award needs three finalists.');
     const id = `g${lg.season}_ccg`;
     await put('games', id, { season: lg.season, week: wk, type: 'ccg', home: h, away: a, neutral: $('#ccgN').checked, homeScore: null, awayScore: null }, false);
     await batch(lineOps(wk));
-    await put('meta', 'league', { week: wk, bettingOpen: true, desk: deskValue(), awards: { open: true, season: lg.season, categories: cats, results: [] } });
+    await put('meta', 'league', { week: wk, bettingOpen: true, desk: deskValue(), awards: { open: true, season: lg.season, categories: [], results: [] } });
     ST.desk = 'no'; flash('Championship week is live: game posted with lines, betting open, awards voting open.');
   },
   async finishCcg() {
@@ -603,10 +619,9 @@ const ACT = {
     await saveScoresAndSettle(games);
     const fin = D.games.find(g => g.id === ccg.id);
     await batch(settleFuturesOps(lg.season, +fin.homeScore > +fin.awayScore ? fin.home : fin.away));
-    await loadBallots(true);
-    const t = tally();
-    await put('meta', 'league', { phase: PHASES.POST, bettingOpen: false, desk: deskValue(), awards: { ...lg.awards, open: false, results: t.results, moments: t.moments } });
-    ST.desk = 'no'; flash('Champion crowned and awards voting closed. Finalize the season when you\'re ready.');
+    await put('meta', 'league', { phase: PHASES.POST, bettingOpen: false, desk: deskValue() });
+    try { await loadBallots(true); } catch (e) { }
+    ST.desk = 'no'; flash('Champion crowned. Awards voting stays open through bowl season; finalize the season when you\'re ready.');
   },
   async addBowl() {
     const h = $('#pH').value, a = $('#pA').value; if (!h || !a || h === a) return alert('Pick two teams.');
@@ -618,16 +633,17 @@ const ACT = {
     const post = D.games.filter(g => g.season === s && g.type === 'bowl');
     await saveScoresAndSettle(post);
     const ccg = D.games.find(g => g.season === s && g.type === 'ccg' && played(g));
-    const H = { season: s, notes: $('#sNotes').value.trim(), awards: (lg.awards?.results || []).filter(r => r.votes > 0), moments: lg.awards?.moments || [] };
+    const aw = readReview(); if (aw === null) return;
+    const H = { season: s, notes: $('#sNotes').value.trim(), awards: aw };
     if (ccg) {
       const hw = +ccg.homeScore > +ccg.awayScore, w = hw ? 'home' : 'away', l = hw ? 'away' : 'home';
       Object.assign(H, { champTeam: ccg[w], champCoach: ccg[w + 'Coach'] || team(ccg[w]).coach || 'CPU', champScore: +ccg[w + 'Score'], runnerTeam: ccg[l], runnerCoach: ccg[l + 'Coach'] || team(ccg[l]).coach || 'CPU', runnerScore: +ccg[l + 'Score'] });
     }
-    if (!confirm(`Finalize ${s}? This writes ${s} to History and moves the league to the offseason.`)) return;
+    if (!confirm(`Finalize ${s}? This closes awards voting, writes ${s} to History (${aw.length} award${aw.length === 1 ? '' : 's'}) and moves the league to the offseason.`)) return;
     await put('history', String(s), H, false);
     await batch(settleFuturesOps(s, ccg ? H.champTeam : null));
     await batch(parlayOps());
-    await put('meta', 'league', { phase: PHASES.PRE, bettingOpen: false, desk: deskValue() });
+    await put('meta', 'league', { phase: PHASES.PRE, bettingOpen: false, desk: deskValue(), awards: { ...(lg.awards || {}), open: false, season: s, results: aw } });
     ST.desk = 'no'; ST.tab = 'preseason'; flash(`${s} is in the books. Set up next season below.`);
   },
   addTeam() {
@@ -744,8 +760,6 @@ const ACT = {
   },
   async repost() { await batch(lineOps(L().week)); flash('Lines re-posted.'); },
   async awardsToggle() { const A = L().awards || {}; await put('meta', 'league', { awards: { ...A, open: !A.open, season: L().season } }); flash('Voting ' + (L().awards.open ? 'opened' : 'closed') + '.'); },
-  addCat() { const cats = readCats(); cats.push({ key: 'new', label: 'New Award', options: [{ name: '', team: '' }, { name: '', team: '' }, { name: '', team: '' }] }); $('#cats').innerHTML = catEditor(cats); },
-  async saveCats() { const cats = readCats(); await put('meta', 'league', { awards: { ...(L().awards || {}), season: L().season, categories: cats } }); flash('Ballot saved.'); },
 
   async liveOn() { try { localStorage.removeItem('oecLiveDismissed'); } catch (e) { /* ignore */ } await put('meta', 'league', { live: { on: true, url: $('#liveUrl').value.trim(), title: $('#liveTitle').value.trim(), since: Date.now() } }); flash('Live pop-up is ON for everyone on the site.'); },
   async liveOff() { await put('meta', 'league', { live: { on: false, url: '', title: '', since: 0 } }); flash('Live pop-up is OFF. (It still appears automatically if the channel is detected live.)'); },
@@ -927,7 +941,6 @@ document.addEventListener('click', async e => {
     else if (t.dataset.delgame) { if (confirm('Delete this game? Open wagers on it will be voided.')) { await batch([{ op: 'del', col: 'games', id: t.dataset.delgame }, ...D.wagers.filter(w => w.gameId === t.dataset.delgame && w.status === 'open').map(w => ({ op: 'set', col: 'wagers', id: w.id, data: { status: 'void', payout: 0, settledAt: Date.now() } }))]); await batch(parlayOps()); await refreshBooks(); render(); } }
     else if (t.dataset.delteam) { const id = t.dataset.delteam; if (D.games.some(g => g.home === id || g.away === id)) return alert('This team has games scheduled. Delete those first.'); if (confirm('Delete ' + team(id).name + '?')) { if (D.teams.find(x => x.id === id)?._new) D.teams = D.teams.filter(x => x.id !== id); else await batch([{ op: 'del', col: 'teams', id }]); render(); } }
     else if (t.dataset.void) { if (confirm('Void this wager and refund the stake?')) { await put('wagers', t.dataset.void, { status: 'void', payout: 0, settledAt: Date.now() }); render(); } }
-    else if (t.dataset.delcat) { const c = readCats(); c.splice(+t.dataset.delcat, 1); $('#cats').innerHTML = catEditor(c); }
     else if (t.dataset.savegoty) {
       const id = t.dataset.savegoty, h = D.history.find(x => x.id === id), sel = $(`[data-goty="${id}"]`), i = +sel.dataset.i;
       const awards = (h.awards || []).map((x, j) => { if (j !== i) return x; const { gameId, ...rest } = x; return sel.value ? { ...rest, gameId: sel.value } : rest; });
@@ -955,7 +968,7 @@ document.addEventListener('change', e => {
     await watchAuth(async () => {
       if (!auth.user) { $('#panel').innerHTML = `<div class="card"><h2>Commissioner Login</h2><p>Log in on the hub with your commissioner account first.</p><a class="btn" style="padding:8px 14px;border-radius:8px" href="index.html#account">Go to login</a></div>`; $('#tabs').innerHTML = ''; return; }
       if (!isCommish()) { $('#panel').innerHTML = `<div class="card"><h2>Commissioner only</h2><p class="muted">Your account doesn't have commissioner access.</p></div>`; $('#tabs').innerHTML = ''; return; }
-      if (L().awards?.open) await loadBallots(true);
+      if (L().awards?.open || L().phase === PHASES.CCG || L().phase === PHASES.POST) { try { await loadBallots(true); } catch (e) { console.warn('ballots', e); } }
       try { if (await ensureFutures()) ST.msg = 'Posted lines for upcoming games and League Champion futures odds.'; } catch (e) { ST.msg = 'Could not post futures odds: ' + e.message + ' — check the Firestore rules are the latest version.'; }
       render();
     });
