@@ -520,16 +520,6 @@ const PAGES = {
     return html;
   },
 
-  tail(id) {
-    const w = D.wagers.find(x => x.id === id);
-    if (!w || w.deleted) return `<p><a href="#betting">← Sportsbook</a></p><div class="card empty">That bet isn't available anymore.</div>`;
-    const legs = w.market === 'parlay' ? w.legs : [w], open = w.status === 'open' || !w.status;
-    return `<p><a href="#betting">← Sportsbook</a></p><h2>Tail ${esc(w.coach || 'this')}'s bet</h2>
-      <div class="card"><div class="row spread"><b>${esc(w.market === 'parlay' ? `${legs.length}-leg parlay (${fmtOdds(w.odds)})` : wagerLabel(w))}</b><span class="pill ${esc(w.status || 'open')}">${esc(w.status || 'open')}</span></div>
-        ${w.market === 'parlay' ? `<ul class="small" style="margin:8px 0 0;padding-left:18px">${legs.map(l => `<li>${esc(legLabel(l))}</li>`).join('')}</ul>` : ''}
-        <p class="muted small">Placed ${fmtTime(w.ts)}${w.week ? ` · Week ${w.week}` : ''}</p>
-        ${open ? `<button class="gold" data-tailgo="${esc(w.id)}">Tail this bet →</button><p class="muted small" style="margin-bottom:0">Loads the same picks into your slip at today's prices. You pick your own stake.</p>` : '<p class="muted">This bet is already settled.</p>'}</div>`;
-  },
   mybets() {
     const L = D.league, s = S(), me = auth.profile;
     const open = L.bettingOpen && L.phase !== PHASES.PRE && L.phase !== PHASES.POST;
@@ -1001,6 +991,15 @@ function tailBet(id) {
 const canTail = w => (w.status === 'open' || !w.status) && !w.deleted && auth.profile && w.uid !== auth.profile.id;
 const statusPill = w => canTail(w) ? `<button class="pill tailpill" data-tailgo="${esc(w.id)}" title="Load this bet into your slip">Tail ›</button>` : `<span class="pill ${esc(w.status || 'open')}">${esc(w.status || 'open')}</span>`;
 const coachCell = w => `${esc(w.coach || '')}${canTail(w) ? `<div class="show-xs"><button class="pill tailpill" data-tailgo="${esc(w.id)}">Tail ›</button></div>` : ''}`;
+async function showTailModal(id) {
+  const w = D.wagers.find(x => x.id === id);
+  if (!w || w.deleted) { $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card" style="max-width:420px"><h2>Bet not found</h2><p class="muted">That bet isn't available anymore.</p><button class="ghost" data-close="1">Close</button></div></div>`; return; }
+  const c = await drawSlip(w), open = w.status === 'open' || !w.status, mine = auth.profile && w.uid === auth.profile.id;
+  $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card" style="max-width:460px;max-height:92vh;overflow:auto">
+    <h2>${mine ? 'Your bet' : `${esc(w.coach || 'A coach')}'s bet`}</h2><img src="${c.toDataURL('image/png')}" alt="Bet slip" style="width:100%;border-radius:10px;display:block">
+    <div class="row" style="margin-top:12px">${open && !mine ? `<button class="gold" data-tailgo="${esc(w.id)}">Tail this bet →</button>` : ''}<button class="ghost" data-close="1">${open && !mine ? 'Not now' : 'Close'}</button></div>
+    <p class="muted small" style="margin-bottom:0">${!open ? 'This bet is already settled.' : mine ? 'Share this slip so others can tail it.' : 'Tailing loads the same picks into your slip at today\'s prices. You pick your own stake.'}</p></div></div>`;
+}
 function showPlacedSlip() { const w = UI.placed; UI.placed = null; if (w) showSlipImage(w); }
 async function saveSlip() {
   const c = UI.slipCanvas; if (!c) return;
@@ -2121,8 +2120,14 @@ function acctHtml(p) {
     <div class="acctbtns">${isCommish() ? '<a class="btn gold" href="admin.html">Commissioner</a>' : ''}<a class="btn ghost" href="#account">Account</a></div>`;
 }
 function route() {
+  // A shared tail link (#tail/<betId>) opens the sportsbook with that bet's slip in a pop-up, not a separate page.
+  if (location.hash.startsWith('#tail/')) {
+    const id = decodeURIComponent(location.hash.slice(6));
+    history.replaceState(null, '', location.pathname + location.search + '#betting');
+    route(); showTailModal(id); return;
+  }
   const [page, arg] = (location.hash.slice(1) || 'home').split('/');
-  const active = page === 'mybets' || page === 'tail' ? 'betting' : page === 'team' ? 'teams' : page === 'coach' ? 'history' : page === 'game' ? 'schedule' : page;
+  const active = page === 'mybets' ? 'betting' : page === 'team' ? 'teams' : page === 'coach' ? 'history' : page === 'game' ? 'schedule' : page;
   $('#nav').innerHTML = NAV.map(([k, label]) => `<a href="#${k}" class="${k === active ? 'on' : ''}">${label}</a>`).join('');
   // Keep the selected tab in view when the tab bar scrolls sideways (phones).
   requestAnimationFrame(() => { const on = $('#nav a.on'), n = $('#nav'); if (on && n.scrollWidth > n.clientWidth) n.scrollLeft = Math.max(0, on.offsetLeft - (n.clientWidth - on.offsetWidth) / 2); });
@@ -2141,7 +2146,7 @@ async function reload() { await loadAll(); refreshProfile(); if (D.league.awards
 
 document.addEventListener('click', async e => {
   const vl = e.target.closest('[data-vidlist]'); if (vl) { e.preventDefault(); showVideoList(vl.dataset.vidlist); return; }
-  const tg = e.target.closest('[data-tailgo]'); if (tg) { if (!auth.profile) { location.hash = '#account'; return; } tailBet(tg.dataset.tailgo); return; }
+  const tg = e.target.closest('[data-tailgo]'); if (tg) { $('#modal').innerHTML = ''; if (!auth.profile) { location.hash = '#account'; return; } tailBet(tg.dataset.tailgo); return; }
   const bfl = e.target.closest('[data-bfilter]'); if (bfl) { UI.betFilter = bfl.dataset.bfilter; route(); return; }
   const rdv = e.target.closest('[data-racediv]');
   if (rdv) { UI.raceDiv = UI.raceDiv === rdv.dataset.racediv ? null : rdv.dataset.racediv; const box = $('#race'); if (box) box.innerHTML = raceSection(); return; }
