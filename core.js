@@ -817,7 +817,23 @@ export function settleOps(gameIds) {
     const st = winsResult(w, w.season); if (st === 'open') return;
     ops.push({ op: 'set', col: 'wagers', id: w.id, data: { status: st, payout: st === 'won' ? profit(w.stake, w.odds) : -w.stake, settledAt: Date.now() } });
   });
-  return ops.concat(parlayOps());
+  return ops.concat(titleOutOps(), parlayOps());
+}
+/* ---- Teams that can no longer win the League Champion title: everyone outside a scheduled title game, or a team
+   mathematically eliminated from its title-game race (exact clinching math, so "very unlikely" never counts). ---- */
+export function titleOut(season = D.league.season) {
+  const out = new Set(), ids = leagueTeams().map(t => t.id);
+  const ccg = D.games.find(g => g.season === season && g.type === 'ccg' && g.home && g.away);
+  if (ccg) { ids.forEach(id => { if (id !== ccg.home && id !== ccg.away) out.add(id); }); return out; }
+  clinchScenarios(season).forEach(d => (d.teams || []).forEach(t => { if (t.status === 'eliminated') out.add(t.id); }));
+  // Every regular-season game is in and no title game yet: only teams the clinch math still has alive remain.
+  return out;
+}
+// Open title bets on those teams close as losses right away.
+export function titleOutOps() {
+  const memo = {}, outOf = s => memo[s] || (memo[s] = titleOut(s));
+  return D.wagers.filter(w => w.market === 'future' && w.status === 'open' && !w.deleted && outOf(w.season).has(w.pick))
+    .map(w => ({ op: 'set', col: 'wagers', id: w.id, data: { status: 'lost', payout: -w.stake, settledAt: Date.now() } }));
 }
 /* ---- Parlays: 2-6 legs, one per game. Any loss loses; pushes/voids drop out; pays when all legs are final. ---- */
 export const MAX_LEGS = 6;
@@ -831,7 +847,8 @@ function evalParlay(w) {
     if (l.market === 'future') {
       const ccg = D.games.find(g => g.season === w.season && g.type === 'ccg' && played(g));
       if (ccg) return { ...l, result: (+ccg.homeScore > +ccg.awayScore ? ccg.home : ccg.away) === l.pick ? 'won' : 'lost' };
-      return { ...l, result: D.history.some(h => h.season === w.season) ? 'void' : 'open' };
+      if (D.history.some(h => h.season === w.season)) return { ...l, result: 'void' };
+      return { ...l, result: titleOut(w.season).has(l.pick) ? 'lost' : 'open' };
     }
     const g = D.games.find(x => x.id === l.gameId);
     return { ...l, result: !g ? 'void' : !played(g) ? 'open' : g.forfeit ? 'void' : grade(l, g) };
@@ -969,7 +986,8 @@ export async function ensureFutures() {
   if (DEMO || !isCommish() || (L.phase !== PHASES.REG && L.phase !== PHASES.CCG)) return false;
   if (L.phase === PHASES.REG && !(L.gotw && L.gotw.season === L.season && L.gotw.week === L.week)) await put('meta', 'league', { gotw: { season: L.season, week: L.week, gameId: gotwTally(L.season, L.week).game?.id || '' } });
   const missingLines = D.games.some(g => g.season === L.season && g.week >= L.week && !played(g) && !(g.lines && g.lines.spread != null && g.lines.spreadOddsHome != null));
-  if (!missingLines && (L.phase !== PHASES.REG || (futuresPosted() && winsPosted()))) return false;
+  const outOps = titleOutOps(); if (outOps.length) await batch(outOps.concat(parlayOps()));
+  if (!missingLines && (L.phase !== PHASES.REG || (futuresPosted() && winsPosted()))) return !!outOps.length;
   await batch(boardOps(L.week)); return true;
 }
 export function friendlyError(e) {
@@ -980,12 +998,14 @@ export function futuresOpen() { const L = D.league; return L.phase === PHASES.RE
 export function futuresBoard() {
   const L = D.league; if (L.phase !== PHASES.REG) return [];
   const sim = simulate(L.season, nowUpto()), F = L.futures, posted = F && F.season === L.season && F.odds ? F.odds : null;
-  return leagueTeams().map(t => ({ id: t.id, p: sim[t.id]?.titlePct || 0, odds: posted ? (posted[t.id] ?? null) : futuresOdds(sim[t.id]?.titlePct || 0), posted: !!posted }))
+  const out = titleOut(L.season);
+  return leagueTeams().map(t => ({ id: t.id, p: out.has(t.id) ? 0 : sim[t.id]?.titlePct || 0, odds: out.has(t.id) ? null : posted ? (posted[t.id] ?? null) : futuresOdds(sim[t.id]?.titlePct || 0), posted: !!posted, out: out.has(t.id) }))
     .sort((a, b) => b.p - a.p || a.id.localeCompare(b.id));
 }
 export function futuresSnapshot() {
   const L = D.league, sim = simulate(L.season, nowUpto()), odds = {};
-  leagueTeams().forEach(t => odds[t.id] = futuresOdds(sim[t.id]?.titlePct || 0));
+  const out = titleOut(L.season);
+  leagueTeams().forEach(t => odds[t.id] = out.has(t.id) ? null : futuresOdds(sim[t.id]?.titlePct || 0));
   return { season: L.season, week: L.week, open: true, odds };
 }
 /* ---- Season win totals (regular season wins). Line = the .5 mark closest to a 50/50 split in the simulation. ---- */
