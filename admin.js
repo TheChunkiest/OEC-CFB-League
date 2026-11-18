@@ -23,8 +23,10 @@ const saveView = () => { try { sessionStorage.setItem('oecAdminView', JSON.strin
 addEventListener('pagehide', saveView);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveView(); });
 setTimeout(() => { restoreY = 0; }, 8000);   // stop trying to restore the scroll spot once things have settled
-// Coach of the Year starts with the 2029 season (Season 4).
-const awardsFor = season => season >= 2029 ? [...DEFAULT_AWARDS, 'Coach of the Year'] : DEFAULT_AWARDS;
+// Coach of the Year starts with the 2028 season (Season 3). A ballot saved before it existed gets it added.
+const COTY_FROM = 2028, blankCat = l => ({ key: slug(l), label: l, options: [{ name: '', team: '' }, { name: '', team: '' }, { name: '', team: '' }] });
+const awardsFor = season => season >= COTY_FROM ? [...DEFAULT_AWARDS, 'Coach of the Year'] : DEFAULT_AWARDS;
+const withCoty = (cats, season) => season >= COTY_FROM && !cats.some(c => /coach of the year/i.test(c.label || '')) ? [...cats, blankCat('Coach of the Year')] : cats;
 const DEFAULT_AWARDS = ['MVP', 'Offensive Player of the Year', 'Defensive Player of the Year', 'Best Offense', 'Best Defense', 'Game of the Year'];
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -290,14 +292,14 @@ const views = {
   },
   advanceBody() {
     const lg = L(), s = lg.season;
-    if (!D.teams.length) return `<div class="card"><h2>Welcome, Commissioner</h2><p>The database is empty. Load the league history and the current season (Seasons 1–3 through Week 9) from <code>league-data.json</code>. This adds all teams, coaches, divisions, results, champions, awards and "Holy Shit" moments, then posts Week 10 lines.</p><button class="gold" data-act="importSeed">Load league data</button></div>`;
+    if (!D.teams.length) return `<div class="card"><h2>Welcome, Commissioner</h2><p>The database is empty. Load the league history and the current season (Seasons 1–3 through Week 9) from <code>league-data.json</code>. This adds all teams, coaches, divisions, results, champions and awards, then posts Week 10 lines.</p><button class="gold" data-act="importSeed">Load league data</button></div>`;
     if (lg.phase === PHASES.PRE) return `<div class="card"><h2>Offseason</h2><p>The ${s} season is wrapped up${D.history.find(h => h.season === s) ? ' and in the history books' : ''}. Fill out the <b>New Season</b> form to set up next season: coaches, team ratings and the schedule. Publishing it opens Week 0 betting and posts preseason odds.</p><button data-tab="preseason">Open New Season form →</button></div>`;
     if (lg.phase === PHASES.REG || ST.done) return wizard();
     if (lg.phase === PHASES.CCG) {
       const ccg = D.games.find(g => g.season === s && g.type === 'ccg');
       if (!ccg) {
         const divs = divisions(s), finals = divs.length > 1 ? divs.map(d => orderGroup(leagueTeams().filter(t => divOf(t, s) === d).map(t => t.id), s)[0]) : orderGroup(leagueTeams().map(t => t.id), s).slice(0, 2);
-        const cats = (lg.awards?.season === s && lg.awards.categories?.length) ? lg.awards.categories : awardsFor(s).map(l => ({ key: slug(l), label: l, options: [{ name: '', team: '' }, { name: '', team: '' }, { name: '', team: '' }] }));
+        const cats = (lg.awards?.season === s && lg.awards.categories?.length) ? withCoty(lg.awards.categories, s) : awardsFor(s).map(blankCat);
         return `<div class="card"><h2>End of Regular Season</h2><p class="muted">Set the ${esc(lg.conference)} Championship Game and the awards ballot. Submitting opens championship-week betting and awards voting. Voting closes automatically when you submit the championship result.</p>
           <h3>League Championship Game</h3><div class="row"><select id="ccgA">${teamOpts(finals[1] || '', true, t => t.conf === lg.conference)}</select> vs <select id="ccgH">${teamOpts(finals[0] || '', true, t => t.conf === lg.conference)}</select>
           <label class="row" style="margin:0"><input type="checkbox" id="ccgN" checked style="width:auto"> Neutral site</label></div>
@@ -415,14 +417,15 @@ const views = {
 
   awards() {
     const lg = L(), A = lg.awards || {}, s = lg.season, ballots = D.ballots.filter(b => b.season === s);
-    const cats = A.categories?.length ? A.categories : awardsFor(s).map(l => ({ key: slug(l), label: l, options: [{ name: '', team: '' }, { name: '', team: '' }, { name: '', team: '' }] }));
+    const cats = A.categories?.length ? withCoty(A.categories, s) : awardsFor(s).map(blankCat);
+    const needsSave = A.categories?.length && cats.length > A.categories.length;
     const t = tally();
     return `<div class="card"><h2>Season Awards Voting</h2><p>Voting is <b>${A.open ? 'OPEN' : 'CLOSED'}</b>. ${ballots.length} ballot${ballots.length === 1 ? '' : 's'} in for ${s}.</p>
       <p class="muted small">Normally this opens with the End of Regular Season form and closes with the championship result. These buttons are manual overrides.</p>
       <div class="row"><button class="ghost" data-act="awardsToggle">${A.open ? 'Close voting now' : 'Open voting now'}</button></div></div>
       ${ballots.length ? `<div class="card"><h3 style="margin-top:0">Live tally (only you can see this)</h3><table>${t.results.map(r => `<tr><td>${esc(r.award)}</td><td><b>${esc(r.winner)}</b></td><td class="num">${r.votes}</td></tr>`).join('')}</table>
 </div>` : ''}
-      <div class="card"><h3 style="margin-top:0">Ballot</h3><div id="cats">${catEditor(cats)}</div><div class="row"><button class="ghost sm" data-act="addCat">+ Add category</button><button data-act="saveCats">Save ballot</button></div></div>`;
+      <div class="card"><h3 style="margin-top:0">Ballot</h3>${needsSave ? '<p class="small" style="color:var(--gold)">🏅 Coach of the Year was added to this season\'s ballot. Fill in the nominees and tap <b>Save ballot</b> so coaches can vote on it.</p>' : ''}<div id="cats">${catEditor(cats)}</div><div class="row"><button class="ghost sm" data-act="addCat">+ Add category</button><button data-act="saveCats">Save ballot</button></div></div>`;
   },
 
 
