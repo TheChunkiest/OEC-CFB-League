@@ -346,7 +346,9 @@ export const rankOf = (id, season, week) => pollFor(season ?? D.league.season, w
 export const rankName = (id, season, week) => { const r = rankOf(id, season, week); return (r ? '#' + r + ' ' : '') + team(id).name; };
 export function chip(id, opts = {}) {
   const t = team(id), r = opts.rank === false ? null : rankOf(id, opts.season, opts.week);
-  return `<a class="chip" href="${esc(opts.href || '#team/' + t.id)}"><i class="sw" style="background:${esc(teamColor(t))}"></i>${r ? `<span class="rk">#${r}</span>` : ''}${esc(opts.abbr ? (t.abbr || t.name) : t.name)}</a>`;
+  // A past-season context links to that season's version of the team page (#team/<id>/<season>).
+  const hs = opts.season != null && +opts.season !== +D.league.season ? '/' + opts.season : '';
+  return `<a class="chip" href="${esc(opts.href || '#team/' + t.id + hs)}"><i class="sw" style="background:${esc(teamColor(t))}"></i>${r ? `<span class="rk">#${r}</span>` : ''}${esc(opts.abbr ? (t.abbr || t.name) : t.name)}</a>`;
 }
 
 /* ---------------- Ratings & lines ---------------- */
