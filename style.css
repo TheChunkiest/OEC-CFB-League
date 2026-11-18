@@ -776,3 +776,100 @@ h3{margin-bottom:10px}
 .mybetsrow{display:flex;justify-content:flex-end;margin:-4px 0 10px}
 /* Ribbons sit centered on the top edge of their box */
 .gotw .ribbon,.popular .ribbon,.betgame.gotw .ribbon{left:50%;right:auto;transform:translateX(-50%);white-space:nowrap;max-width:calc(100% - 16px);overflow:hidden;text-overflow:ellipsis}
+
+/* ================= Calm theme (Nov 2026) =================
+   Red = brand + actions (logo, selected tab, main buttons, section markers).
+   Gold = special only (Game of the Week, championship, Crackers, titles).
+   Everything else neutral; green/red only for win/loss. Flat cards, no red gradients. */
+:root{--card:#161314;--card2:#1c1819;--line:#2c2527;--chipbg:#231d1f;--soft:#d6cfd0}
+body{background-image:none}
+a{color:var(--text)}
+main p a,.notice a,.empty a,.card>p>a,.card p a,.story p a{text-decoration:underline;text-decoration-color:rgba(255,255,255,.35);text-underline-offset:3px}
+.card{background:var(--card)}
+.banner{border-color:var(--line);background:var(--card)}
+.gotw,.popular,.betgame.gotw{background:var(--card)}
+.betgame.gotw{background:#1a1617}
+.card.value{border-color:var(--line);background:var(--card)}
+.ribbon.vrib{background:#3a3234;color:var(--text)}
+.notice{background:var(--card2);border-left-color:#5a4f52}
+/* Header */
+.hero{background:#0f0c0d}
+.hero::after{display:none}
+.logo{filter:none}
+.badge,.badge.gold,.badge.adv{background:var(--card2);color:var(--text);border:1px solid var(--line);box-shadow:none}
+.badge span{color:var(--muted);opacity:1}
+.badge.gold b{color:var(--gold)}
+/* Text accents */
+.rank,.rpos{color:var(--text)}
+th.sorted{color:var(--text)}
+.chip:hover{color:var(--text);text-decoration:underline}
+.chip .rk,.gp-name .rk{color:var(--muted)}
+.kick,.kcal a,.cheatlink a,.cpulinks a,details.kform summary,.a2hs-act a,.vidcard b,.vidpart b{color:var(--text)}
+details.card>summary::before{color:var(--muted)}
+.vidtag{color:var(--soft)}
+/* Tags: neutral outlines (CPU / division / storyline labels) */
+.tag{background:var(--chipbg);color:var(--soft);border:1px solid var(--line);font-size:11px}
+.h2h,.h2h.divtag,.h2h.cputag{background:transparent;color:var(--muted);border:1px solid #3d3437;font-size:11px;font-weight:800}
+/* Sportsbook */
+button.pick{background:var(--chipbg)}
+button.pick b,.card.popular .vodds{color:var(--text)}
+button.pick:hover{border-color:#5a4f52}
+button.pick.sel{background:var(--red);color:#fff;border-color:var(--red)}
+button.pick.sel b{color:#fff}
+.pill.open{background:#2a2426;color:var(--soft)}
+.pill.cashed{background:#123c24;color:#7ef0ad}
+.bar i{background:var(--red)}
+.vote-opt.on{border-color:var(--red);background:var(--card2)}
+.rpk.on{border-color:var(--red);background:rgba(211,18,28,.12);color:var(--text)}.rpk.on span{color:var(--text)}
+.chipbtn.on{background:var(--red);color:#fff;border-color:var(--red)}
+.mybetsbtn{border-color:var(--line);background:var(--card2)}
+.sbtn.cal{background:var(--card2);border-color:var(--line);color:var(--text)}
+.card.game.clickable:hover{border-color:#4a4043}
+.vote-opt:hover{border-color:#4a4043}
+tr.me td{background:rgba(255,255,255,.05)}
+.tcard.me{box-shadow:0 0 0 2px #5a4f52 inset}
+
+/* ---------- Layout fixes ---------- */
+/* Bigger tap targets */
+.chip{padding:4px 0}
+.gsub .bal,.gsub .nextg{padding:5px 10px}
+a.small{display:inline-flex;align-items:center;min-height:32px}
+/* Nothing smaller than 11px */
+th{font-size:11px}
+.boosttag{font-size:11px}
+/* Laptop home: two equal cards instead of two-of-three columns */
+.grid.home2{grid-template-columns:1fr 1fr}
+@media(max-width:760px){.grid.home2{grid-template-columns:1fr}}
+/* "More" menu for the tabs on phones */
+nav .more{display:none}
+.navmore{display:none}
+@media (max-width:640px){
+  nav{justify-content:space-between;overflow:visible}
+  nav a.x{display:none}
+  nav .more{display:inline-flex;align-items:center;gap:4px;padding:8px 11px;border-radius:8px;background:transparent;color:var(--muted);font-weight:700;font-size:13.5px;min-height:0;border:0}
+  nav .more.on{background:var(--red);color:#fff}
+  nav.open .navmore{display:grid;grid-template-columns:1fr 1fr;gap:6px;position:absolute;left:10px;right:10px;top:100%;margin-top:6px;background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:8px;box-shadow:0 12px 30px rgba(0,0,0,.6)}
+  .navmore a{padding:12px;border-radius:8px;color:var(--text);font-weight:700;background:var(--card)}
+  .navmore a.on{background:var(--red);color:#fff}
+  /* Shorter header */
+  .logo{height:46px}
+  .titleblock h1{font-size:18px}
+  .titleblock .sub{display:none}
+  .hero-in{padding:8px 12px;gap:8px}
+  .badge{padding:5px 9px}
+  .badge span{font-size:11px;letter-spacing:.6px}
+  .badge b{font-size:16px}
+  .badge.gold b{font-size:16px}
+  th{font-size:11px}
+}
+/* Very small phones (iPhone SE / mini): tighter tables so no column is cut off */
+@media (max-width:359px){
+  th,td{padding:6px 3px}
+  .chip{gap:4px;font-size:13px}
+  .badge span{letter-spacing:.3px}
+}
+@media (max-width:640px){.badge.adv span{font-size:11px;letter-spacing:.4px}.badge.adv b{font-size:13px}}
+.badge span,.bkmini span{font-size:11px}
+.chip .rk{font-size:max(11px,.78em)}
+@media (max-width:379px){nav{padding:8px 6px;gap:2px}nav a,nav .more{font-size:12.5px;padding:8px 7px}.bkmini span{font-size:11px;letter-spacing:0}.sbhead h2{font-size:14px}}
+nav .more{white-space:nowrap;flex:none}
