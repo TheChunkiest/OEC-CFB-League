@@ -923,11 +923,23 @@ export function futuresOdds(p) {
   return Math.max(100, v >= 1000 ? Math.round(v / 50) * 50 : v >= 300 ? Math.round(v / 10) * 10 : round5(v));
 }
 export function futuresPosted() { const L = D.league, F = L.futures; return DEMO || !!(F && F.season === L.season && F.open && F.odds); }
+// Quick-check maps stored with every posted line, so the database rules can verify a bet in a couple of lookups:
+// o = price by "market_pick", v = line by market. Only picks actually on the board get a key.
+export function lineKeys(l) {
+  if (!l) return {};
+  const o = {}, v = {}, j = k => l[k] != null ? l[k] : -110;
+  if (l.mlHome != null && l.mlAway != null) { o.ml_home = l.mlHome; o.ml_away = l.mlAway; }
+  if (l.spread != null) { v.spread = l.spread; o.spread_home = j('spreadOddsHome'); o.spread_away = j('spreadOddsAway'); }
+  if (l.total != null) { v.total = l.total; o.total_over = j('overOdds'); o.total_under = j('underOdds'); }
+  if (l.ttHome != null) { v.tth = l.ttHome; o.tth_over = j('ttHomeOver'); o.tth_under = j('ttHomeUnder'); }
+  if (l.ttAway != null) { v.tta = l.ttAway; o.tta_over = j('ttAwayOver'); o.tta_under = j('ttAwayUnder'); }
+  return { o, v };
+}
 // Post lines for every unplayed game from `week` on (current + future weeks), plus League Champion futures.
 export function boardOps(week, season = D.league.season) {
   const L = D.league;
   const ops = D.games.filter(g => g.season === season && g.week >= week && !played(g)).map(g => {
-    const l = freshLine(g), data = { lines: l }, h = histPoint(g, l);
+    const l = freshLine(g), data = { lines: l && { ...l, ...lineKeys(l) } }, h = histPoint(g, l);
     if (h) data.hist = h;
     return { op: 'set', col: 'games', id: g.id, data };
   });
@@ -1011,6 +1023,10 @@ export async function ensureFutures() {
   if (L.phase === PHASES.REG && !(L.gotw && L.gotw.season === L.season && L.gotw.week === L.week)) await put('meta', 'league', { gotw: { season: L.season, week: L.week, gameId: gotwTally(L.season, L.week).game?.id || '' } });
   const missingLines = D.games.some(g => g.season === L.season && g.week >= L.week && !played(g) && !(g.lines && g.lines.spread != null && g.lines.spreadOddsHome != null));
   const outOps = titleOutOps(); if (outOps.length) await batch(outOps.concat(parlayOps()));
+  // Lines posted before the quick-check maps existed: add them (same prices and lines, nothing re-priced).
+  const keyOps = D.games.filter(g => g.season === L.season && !played(g) && g.lines && g.lines.spread != null && !g.lines.o)
+    .map(g => ({ op: 'set', col: 'games', id: g.id, data: { lines: lineKeys(g.lines) } }));
+  if (keyOps.length) await batch(keyOps);
   if (!missingLines && (L.phase !== PHASES.REG || (futuresPosted() && winsPosted()))) return !!outOps.length;
   await batch(boardOps(L.week)); return true;
 }
