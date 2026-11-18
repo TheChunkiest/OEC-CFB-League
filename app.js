@@ -1726,7 +1726,6 @@ PAGES.game = function (id) {
   const lastGame = t => seasonGames(t).filter(x => x.week < g.week).pop();
   const careerWins = (coach, beforeThis) => coach && coach !== 'CPU' ? D.games.filter(x => played(x) && !x.forfeit && (!beforeThis || x.season < s || (x.season === s && x.week < g.week)) && (coachOf(x, 'home') === coach || coachOf(x, 'away') === coach))
     .filter(x => { const hw = +x.homeScore > +x.awayScore; return coachOf(x, hw ? 'home' : 'away') === coach; }).length : 0;
-  const betsHere = D.wagers.filter(w => !w.deleted && w.market !== 'parlay' && w.gameId === g.id);
 
   let title;
   const paras = []; let stake = null;
@@ -1785,11 +1784,19 @@ PAGES.game = function (id) {
     if (rk(lo) && !rk(w)) F.push([60, `${w.name} took down a ranked opponent in #${rk(lo)} ${lo.name}.`]);
     if (cw !== 'CPU') { const n = careerWins(cw, false); if (n && (n % 5 === 0 || n === 1)) F.push([50, `It's career win No. ${n} for ${cw} in the league.`]); }
     if (same && lastPlayedWeek(s) === g.week) { const ord2 = orderGroup(leagueTeams().filter(t => divOf(t, s) === dA).map(t => t.id), s); const pos = ord2.indexOf(w.id) + 1; if (pos) F.push([48, pos === 1 ? `${w.name} sits atop the ${dA} after this one.` : `${w.name} is ${ord(pos)} in the ${dA} now.`]); }
-    const won = betsHere.filter(b => b.status === 'won').sort((a, b) => (b.payout || 0) - (a.payout || 0))[0], lost = betsHere.filter(b => b.status === 'lost').sort((a, b) => b.stake - a.stake)[0];
-    if (won) F.push([52 + rng() * 15, `${won.coach} cashed ${(won.payout || 0).toLocaleString()} Crackers on ${wagerLabel(won).replace(/ — .*$/, '').replace(/ \([+-]\d+\)$/, '')}.${lost ? ` ${lost.coach} wasn't so lucky, dropping ${lost.stake} on the other side.` : ''}`]);
-    else if (lost) F.push([45, `${lost.coach} had ${lost.stake} Crackers riding on ${wagerLabel(lost).replace(/ — .*$/, '').replace(/ \([+-]\d+\)$/, '')} and watched it go the other way.`]);
-    const picked = shuffle(F.map(f => [f[0] + rng() * 25, f[1]])).sort((x, y) => y[0] - x[0]).slice(0, 3 + Math.floor(rng() * 2)).map(f => f[1]);
-    if (picked.length) { paras.push(picked.slice(0, 2).join(' ')); if (picked.length > 2) paras.push(picked.slice(2).join(' ')); }
+    // Always-true background facts so every recap has some depth.
+    const rAfter = records(s, g.week + 1), rw = rAfter[w.id], rl = rAfter[lo.id];
+    const recLine = (t, r) => t.conf === L.conference && (r.cw !== r.w || r.cl !== r.l) ? `${r.w}-${r.l} (${r.cw}-${r.cl} ${L.conference})` : `${r.w}-${r.l}`;
+    F.push([30 + rng() * 25, pick([`${w.name} moves to ${recLine(w, rw)}, while ${lo.name} falls to ${recLine(lo, rl)}.`, `The win puts ${w.name} at ${recLine(w, rw)}. ${lo.name} drops to ${recLine(lo, rl)}.`])]);
+    if (p && !upset) F.push([25 + rng() * 25, pick([`${w.name} went in with ${pw >= 80 ? 'a commanding' : 'a'} ${pw}% chance to win, and played like it.`, `The model liked ${w.name} at ${pw}% before kickoff.`, `${pw >= 70 ? 'No surprise here' : 'Close to the script'}: the model had ${w.name} winning ${pw}% of the time.`])]);
+    if (PWp.gp) F.push([22 + rng() * 25, ws >= PWp.pf / PWp.gp ? `${w.name} scored ${ws}, ${(ws - PWp.pf / PWp.gp).toFixed(1)} more than its season average going in.` : `${w.name} won without its best offensive day, scoring ${ws} against a season average of ${(PWp.pf / PWp.gp).toFixed(1)}.`]);
+    if (PLp.gp) F.push([22 + rng() * 25, ls <= PLp.pf / PLp.gp ? pick([`${lo.name} was held to ${ls}, ${(PLp.pf / PLp.gp - ls).toFixed(1)} below its average.`, `The ${w.name} defense kept ${lo.name} to ${ls} points, well under its ${(PLp.pf / PLp.gp).toFixed(1)} average.`]) : `${lo.name} put up ${ls}, actually above its ${(PLp.pf / PLp.gp).toFixed(1)}-point average. It just wasn't enough.`]);
+    const nextOf = t => D.games.filter(x => x.season === s && x.week > g.week && (x.home === t.id || x.away === t.id)).sort((a, b) => a.week - b.week)[0];
+    const nw = nextOf(w), nl = nextOf(lo), vsT = (x, t) => `${x.home === t.id ? 'hosts' : 'visits'} ${team(x.home === t.id ? x.away : x.home).name}`;
+    if (nw || nl) F.push([18 + rng() * 20, `Up next: ${[nw ? `${w.name} ${vsT(nw, w)}${nw.type === 'ccg' ? ' in the title game' : ` in Week ${nw.week}`}` : '', nl ? `${lo.name} ${vsT(nl, lo)}${nl.type === 'ccg' ? ' in the title game' : ` in Week ${nl.week}`}` : ''].filter(Boolean).join('; ')}.`]);
+    const picked = shuffle(F.map(f => [f[0] + rng() * 25, f[1]])).sort((x, y) => y[0] - x[0]).slice(0, 5 + Math.floor(rng() * 2)).map(f => f[1]);
+    const half = Math.ceil(picked.length / 2);
+    if (picked.length) { paras.push(picked.slice(0, half).join(' ')); if (picked.length > half) paras.push(picked.slice(half).join(' ')); }
   } else {
     // ----- preview -----
     const T = [];
@@ -1844,12 +1851,16 @@ PAGES.game = function (id) {
     const lastTxt = t => { const lg = lastGame(t); if (!lg) return null; const my = scoreOf(lg, t), th = oppScore(lg, t), op = team(lg.home === t.id ? lg.away : lg.home); return { won: my > th, txt: my > th ? `${my}-${th} win over ${op.name}` : `${th}-${my} loss to ${op.name}` }; };
     const la = lastTxt(A), lh = lastTxt(H);
     if (la && lh) F.push([35 + rng() * 30, la.won === lh.won ? pick([`Both teams are coming off ${la.won ? 'wins' : 'losses'}: ${A.name} a ${la.txt}, ${H.name} a ${lh.txt}.`, `${A.name} enters off a ${la.txt}; ${H.name} off a ${lh.txt}.`]) : pick([`They arrive in opposite moods. ${A.name} is coming off a ${la.txt}, ${H.name} a ${lh.txt}.`, `${A.name} (fresh off a ${la.txt}) meets a ${H.name} team coming off a ${lh.txt}.`])]);
-    const bh = betsHere.filter(b => b.status === 'open' || !b.status);
-    if (bh.length >= 2) { const side = {}; bh.forEach(b => { const k = wagerLabel(b).replace(/ — .*$/, '').replace(/ \([+-]\d+\)$/, ''); side[k] = (side[k] || 0) + b.stake; }); const top = Object.entries(side).sort((a, b) => b[1] - a[1])[0];
-      F.push([55, `The league is already in on this one: ${bh.length} bets placed, with the most money (${top[1]} Crackers) on ${top[0]}.`]); }
     if (rk(A) || rk(H)) { const r = rk(A) ? A : H; if (!(rk(A) && rk(H))) F.push([40, `${r.name} comes in ranked #${rk(r)}, which puts a target on its back.`]); }
-    const picked = shuffle(F.map(f => [f[0] + rng() * 30, f[1]])).sort((x, y) => y[0] - x[0]).slice(0, 3 + Math.floor(rng() * 2)).map(f => f[1]);
-    if (picked.length) { paras.push(picked.slice(0, 2).join(' ')); if (picked.length > 2) paras.push(picked.slice(2).join(' ')); }
+    // Always-true background facts so every preview has some depth.
+    [[A, PA], [H, PH]].forEach(([t, P]) => { if (P.gp && ppgRank[t.id]) F.push([24 + rng() * 25, pick([`${t.name} averages ${(P.pf / P.gp).toFixed(1)} points (${ord(ppgRank[t.id])} in the league) and allows ${(P.pa / P.gp).toFixed(1)} (${ord(papgRank[t.id])}).`, `On the season, ${t.name} is scoring ${(P.pf / P.gp).toFixed(1)} a game and giving up ${(P.pa / P.gp).toFixed(1)}.`])]); });
+    if (l && l.pHome != null && l.total) { const hs = Math.round((l.total - l.spread) / 2), as = Math.round((l.total + l.spread) / 2); F.push([30 + rng() * 25, pick([`Put the spread and total together and the books see something like ${H.name} ${hs}, ${A.name} ${as}.`, `The numbers point to a final around ${Math.max(hs, as)}-${Math.min(hs, as)}${hs === as ? '' : `, ${hs > as ? H.name : A.name}`}.`])]); }
+    if (same) { const pa = divOrder.indexOf(A.id) + 1, ph = divOrder.indexOf(H.id) + 1; if (pa && ph) F.push([26 + rng() * 25, `In the ${dA} standings, ${A.name} sits ${ord(pa)} and ${H.name} ${ord(ph)}.`]); }
+    const after = t => D.games.filter(x => x.season === s && x.week > g.week && (x.type || 'reg') === 'reg' && (x.home === t.id || x.away === t.id)).length;
+    [A, H].forEach(t => { const n = after(t); if (n <= 1) F.push([20 + rng() * 20, n === 0 ? `It's the regular-season finale for ${t.name}.` : `${t.name} has just one game left after this one.`]); });
+    const picked = shuffle(F.map(f => [f[0] + rng() * 30, f[1]])).sort((x, y) => y[0] - x[0]).slice(0, 5 + Math.floor(rng() * 2)).map(f => f[1]);
+    const half = Math.ceil(picked.length / 2);
+    if (picked.length) { paras.push(picked.slice(0, half).join(' ')); if (picked.length > half) paras.push(picked.slice(half).join(' ')); }
     const pw = playersToWatch(A, H, s); if (pw) paras.push(pw);
   }
   // Series history between the two coaches, worded a few ways.
