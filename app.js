@@ -472,7 +472,7 @@ const PAGES = {
         const home = g.home === id, opp = home ? g.away : g.home, done = played(g), l = lineOf(g);
         const my = home ? +g.homeScore : +g.awayScore, th = home ? +g.awayScore : +g.homeScore;
         const myLine = l ? (home ? l.spread : -l.spread) : null;
-        return `<tr class="clickable" data-game="${esc(g.id)}"><td>${g.week}</td><td>${g.neutral ? 'vs' : home ? 'vs' : '@'} ${chip(opp, { season: g.season, week: g.week })}</td><td class="muted wrap-sm">${l ? fmtLine(myLine) + `<span class="hide-sm"> · ${fmtOdds(home ? l.mlHome : l.mlAway)}</span>` + (winPct(g, l) && !g.forfeit ? ` · <span title="${done ? 'Pre-game win chance' : 'Win chance'}">${home ? winPct(g, l).h : winPct(g, l).a}%</span>` : '') : ''}</td><td class="num">${done ? `<span class="${my > th ? 'win' : 'loss'}">${my > th ? 'W' : 'L'} ${g.forfeit ? '(forfeit)' : my + '-' + th}</span>` : '<span class="muted">—</span>'}</td></tr>`;
+        return `<tr class="clickable" data-game="${esc(g.id)}"><td>${g.type === 'ccg' ? '<b title="League Championship">🏆</b>' : g.type === 'bowl' ? '<span title="Postseason">Bowl</span>' : g.week}</td><td>${g.neutral ? 'vs' : home ? 'vs' : '@'} ${chip(opp, { season: g.season, week: g.week })}</td><td class="muted wrap-sm">${l ? fmtLine(myLine) + `<span class="hide-sm"> · ${fmtOdds(home ? l.mlHome : l.mlAway)}</span>` + (winPct(g, l) && !g.forfeit ? ` · <span title="${done ? 'Pre-game win chance' : 'Win chance'}">${home ? winPct(g, l).h : winPct(g, l).a}%</span>` : '') : ''}</td><td class="num">${done ? `<span class="${my > th ? 'win' : 'loss'}">${my > th ? 'W' : 'L'} ${g.forfeit ? '(forfeit)' : my + '-' + th}</span>` : '<span class="muted">—</span>'}</td></tr>`;
       }).join('')}</table></div></div>`;
   },
 
@@ -1573,7 +1573,9 @@ function teamStatLine(tid, s) {
     if (!g.forfeit && Math.abs(my - th) <= 8) won ? ha.close[0]++ : ha.close[1]++;
   });
   const pct = (w, l) => w + l ? w / (w + l) : null, avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
-  const pr = currentPower(s)?.find(x => x.id === tid);
+  // Past seasons: final power rank = end-of-season model rating among that season's league members.
+  const pr = s === D.league.season ? currentPower(s)?.find(x => x.id === tid) : (() => { const M = [...seasonMembers(s)].filter(id => R[id]); if (!R[tid] || !M.includes(tid)) return null;
+    const v = id => R[id].o + R[id].d; return { rank: M.filter(id => v(id) > v(tid) + 1e-9).length + 1 }; })();
   return {
     rec: { v: pct(r.w, r.l), f: `${r.w}-${r.l}` }, conf: (() => { const c = confRecOf(tid, s); return { v: pct(c.w, c.l), f: `${c.w}-${c.l}` }; })(),
     ppg: { v: P.gp ? P.pf / P.gp : null, f: P.gp ? (P.pf / P.gp).toFixed(1) : '–' }, papg: { v: P.gp ? P.pa / P.gp : null, f: P.gp ? (P.pa / P.gp).toFixed(1) : '–' },
@@ -1615,7 +1617,9 @@ function statsBoard(s) {
     <div class="tablewrap" style="margin-top:8px"><table class="tsboard"><tr><th>#</th><th>Team</th><th class="hide-sm">Record</th><th class="num sortable" data-tsflip="1">${esc(label)} ${UI.tsFlip ? '▲' : '▼'}</th></tr>${rows}</table></div></div>`;
 }
 function teamStatsCard(tid, s) {
-  const lt = leagueTeams(), inL = lt.some(t => t.id === tid), all = Object.fromEntries((inL ? lt : [...lt, team(tid)]).map(t => [t.id, teamStatLine(t.id, s)]));
+  // Past seasons rank against that season's league members (teams a league coach ran that year).
+  const past = s !== D.league.season;
+  const lt = past ? [...seasonMembers(s)].map(id => team(id)) : leagueTeams(), inL = lt.some(t => t.id === tid), all = Object.fromEntries((inL ? lt : [...lt, team(tid)]).map(t => [t.id, teamStatLine(t.id, s)]));
   const me = all[tid], n = lt.length, r0 = records(s)[tid];
   if (!inL && !(r0 && r0.w + r0.l)) return '';
   const rankOfStat = (k, dir) => {
@@ -1630,8 +1634,8 @@ function teamStatsCard(tid, s) {
     const q = Math.ceil(x.of / 4);
     return `<span class="srk ${k === 'sos' ? '' : x.r <= q ? 'top' : x.r > x.of - q ? 'bot' : ''}">${x.tie ? 'T-' : ''}${ordinal(x.r)}</span>`;
   };
-  return `<div class="card"><div class="row spread"><h3 style="margin:0">${s} Season Stats</h3>${inL ? `<span class="muted small">Rank among ${n} ${esc(D.league.conference)} teams</span>` : ''}</div>
-    <div class="tstats">${TEAM_STATS.map(([grp, rows]) => `<div class="tsg"><div class="tsh">${grp}</div><table>${rows.map(([k, label, dir, tip]) => `<tr${tip ? ` title="${esc(tip)}"` : ''}><td>${label}${tip ? ' <span class="muted small">ⓘ</span>' : ''}</td><td class="num"><b>${me[k].f}</b></td><td class="num">${pill(k, dir)}</td></tr>`).join('')}</table></div>`).join('')}</div>
+  return `<div class="card"><div class="row spread"><h3 style="margin:0">${s} Season Stats</h3>${inL ? `<span class="muted small">Rank among ${n} ${esc(D.league.conference)} teams${past ? ` that season` : ''}</span>` : ''}</div>
+    <div class="tstats">${TEAM_STATS.map(([grp, rows]) => [grp, past ? rows.filter(([k]) => !['ovr', 'off', 'def', 'expW', 'title'].includes(k)) : rows]).filter(([, rows]) => rows.length).map(([grp, rows]) => `<div class="tsg"><div class="tsh">${past && grp === 'Team' ? 'Final' : grp}</div><table>${rows.map(([k, label, dir, tip]) => `<tr${tip ? ` title="${esc(tip)}"` : ''}><td>${label}${tip ? ' <span class="muted small">ⓘ</span>' : ''}</td><td class="num"><b>${me[k].f}</b></td><td class="num">${pill(k, dir)}</td></tr>`).join('')}</table></div>`).join('')}</div>
     <p class="muted small" style="margin:8px 0 0"><span class="srk top">Green</span> = top quarter of the league, <span class="srk bot">red</span> = bottom quarter. One-score games are decided by 8 or fewer. Schedule strength is the average model rating of opponents played (1st = toughest).</p></div>`;
 }
 function coachMeetings(c1, c2, exceptId) {

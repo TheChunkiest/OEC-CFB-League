@@ -1000,3 +1000,5 @@ a.reclink .goty{color:var(--muted)}
 .vidcard,.vidcard.card{padding:8px 18px;gap:8px;font-size:14px;border-radius:999px;background:#c8161e;border-color:#c8161e}
 .vidcard svg{width:14px;height:14px}
 .vidcard b{font-size:14px}
+/* Coach names are links: a touch bolder with a soft dotted underline so they read as tappable */
+a[href^="#coach/"]{font-weight:700;text-decoration:underline;text-decoration-style:dotted;text-decoration-color:rgba(255,255,255,.45);text-underline-offset:3px}
