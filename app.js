@@ -1806,9 +1806,9 @@ PAGES.game = function (id) {
     ${l && !g.forfeit ? winChart(g, A, H) : ''}
     ${(() => { const air = done ? aiRecap(g) : null; if (done && !AI.moms && videosOf(g).length) loadMoments();
       const showCtl = !air && isCommish() && AI.moms?.games?.[g.id]?.r;   // recap hidden: keep the Show link reachable
-      if (showCtl) return `<div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(title)}</h2>${(() => { const vs = {}; return paras.map(t => `<p>${esc(vary(t, vs))}</p>`).join(''); })()}${aiExtras(g, A, H)}</div>`;
-      return air ? `<div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(air.h)}</h2>${air.p.map(t => `<p>${esc(t)}</p>`).join('')}${aiExtras(g, A, H)}<p class="aifoot">Recap written by AI from the broadcast.</p></div>`
-        : `<div class="card gp-story"><h2 style="text-transform:none;font-size:22px">${esc(title)}</h2>${(() => { const vs = {}; return paras.map(t => `<p>${esc(vary(t, vs))}</p>`).join(''); })()}</div>`; })()}
+      if (showCtl) return `<div class="card gp-story"><h2 class="gp-title">${esc(title)}</h2>${(() => { const vs = {}; return paras.map(t => `<p>${esc(vary(t, vs))}</p>`).join(''); })()}${aiExtras(g, A, H)}</div>`;
+      return air ? `<div class="card gp-story"><h2 class="gp-title">${esc(air.h)}</h2>${air.p.map(t => `<p>${esc(t)}</p>`).join('')}${aiExtras(g, A, H)}<p class="aifoot">Recap written by AI from the broadcast.</p></div>`
+        : `<div class="card gp-story"><h2 class="gp-title">${esc(title)}</h2>${(() => { const vs = {}; return paras.map(t => `<p>${esc(vary(t, vs))}</p>`).join(''); })()}</div>`; })()}
 
     ${trends.length ? `<div class="card"><h3 style="margin-top:0">${done ? 'Trends going in' : 'Trends to watch'}</h3><ul class="clean gp-trends">${trends.slice(0, 6).map(t => `<li>${t}</li>`).join('')}</ul></div>` : ''}
     <div class="card"><h3 style="margin-top:0">Tale of the tape</h3><p class="muted small" style="margin-top:0">${done ? 'How the teams stacked up going in. ' : ''}<span class="tb">✓ Green</span> = the edge in that category, <span class="tw">red</span> = behind.</p><div class="tablewrap"><table class="gp-tape">
@@ -1867,12 +1867,9 @@ function acctHtml(p) {
 function route() {
   const [page, arg] = (location.hash.slice(1) || 'home').split('/');
   const active = page === 'mybets' ? 'betting' : page === 'team' ? 'teams' : page === 'coach' ? 'history' : page === 'game' ? 'schedule' : page;
-  // Phones show the first 4 tabs plus "More" (the rest open in a small menu); wider screens show every tab.
-  const PHONE = 4, extra = NAV.slice(PHONE), inMore = extra.find(([k]) => k === active);
-  $('#nav').classList.remove('open');
-  $('#nav').innerHTML = NAV.map(([k, label], i) => `<a href="#${k}" class="${k === active ? 'on' : ''}${i >= PHONE ? ' x' : ''}">${label}</a>`).join('')
-    + `<button class="more${inMore ? ' on' : ''}" data-navmore="1" aria-label="More pages">${inMore ? inMore[1] : 'More'} ▾</button>`
-    + `<div class="navmore">${extra.map(([k, label]) => `<a href="#${k}" class="${k === active ? 'on' : ''}">${label}</a>`).join('')}</div>`;
+  $('#nav').innerHTML = NAV.map(([k, label]) => `<a href="#${k}" class="${k === active ? 'on' : ''}">${label}</a>`).join('');
+  // Keep the selected tab in view when the tab bar scrolls sideways (phones).
+  requestAnimationFrame(() => { const on = $('#nav a.on'), n = $('#nav'); if (on && n.scrollWidth > n.clientWidth) n.scrollLeft = Math.max(0, on.offsetLeft - (n.clientWidth - on.offsetWidth) / 2); });
   header();
   try { $('#view').innerHTML = (PAGES[page] || PAGES.home)(decodeURIComponent(arg || '')); parlayBar(); }
   catch (e) { console.error(e); $('#view').innerHTML = `<div class="card err">Something went wrong rendering this page: ${esc(e.message)}</div>`; }
@@ -1887,7 +1884,6 @@ function route() {
 async function reload() { await loadAll(); refreshProfile(); if (D.league.awards?.open && auth.user) await loadBallots(false); route(); }
 
 document.addEventListener('click', async e => {
-  { const nm = e.target.closest('[data-navmore]'); if (nm) { $('#nav').classList.toggle('open'); return; } if (!e.target.closest('#nav')) $('#nav')?.classList.remove('open'); }
   const vl = e.target.closest('[data-vidlist]'); if (vl) { e.preventDefault(); showVideoList(vl.dataset.vidlist); return; }
   const rp = e.target.closest('[data-rpick]'), rr = e.target.closest('[data-rreset]');
   if (rp || rr) {

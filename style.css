@@ -844,8 +844,6 @@ th{font-size:11px}
 nav .more{display:none}
 .navmore{display:none}
 @media (max-width:640px){
-  nav{justify-content:space-between;overflow:visible}
-  nav a.x{display:none}
   nav .more{display:inline-flex;align-items:center;gap:4px;padding:8px 11px;border-radius:8px;background:transparent;color:var(--muted);font-weight:700;font-size:13.5px;min-height:0;border:0}
   nav .more.on{background:var(--red);color:#fff}
   nav.open .navmore{display:grid;grid-template-columns:1fr 1fr;gap:6px;position:absolute;left:10px;right:10px;top:100%;margin-top:6px;background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:8px;box-shadow:0 12px 30px rgba(0,0,0,.6)}
@@ -898,3 +896,52 @@ nav{background:rgba(18,10,12,.92)}
 /* Hidden Value: soft blue wash (matches the red wash on Most Popular) */
 .card.value{border-color:rgba(120,200,255,.35);background:linear-gradient(135deg,rgba(20,70,110,.45),rgba(26,20,22,.92) 60%)}
 .ribbon.vrib{background:#7fd0ff;color:#06202e}
+
+/* ================= Tab bar: sideways scroll (all tabs), with a fade hint on the right edge ================= */
+nav{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav .more,.navmore{display:none!important}
+@media (max-width:900px){
+  nav{justify-content:flex-start;-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent);mask-image:linear-gradient(90deg,#000 85%,transparent);padding-right:28px}
+}
+
+/* ================= Phone header: bigger logo + title, centered Next advance ================= */
+.badge.adv{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+@media (max-width:640px){
+  .logo{height:62px}
+  .titleblock h1{font-size:24px}
+  .badge.adv{align-items:center}
+}
+@media (max-width:359px){.logo{height:52px}.titleblock h1{font-size:20px}}
+
+/* ================= Type system =================
+   Display font (Impact look, same on iPhone, iPad, Mac, Windows; Anton fills in on Android):
+     site title, page/section headings, big numbers (badges, scores, ranks, years).
+   Body font (the device's system font): everything else, including card titles and labels.
+   Sizes: site title 28/24 · section heading 22/19 · card title 16 · body 15/14.5 · small 13 · labels 12 · footer 13 */
+:root{--display:Impact,Anton,"Haettenschweiler","Arial Narrow Bold","Arial Black",sans-serif;--body:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{font-family:var(--body)}
+h1,h2,.badge b,.rank,.big,.champ .yr,.gp-name,.gp-score{font-family:var(--display);font-weight:400;letter-spacing:.4px}
+h1,h2{text-transform:uppercase}
+.titleblock h1{font-size:30px}
+h2,.sbhead h2,.card h2{font-size:22px;line-height:1.15}
+h3{font-family:var(--body);font-size:12px;font-weight:800;letter-spacing:.8px}
+.story h3,.popular .pop-title,.card.value .pop-title{font-family:var(--body);font-size:16px;font-weight:800;letter-spacing:0;text-transform:none}
+.badge b{font-size:24px}
+.badge.adv b{font-family:var(--body);font-weight:800;font-size:15px}
+.small,.meta,.game .meta{font-size:13px}
+footer{font-size:13px}
+th{font-size:12px}
+@media (max-width:640px){
+  .titleblock h1{font-size:24px}
+  h2,.sbhead h2,.card h2{font-size:19px}
+  .sbhead{flex-wrap:wrap}
+  .badge b,.badge.gold b{font-size:19px}
+  .badge.adv b{font-size:13px}
+  .story h3,.popular .pop-title,.card.value .pop-title{font-size:15.5px}
+  th{font-size:11px}
+}
+@media (max-width:379px){h2,.sbhead h2,.card h2{font-size:17px}}
+.gp-story h2.gp-title{text-transform:none;font-size:24px}
+.gp-story h2.gp-title::before{display:none}
+@media (max-width:640px){.gp-story h2.gp-title{font-size:21px}}
