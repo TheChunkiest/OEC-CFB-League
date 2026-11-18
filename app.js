@@ -1704,77 +1704,166 @@ PAGES.game = function (id) {
   const divOrder = same ? orderGroup(leagueTeams().filter(t => divOf(t, s) === dA).map(t => t.id), s) : [];
   const where = g.neutral ? 'at a neutral site' : `at ${H.name}`;
 
-  // ----- headline -----
-  let title;
-  if (done) {
-    const w = +g.homeScore > +g.awayScore ? H : A, lo = w === H ? A : H, mar = Math.abs(g.homeScore - g.awayScore), pw = p ? (w === H ? p.h : p.a) : 50;
-    title = g.forfeit ? `${w.name} Takes a Forfeit Win Over ${lo.name}` : pw < 40 ? `Shock in Week ${g.week}: ${rn(w)} Stuns ${rn(lo)}` : mar >= 28 ? `${w.name} Rolls Past ${lo.name}` : mar <= 3 ? `${w.name} Survives ${lo.name} in a Thriller` : `${w.name} Handles ${lo.name}`;
-    if (g.type === 'ccg') title = `${w.name} Wins the League Championship`;
-  } else {
-    const cand = [];
-    if (g.type === 'ccg') cand.push([100, `For All the Marbles: ${rn(A)} vs. ${rn(H)}`]);
-    if (rk(A) && rk(H)) cand.push([90, `Top-25 Clash: ${rn(A)} at ${rn(H)}`]);
-    if (same && divOrder.indexOf(A.id) < 2 && divOrder.indexOf(H.id) < 2) cand.push([86, `Showdown for the ${dA} Crown`]);
-    const lead = Object.entries(mw).sort((x, y) => y[1] - x[1])[0];
-    if (lead && meets.length >= 3 && lead[1] === meets.length) { const loser = lead[0] === coachA ? coachH : coachA; cand.push([80, `Can ${loser} Finally Solve ${lead[0]}?`]); }
-    if (meets.length) { const lm = meetingWinner(meets[0]); cand.push([70, `Revenge Game: ${lm.lcoach} Gets Another Shot at ${lm.coach}`]); }
-    if (l && Math.abs(l.spread) <= 2.5) cand.push([66, `Coin Flip: ${A.name} and ${H.name} Are Dead Even`]);
-    if (l && Math.abs(l.spread) >= 17) cand.push([60, `Upset Alert? ${dog.name} Tries to Shock ${rn(fav)}`]);
-    const sa = streak(ra), sh = streak(rh);
-    [[A, sa], [H, sh]].forEach(([t, st]) => { if (/^W\d+$/.test(st) && +st.slice(1) >= 3) cand.push([55, `Can Anyone Stop ${t.name}?`]); if (/^L\d+$/.test(st) && +st.slice(1) >= 3) cand.push([50, `Desperation Time for ${t.name}`]); });
-    cand.push([0, `${A.name} at ${H.name}: What to Watch`]);
-    title = cand.sort((x, y) => y[0] - x[0])[0][1];
-  }
+  // ----- headline + story -----
+  // Each game gets its own mix: a pool of true facts is built from the data, every fact has a few phrasings,
+  // and a random generator seeded by the game id picks which facts and wordings appear. The same game always
+  // reads the same way (no reshuffling on reload), but no two games read alike.
+  const rng = (() => { let h = 2166136261; for (const c of String(g.id) + (done ? 'r' : 'p')) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } let a = h >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; })();
+  const pick = arr => arr[Math.floor(rng() * arr.length)];
+  const shuffle = arr => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const coachOfT = t => t === H ? coachH : coachA, hasCoach = t => coachOfT(t) && coachOfT(t) !== 'CPU';
+  const who = t => hasCoach(t) ? `${possN(coachOfT(t))} ${t.name}` : t.name;          // "Kahuna's FIU"
+  const nick = t => { const m = mascotOf(t); return m ? `the ${m}` : t.name; };       // "the Panthers"
+  const Cap = x => x.charAt(0).toUpperCase() + x.slice(1);
+  const ord = n => n + (n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
+  const lt = leagueTeams(), ppgRank = {}, papgRank = {};
+  (() => { const pr = lt.map(t => ({ id: t.id, P: teamProfile(t.id, s, upto) })).filter(x => x.P.gp);
+    pr.slice().sort((a, b) => b.P.pf / b.P.gp - a.P.pf / a.P.gp).forEach((x, i) => ppgRank[x.id] = i + 1);
+    pr.slice().sort((a, b) => a.P.pa / a.P.gp - b.P.pa / b.P.gp).forEach((x, i) => papgRank[x.id] = i + 1); })();
+  const nT = Object.keys(ppgRank).length;
+  const seasonGames = t => D.games.filter(x => x.season === s && played(x) && !x.forfeit && (x.home === t.id || x.away === t.id)).sort((a, b) => a.week - b.week);
+  const scoreOf = (x, t) => x.home === t.id ? +x.homeScore : +x.awayScore, oppScore = (x, t) => x.home === t.id ? +x.awayScore : +x.homeScore;
+  const lastGame = t => seasonGames(t).filter(x => x.week < g.week).pop();
+  const careerWins = (coach, beforeThis) => coach && coach !== 'CPU' ? D.games.filter(x => played(x) && !x.forfeit && (!beforeThis || x.season < s || (x.season === s && x.week < g.week)) && (coachOf(x, 'home') === coach || coachOf(x, 'away') === coach))
+    .filter(x => { const hw = +x.homeScore > +x.awayScore; return coachOf(x, hw ? 'home' : 'away') === coach; }).length : 0;
+  const betsHere = D.wagers.filter(w => !w.deleted && w.market !== 'parlay' && w.gameId === g.id);
 
-  // ----- story paragraphs -----
+  let title;
   const paras = []; let stake = null;
-  // "(6-0 MAC, 2-0 Catholics)": conference record, then record against teams in the same division.
   const divRec = t => { let w = 0, l = 0; D.games.filter(x => x.season === s && played(x) && (x.type || 'reg') === 'reg' && (x.home === t.id || x.away === t.id)).forEach(x => {
     const o = team(x.home === t.id ? x.away : x.home); if (!divOf(t, s) || divOf(o, s) !== divOf(t, s) || o.conf !== t.conf) return; const won = (x.home === t.id) === (+x.homeScore > +x.awayScore); won ? w++ : l++; }); return `${w}-${l}`; };
   const recTxt = t => { const r = recs[t.id]; if (t.conf !== L.conference) return `${r.w}-${r.l}`; return `${r.cw}-${r.cl} ${L.conference}${divOf(t, s) ? `, ${divRec(t)} ${divOf(t, s)}` : ''}`; };
   const cTxt = c => c && c !== 'CPU' ? `${possN(c)} ` : '';
-  if (done) {
+
+  if (done && g.forfeit) {
+    const w = +g.homeScore > +g.awayScore ? H : A, lo = w === H ? A : H;
+    title = `${w.name} Takes a Forfeit Win Over ${lo.name}`;
+    paras.push(`${who(w)} was awarded a forfeit win over ${lo.name} in Week ${g.week}. All bets on this game were refunded.`);
+  } else if (done) {
     const w = +g.homeScore > +g.awayScore ? H : A, lo = w === H ? A : H, ws = Math.max(+g.homeScore, +g.awayScore), ls = Math.min(+g.homeScore, +g.awayScore);
-    if (g.forfeit) paras.push(`${cTxt(w === H ? coachH : coachA)}${w.name} was awarded a forfeit win over ${lo.name} in Week ${g.week}. All bets on this game were refunded.`);
-    else {
-      let t = `${cTxt(w === H ? coachH : coachA)}${rn(w)} beat ${cTxt(lo === H ? coachH : coachA)}${rn(lo)} ${ws}-${ls} in Week ${g.week}${g.type === 'ccg' ? ' to win the league championship' : ''}.`;
-      if (l) { const m = +g.homeScore - +g.awayScore + l.spread, tot = ws + ls; t += ` ${fav ? `${fav.name} closed as a ${Math.abs(l.spread)}-point favorite` : 'It closed as a pick\'em'}; ${m === 0 ? 'the spread pushed' : `${(m > 0 ? H : A).name} covered`}, and the ${tot} combined points went ${tot > l.total ? 'over' : tot < l.total ? 'under' : 'right on'} the ${l.total} total.`; }
-      if (p) { const pw = w === H ? p.h : p.a; t += pw < 40 ? ` The model gave ${w.name} only a ${pw}% chance before kickoff.` : ` ${w.name} went in with a ${pw}% chance to win.`; }
-      paras.push(t);
+    const mar = ws - ls, tot = ws + ls, pw = p ? (w === H ? p.h : p.a) : 50, upset = pw < 42;
+    const cw = coachOfT(w), cl = coachOfT(lo);
+    // Headline: the most striking angle, worded one of several ways.
+    const T = [];
+    if (g.type === 'ccg') T.push([100, [`${w.name} Wins the League Championship`, `${rn(w)} Are Your Champions`, `Crowned: ${w.name} Takes the Title, ${ws}-${ls}`]]);
+    if (ls === 0) T.push([90, [`${w.name} Pitches a Shutout`, `Zero: ${w.name} Blanks ${lo.name}`, `${w.name} Doesn't Allow a Point`]]);
+    if (upset) T.push([88, [`Shock in Week ${g.week}: ${rn(w)} Stuns ${rn(lo)}`, `Nobody Saw It Coming: ${w.name} Topples ${lo.name}`, `Upset! ${w.name} Takes Down ${rn(lo)}`]]);
+    if (mar <= 3) T.push([80, [`${w.name} Survives ${lo.name} in a Thriller`, `Down to the Wire: ${w.name} Edges ${lo.name}`, `By a Hair: ${w.name} ${ws}, ${lo.name} ${ls}`]]);
+    if (mar >= 28) T.push([70, [`${w.name} Rolls Past ${lo.name}`, `${w.name} Runs ${lo.name} Off the Field`, `No Contest: ${w.name} ${ws}, ${lo.name} ${ls}`]]);
+    if (tot >= 80) T.push([65, [`Shootout: ${w.name} Outlasts ${lo.name}, ${ws}-${ls}`, `Points Galore as ${w.name} Beats ${lo.name}`]]);
+    if (cw !== 'CPU' && cl !== 'CPU' && meets.length && meetingWinner(meets[0]).coach === cl) T.push([60, [`Payback: ${cw} Gets Even With ${cl}`, `${cw} Settles the Score With ${cl}`]]);
+    T.push([0, [`${w.name} Handles ${lo.name}`, `${w.name} Takes Care of Business Against ${lo.name}`, `${w.name} Beats ${lo.name}, ${ws}-${ls}`]]);
+    title = pick(T.sort((x, y) => y[0] - x[0])[0][1]);
+    // Lead paragraph.
+    const lead = [];
+    if (ls === 0) lead.push(`${Cap(who(w))} didn't give up a single point. ${pick([`The final read ${ws}-0`, `${ws}-0, and it was never in doubt`, `${lo.name} left Week ${g.week} without a point on the board`])}.`);
+    else if (mar <= 3) lead.push(pick([`This one came down to the last possession. ${Cap(who(w))} held on to beat ${who(lo)} ${ws}-${ls} in Week ${g.week}.`, `${Cap(who(w))} and ${who(lo)} traded punches all night, and when it was over ${w.name} had it, ${ws}-${ls}.`, `Three points or fewer decided it: ${who(w)} ${ws}, ${who(lo)} ${ls}.`]));
+    else if (mar >= 28) lead.push(pick([`It got out of hand quickly. ${Cap(who(w))} beat ${who(lo)} ${ws}-${ls}.`, `${Cap(who(w))} put up ${ws} and won by ${mar}, leaving ${who(lo)} with nothing to show for Week ${g.week}.`, `${ws}-${ls}. ${Cap(who(w))} made a statement against ${who(lo)}.`]));
+    else lead.push(pick([`${Cap(who(w))} beat ${who(lo)} ${ws}-${ls} in Week ${g.week}.`, `Week ${g.week} went to ${who(w)}, ${ws}-${ls} over ${who(lo)}.`, `${Cap(who(w))} took care of ${who(lo)}, ${ws}-${ls}.`]));
+    if (g.type === 'ccg') lead.push(`That makes ${w.name} the Season ${seasonNum(s)} league champion${cw !== 'CPU' ? ` and puts ${cw} in the record books` : ''}.`);
+    if (upset) lead.push(pick([`The model gave ${w.name} just a ${pw}% chance before kickoff.`, `Going in, ${w.name} had a ${pw}% shot according to the model. So much for that.`, `Only ${pw}% of simulations had ${w.name} winning this one.`]));
+    paras.push(lead.join(' '));
+    // Everything else true about this game, scored by how interesting it is; a random handful makes the cut.
+    const F = [];
+    if (l) {
+      const m = +g.homeScore - +g.awayScore + l.spread, cov = m === 0 ? null : (m > 0 ? H : A), favWon = fav && fav === w;
+      const ats = m === 0 ? `The spread pushed right on ${fmtLine(-Math.abs(l.spread))}.` : !fav ? `It closed as a pick'em, so ${w.name} cashed for anyone holding it.` : favWon && cov === fav ? pick([`${fav.name} covered the ${Math.abs(l.spread)} points comfortably.`, `Anyone laying ${Math.abs(l.spread)} with ${fav.name} got paid.`]) : favWon ? pick([`${fav.name} won but didn't cover the ${Math.abs(l.spread)}, a frustrating finish for anyone laying the points.`, `The ${dog.name} backers got the last laugh: ${fav.name} won, but not by ${Math.abs(l.spread)}.`]) : `${dog.name} didn't just cover as a ${Math.abs(l.spread)}-point underdog, it won outright.`;
+      const ou = tot === l.total ? `The total landed exactly on ${l.total}.` : tot > l.total ? pick([`The ${tot} combined points flew over the ${l.total} total.`, `Over bettors had an easy night: ${tot} points against a total of ${l.total}.`]) : pick([`The under (${l.total}) never felt in danger with only ${tot} points scored.`, `Just ${tot} points went up, well under the ${l.total} total.`]);
+      F.push([40 + rng() * 30, ats + ' ' + ou]);
     }
+    const sw = streak(records(s, g.week + 1)[w.id]), sl0 = streak(records(s, g.week)[lo.id]), sw0 = streak(records(s, g.week)[w.id]), sl = streak(records(s, g.week + 1)[lo.id]);
+    if (/^W\d+$/.test(sw) && +sw.slice(1) >= 3) F.push([60, pick([`That's ${sw.slice(1)} straight wins for ${w.name}.`, `${Cap(nick(w))} have now won ${sw.slice(1)} in a row.`, `The streak is up to ${sw.slice(1)} for ${w.name}.`])]);
+    if (/^W\d+$/.test(sl0) && +sl0.slice(1) >= 3) F.push([70, `It also ended a ${sl0.slice(1)}-game winning streak for ${lo.name}.`]);
+    if (/^L\d+$/.test(sw0) && +sw0.slice(1) >= 2) F.push([65, `For ${w.name}, it snapped a ${sw0.slice(1)}-game losing skid.`]);
+    if (/^L\d+$/.test(sl) && +sl.slice(1) >= 3) F.push([55, pick([`${lo.name} has now dropped ${sl.slice(1)} straight.`, `The skid reaches ${sl.slice(1)} games for ${nick(lo)}.`])]);
+    const prevW = seasonGames(w).filter(x => x.id !== g.id && x.week <= g.week);
+    if (prevW.length >= 2 && ws > Math.max(...prevW.map(x => scoreOf(x, w)))) F.push([58, `The ${ws} points are a season high for ${w.name}.`]);
+    const PWp = teamProfile(w.id, s, g.week); if (PWp.gp >= 2 && ws - PWp.pf / PWp.gp >= 10) F.push([45, `${w.name} came in averaging ${(PWp.pf / PWp.gp).toFixed(1)} points and blew right past it.`]);
+    const PLp = teamProfile(lo.id, s, g.week); if (PLp.gp >= 2 && ws - PLp.pa / PLp.gp >= 12) F.push([42, `${lo.name} had been allowing ${(PLp.pa / PLp.gp).toFixed(1)} a game before this. Not this week.`]);
+    const sTot = D.games.filter(x => x.season === s && played(x) && !x.forfeit && x.id !== g.id && x.week <= g.week).map(x => +x.homeScore + +x.awayScore);
+    if (sTot.length >= 5 && tot > Math.max(...sTot)) F.push([62, `The ${tot} combined points make it the highest-scoring game of the season.`]);
+    if (rk(lo) && !rk(w)) F.push([60, `${w.name} took down a ranked opponent in #${rk(lo)} ${lo.name}.`]);
+    if (cw !== 'CPU') { const n = careerWins(cw, false); if (n && (n % 5 === 0 || n === 1)) F.push([50, `It's career win No. ${n} for ${cw} in the league.`]); }
+    if (same && lastPlayedWeek(s) === g.week) { const ord2 = orderGroup(leagueTeams().filter(t => divOf(t, s) === dA).map(t => t.id), s); const pos = ord2.indexOf(w.id) + 1; if (pos) F.push([48, pos === 1 ? `${w.name} sits atop the ${dA} after this one.` : `${w.name} is ${ord(pos)} in the ${dA} now.`]); }
+    const won = betsHere.filter(b => b.status === 'won').sort((a, b) => (b.payout || 0) - (a.payout || 0))[0], lost = betsHere.filter(b => b.status === 'lost').sort((a, b) => b.stake - a.stake)[0];
+    if (won) F.push([52 + rng() * 15, `${won.coach} cashed ${(won.payout || 0).toLocaleString()} Crackers on ${wagerLabel(won).replace(/ — .*$/, '').replace(/ \([+-]\d+\)$/, '')}.${lost ? ` ${lost.coach} wasn't so lucky, dropping ${lost.stake} on the other side.` : ''}`]);
+    else if (lost) F.push([45, `${lost.coach} had ${lost.stake} Crackers riding on ${wagerLabel(lost).replace(/ — .*$/, '').replace(/ \([+-]\d+\)$/, '')} and watched it go the other way.`]);
+    const picked = shuffle(F.map(f => [f[0] + rng() * 25, f[1]])).sort((x, y) => y[0] - x[0]).slice(0, 3 + Math.floor(rng() * 2)).map(f => f[1]);
+    if (picked.length) { paras.push(picked.slice(0, 2).join(' ')); if (picked.length > 2) paras.push(picked.slice(2).join(' ')); }
   } else {
-    let t = `${cTxt(coachA)}${rn(A)} (${recTxt(A)}) ${g.neutral ? 'meets' : 'visits'} ${cTxt(coachH)}${rn(H)} (${recTxt(H)}) in Week ${g.week}${g.neutral ? ' at a neutral site' : ''}.`;
-    if (l && p) t += ` ${fav ? `${fav.name} is a ${Math.abs(l.spread)}-point favorite with a ${Math.max(p.a, p.h)}% chance to win` : 'The line is a pick\'em'}, and the total sits at ${l.total}.`;
-    if (same) t += ` Both teams play in the ${dA}, where ${team(divOrder[0]).name} currently leads the division${divOrder.indexOf(A.id) < 2 && divOrder.indexOf(H.id) < 2 ? ', so the division race runs straight through this game' : ''}.`;
-    if (g.type === 'ccg') t += ` It's the league championship, and bets on it get a +${Math.round((CCG_BOOST - 1) * 100)}% profit boost.`;
-    else if (isGotw) t += ` The league voted it Game of the Week, and bets on it get a +${Math.round((GOTW_BOOST - 1) * 100)}% profit boost.`;
-    paras.push(t);
+    // ----- preview -----
+    const T = [];
+    if (g.type === 'ccg') T.push([100, [`For All the Marbles: ${rn(A)} vs. ${rn(H)}`, `Title on the Line: ${A.name} vs. ${H.name}`, `One Game for the Crown`]]);
+    if (rk(A) && rk(H)) T.push([90, [`Top-25 Clash: ${rn(A)} at ${rn(H)}`, `Ranked vs. Ranked in Week ${g.week}`]]);
+    if (same && divOrder.indexOf(A.id) < 2 && divOrder.indexOf(H.id) < 2) T.push([86, [`Showdown for the ${dA} Crown`, `The ${dA} Runs Through This Game`, `${A.name}, ${H.name} and the ${dA} Title`]]);
+    const lead0 = Object.entries(mw).sort((x, y) => y[1] - x[1])[0];
+    if (lead0 && meets.length >= 3 && lead0[1] === meets.length) { const loser = lead0[0] === coachA ? coachH : coachA; T.push([80, [`Can ${loser} Finally Solve ${lead0[0]}?`, `${lead0[0]} Is ${meets.length}-0 Against ${loser}. Again?`]]); }
+    if (meets.length) { const lm = meetingWinner(meets[0]), fresh = meets[0].season >= s - 1 && lm.ws - lm.ls >= 14; T.push([(fresh ? 62 : 40) + rng() * 15, [`Revenge Game: ${lm.lcoach} Gets Another Shot at ${lm.coach}`, `${lm.lcoach} Hasn't Forgotten Last Time`, `Round ${meets.length + 1}: ${coachA} vs. ${coachH}`, `${lm.lcoach} Wants This One Back`, `The Rematch: ${coachA} and ${coachH} Meet Again`]]); }
+    if (l && Math.abs(l.spread) <= 2.5) T.push([60 + rng() * 15, [`Coin Flip: ${A.name} and ${H.name} Are Dead Even`, `Pick Your Side: Nothing Separates ${A.name} and ${H.name}`, `Too Close to Call in Week ${g.week}`]]);
+    if (l && Math.abs(l.spread) >= 17) T.push([58, [`Upset Alert? ${dog.name} Tries to Shock ${rn(fav)}`, `${Math.abs(l.spread)} Points: Can ${dog.name} Hang With ${fav.name}?`]]);
+    const sa = streak(ra), sh = streak(rh);
+    [[A, sa], [H, sh]].forEach(([t, st]) => { if (/^W\d+$/.test(st) && +st.slice(1) >= 3) T.push([55 + rng() * 10, [`Can Anyone Stop ${t.name}?`, `${t.name} Goes for ${+st.slice(1) + 1} Straight`, `Red-Hot ${t.name} Rolls Into Week ${g.week}`]]); if (/^L\d+$/.test(st) && +st.slice(1) >= 3) T.push([50, [`Desperation Time for ${t.name}`, `${t.name} Needs to Stop the Bleeding`]]); });
+    T.push([0, [`${A.name} at ${H.name}: What to Watch`, `Week ${g.week}: ${A.name} at ${H.name}`, `${A.name} Heads to ${H.name}`]]);
+    title = pick(T.sort((x, y) => y[0] - x[0])[0][1]);
+    // Lead.
+    const ko = kickoffOf(g), v = venueOf(g);
+    const opener = pick([
+      `${Cap(who(A))} (${recTxt(A)}) ${g.neutral ? 'meets' : 'travels to face'} ${who(H)} (${recTxt(H)}) in Week ${g.week}${v && !g.neutral ? ` at ${v.name}` : g.neutral ? ' at a neutral site' : ''}.`,
+      `Week ${g.week} brings ${who(A)} (${recTxt(A)}) ${g.neutral ? 'and' : 'to'} ${who(H)} (${recTxt(H)})${v && !g.neutral ? ` at ${v.name}` : ''}.`,
+      `${Cap(who(H))} (${recTxt(H)}) ${g.neutral ? 'meets' : 'welcomes'} ${who(A)} (${recTxt(A)}) in Week ${g.week}.`]);
+    let line = '';
+    const an = n => (/^(8|11|18)/.test(String(n)) ? 'an' : 'a');
+    if (l && p) line = !fav || l.spread === 0 ? `The books can't separate them: it's a pick'em with a total of ${l.total}.` : pick([`${fav.name} is laying ${Math.abs(l.spread)} with ${an(Math.max(p.a, p.h))} ${Math.max(p.a, p.h)}% chance to win, and the total sits at ${l.total}.`, `The line has ${fav.name} by ${Math.abs(l.spread)} (${Math.max(p.a, p.h)}% to win), total ${l.total}.`, `${dog.name} is getting ${Math.abs(l.spread)} points. The model gives it ${an(Math.min(p.a, p.h))} ${Math.min(p.a, p.h)}% shot at the outright win, and the total is ${l.total}.`]);
+    const tag = g.type === 'ccg' ? ` It's the league championship, and bets on it get a +${Math.round((CCG_BOOST - 1) * 100)}% profit boost.` : isGotw ? pick([` The league voted it Game of the Week, so bets on it get a +${Math.round((GOTW_BOOST - 1) * 100)}% profit boost.`, ` It's the Game of the Week, which means a +${Math.round((GOTW_BOOST - 1) * 100)}% profit boost on bets.`]) : '';
+    paras.push(`${opener} ${line}${tag}${ko ? ` Kickoff is set for ${fmtKick(ko)}.` : ''}`.trim());
+    // Stakes (title odds swing), only when it matters for someone.
     if (L.phase === PHASES.REG && s === L.season && (g.type || 'reg') === 'reg' && A.conf === L.conference && H.conf === L.conference) {
       const u = nowUpto(), base = simulate(s, u), hW = simulate(s, u, 1500, { [g.id]: true }), aW = simulate(s, u, 1500, { [g.id]: false });
       stake = { a: [base[A.id].titlePct, aW[A.id].titlePct, hW[A.id].titlePct], h: [base[H.id].titlePct, hW[H.id].titlePct, aW[H.id].titlePct] };
-      const move = (t, win, lose) => { const b = base[t.id].titlePct, w = win[t.id].titlePct, lo = lose[t.id].titlePct;
-        if (!b && !w && !lo) return 'it is out of the title race, so this one is about pride and spoiling someone else\'s season';
-        return `a win would move its title odds to ${pctStr(w)} (from ${pctStr(b)}), while a loss would ${lo < b - 0.005 ? 'drop them to' : 'leave them at'} ${pctStr(lo)}`; };
-      const cn = clinchNote(g);
-      const mh = move(H, hW, aW), ma = move(A, aW, hW), outH = mh.startsWith('it is out'), outA = ma.startsWith('it is out');
-      paras.push(outH && outA ? `What's at stake: neither team can reach the title game anymore, so this one is about pride and playing spoiler.`
-        : `What's at stake: for ${H.name}, ${outH ? 'the title race is already over, but it can still play spoiler' : mh}. For ${A.name}, ${outA ? 'the title race is already over, but it can still play spoiler' : ma}.${cn ? ' ' + cn : ''}`);
+      const outA = !base[A.id].titlePct && !aW[A.id].titlePct, outH = !base[H.id].titlePct && !hW[H.id].titlePct, cn = clinchNote(g);
+      const swing = t => { const b = base[t.id].titlePct, w = (t === H ? hW : aW)[t.id].titlePct, lo = (t === H ? aW : hW)[t.id].titlePct; return { b, w, lo, d: w - lo }; };
+      if (!(outA && outH)) {
+        const big = [A, H].filter(t => !(t === A ? outA : outH)).map(t => ({ t, ...swing(t) })).sort((x, y) => y.d - x.d)[0];
+        const other = (big.t === A ? H : A), otherOut = big.t === A ? outH : outA;
+        paras.push(`${pick([`The stakes are real for ${big.t.name}.`, `This one matters most to ${big.t.name}.`, `Here's what's riding on it for ${big.t.name}:`])} ${pick([`Win, and the title odds climb to ${pctStr(big.w)}. Lose, and they ${big.lo < big.b - 0.005 ? 'fall to' : 'stay at'} ${pctStr(big.lo)}.`, `The model has the title chances at ${pctStr(big.b)} today: ${pctStr(big.w)} with a win, ${pctStr(big.lo)} with a loss.`])}${otherOut ? ` ${other.name} is out of the title race, which makes it the most dangerous kind of opponent: one with nothing to lose.` : ''}${cn ? ' ' + cn : ''}`);
+      } else if (rng() < 0.5) paras.push(pick([`Neither team can reach the title game anymore, so this is about pride, bragging rights and wrecking someone's betting slip.`, `The title race has moved on without both of these teams. What's left is pride, and pride can make for a strange football game.`]));
     }
-    const form = t => { const f = formOf(t), P = t === A ? PA : PH; if (!P.gp) return ''; const atsT = `${P.ats[0]}-${P.ats[1]}${P.ats[2] ? '-' + P.ats[2] : ''} against the spread`;
-      // The second team is called by its mascot (plural grammar) for variety: "The Boilermakers come in hot…".
-      const m = t === H && mascotOf(t), pl = !!m && /s$/.test(m), who = m ? `The ${m}` : t.name;
-      const v = (sg, p) => pl ? p : sg, its = pl ? 'their' : 'its', It = pl ? "They're" : "It's", it = pl ? "they're" : "it's";
-      return `${who} ${v('comes', 'come')} in${f == null ? '' : f >= 4 ? ' hot' : f <= -4 ? ' cold' : ' steady'}${f == null ? '' : `, playing ${Math.abs(f).toFixed(1)} points per game ${f >= 0 ? 'better' : 'worse'} than expected over ${its} last three`}. ${It} averaging ${(P.pf / P.gp).toFixed(1)} points while allowing ${(P.pa / P.gp).toFixed(1)}, and ${it} ${atsT} this season.`; };
-    const fa = form(A), fh = form(H); if (fa || fh) paras.push([fa, fh].filter(Boolean).join(' '));
+    // Pool of preview facts.
+    const F = [];
+    [[A, PA], [H, PH]].forEach(([t, P]) => {
+      const o = t === A ? H : A;
+      if (P.gp && ppgRank[t.id] && papgRank[o.id] && ppgRank[t.id] <= 3 && papgRank[o.id] >= nT - 2) F.push([75, `Mismatch alert: ${t.name} scores ${(P.pf / P.gp).toFixed(1)} a game (${ord(ppgRank[t.id])} in the league), and ${o.name} gives up ${((t === A ? PH : PA).pa / (t === A ? PH : PA).gp).toFixed(1)} (${ord(papgRank[o.id])}).`]);
+      if (P.gp && ppgRank[t.id] && papgRank[o.id] && ppgRank[t.id] <= 3 && papgRank[o.id] <= 3) F.push([78, `Strength on strength: ${possN(t.name)} offense (${ord(ppgRank[t.id])} in scoring) against ${possN(o.name)} defense (${ord(papgRank[o.id])} in points allowed).`]);
+      const f = formOf(t); if (f != null && Math.abs(f) >= 5) F.push([50, f > 0 ? pick([`${Cap(nick(t))} have been playing ${f.toFixed(1)} points a game better than expected over their last three.`, `Nobody's been hotter than ${t.name} lately: ${f.toFixed(1)} points a game better than the model expected over three weeks.`]) : `${t.name} has been ${Math.abs(f).toFixed(1)} points a game worse than expected over its last three.`]);
+      if (P.ats[0] + P.ats[1] >= 4 && Math.abs(P.ats[0] - P.ats[1]) >= 2) F.push([40, P.ats[0] > P.ats[1] ? `${t.name} has been a bettor's friend at ${P.ats[0]}-${P.ats[1]} against the spread.` : `${t.name} is ${P.ats[0]}-${P.ats[1]} against the spread, which bettors have noticed.`]);
+      if (P.ou[0] + P.ou[1] >= 4 && Math.abs(P.ou[0] - P.ou[1]) >= 3) F.push([38, `${P.ou[0] > P.ou[1] ? 'Overs' : 'Unders'} are ${Math.max(P.ou[0], P.ou[1])}-${Math.min(P.ou[0], P.ou[1])} in ${possN(t.name)} games.`]);
+      if (dog === t && P.dog[0] + P.dog[1] >= 2) F.push([45, `As an underdog, ${t.name} is ${P.dog[0]}-${P.dog[1]} straight up this season.`]);
+      if (hasCoach(t)) { const n = careerWins(coachOfT(t), true); if (n >= 5) F.push([28, `${coachOfT(t)} has ${n} career wins in the league${(n + 1) % 5 === 0 ? `, so a win here would be No. ${n + 1}` : ''}.`]); }
+    });
+    // Both teams' last results in one sentence.
+    const lastTxt = t => { const lg = lastGame(t); if (!lg) return null; const my = scoreOf(lg, t), th = oppScore(lg, t), op = team(lg.home === t.id ? lg.away : lg.home); return { won: my > th, txt: my > th ? `${my}-${th} win over ${op.name}` : `${th}-${my} loss to ${op.name}` }; };
+    const la = lastTxt(A), lh = lastTxt(H);
+    if (la && lh) F.push([35 + rng() * 30, la.won === lh.won ? pick([`Both teams are coming off ${la.won ? 'wins' : 'losses'}: ${A.name} a ${la.txt}, ${H.name} a ${lh.txt}.`, `${A.name} enters off a ${la.txt}; ${H.name} off a ${lh.txt}.`]) : pick([`They arrive in opposite moods. ${A.name} is coming off a ${la.txt}, ${H.name} a ${lh.txt}.`, `${A.name} (fresh off a ${la.txt}) meets a ${H.name} team coming off a ${lh.txt}.`])]);
+    const bh = betsHere.filter(b => b.status === 'open' || !b.status);
+    if (bh.length >= 2) { const side = {}; bh.forEach(b => { const k = wagerLabel(b).replace(/ — .*$/, '').replace(/ \([+-]\d+\)$/, ''); side[k] = (side[k] || 0) + b.stake; }); const top = Object.entries(side).sort((a, b) => b[1] - a[1])[0];
+      F.push([55, `The league is already in on this one: ${bh.length} bets placed, with the most money (${top[1]} Crackers) on ${top[0]}.`]); }
+    if (rk(A) || rk(H)) { const r = rk(A) ? A : H; if (!(rk(A) && rk(H))) F.push([40, `${r.name} comes in ranked #${rk(r)}, which puts a target on its back.`]); }
+    const picked = shuffle(F.map(f => [f[0] + rng() * 30, f[1]])).sort((x, y) => y[0] - x[0]).slice(0, 3 + Math.floor(rng() * 2)).map(f => f[1]);
+    if (picked.length) { paras.push(picked.slice(0, 2).join(' ')); if (picked.length > 2) paras.push(picked.slice(2).join(' ')); }
     const pw = playersToWatch(A, H, s); if (pw) paras.push(pw);
   }
+  // Series history between the two coaches, worded a few ways.
   if (coachA !== 'CPU' && coachH !== 'CPU') {
-    if (!meets.length) paras.push(`This ${done ? 'was' : 'is'} the first meeting ever between ${coachA} and ${coachH}.`);
+    if (!meets.length) paras.push(pick([`Believe it or not, ${coachA} and ${coachH} ${done ? 'had' : 'have'} never played each other before ${done ? 'this' : 'now'}.`, `This ${done ? 'was' : 'is'} the first-ever meeting between ${coachA} and ${coachH}${done ? '' : ', so there are no bragging rights to defend yet'}.`, `First time ${coachA} and ${coachH} ${done ? 'met' : 'meet'}. ${done ? `${coachOfT(+g.homeScore > +g.awayScore ? H : A)} draws first blood.` : 'Somebody draws first blood.'}`]));
     else {
       const lm = meetingWinner(meets[0]), wa = mw[coachA] || 0, wh = mw[coachH] || 0;
-      const lead = wa === wh ? `The series is tied ${wa}-${wh}` : `${wa > wh ? coachA : coachH} leads the all-time series ${Math.max(wa, wh)}-${Math.min(wa, wh)}`;
+      const lead = wa === wh ? pick([`The series is tied ${wa}-${wh}`, `${wa}-${wh}, dead even`]) : `${wa > wh ? coachA : coachH} ${pick(['leads the all-time series', 'owns the series', 'has the edge in the series'])} ${Math.max(wa, wh)}-${Math.min(wa, wh)}`;
       const tg = meets.filter(m => m.type === 'ccg').map(m => { const w = meetingWinner(m); return `the Season ${seasonNum(m.season)} title game, won by ${w.coach} ${w.ws}-${w.ls}`; });
-      paras.push(`${coachA} and ${coachH} have met ${meets.length} time${meets.length === 1 ? '' : 's'}${done ? ' before this one' : ''}. ${lead}${tg.length ? `. Their meetings include ${tg.join(' and ')}` : ''}. Last time: Season ${seasonNum(meets[0].season)}${meets[0].type === 'ccg' ? ' title game' : `, Week ${meets[0].week}`}, ${possN(lm.coach)} ${team(lm.team).name} won ${lm.ws}-${lm.ls}.`);
+      const last = `Season ${seasonNum(meets[0].season)}${meets[0].type === 'ccg' ? ' title game' : `, Week ${meets[0].week}`}`;
+      paras.push(pick([
+        `${lead}${done ? ' going into this one' : ''}${tg.length ? `, including ${tg.join(' and ')}` : ''}. Last time (${last}), ${possN(lm.coach)} ${team(lm.team).name} won ${lm.ws}-${lm.ls}.`,
+        `${coachA} vs. ${coachH}, meeting No. ${meets.length + 1}. ${lead}${tg.length ? `, and they've already met in ${tg.join(' and ')}` : ''}. ${lm.coach} won the last one, ${lm.ws}-${lm.ls} (${last}).`,
+        `History: ${lead}. The most recent meeting went to ${lm.coach}, ${lm.ws}-${lm.ls}, in ${last}${tg.length ? `; they've also met in ${tg.join(' and ')}` : ''}.`]));
     }
   }
 
