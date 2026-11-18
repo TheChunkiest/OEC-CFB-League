@@ -765,3 +765,8 @@ h3{margin-bottom:10px}
 .linesfinal .lf-r{font-weight:800;text-align:right;white-space:nowrap}
 .linesfinal .lf-r.hit{color:#5fd38a}
 .linesfinal .lf-r.push{color:var(--muted)}
+/* Game cards and sportsbook rows: everything centered (chevron space mirrored on the left so it stays balanced) */
+.card.game .teams{text-align:center;padding-left:18px}
+.card.game .matchup,.betgame .tm.matchup{justify-content:center;text-align:center}
+.betgame .ownnote,.betgame .meta.winp{text-align:center}
+.betgame .pick.off{text-align:center}
