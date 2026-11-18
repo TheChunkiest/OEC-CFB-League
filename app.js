@@ -632,9 +632,6 @@ const PAGES = {
     const champLine = h => h.champCoach ? `${esc(h.champCoach)} over ${esc(h.runnerCoach || 'CPU')} — ${esc(team(h.champTeam).name)} ${h.champScore ?? ''}, ${esc(team(h.runnerTeam).name)} ${h.runnerScore ?? ''}` : esc(h.summary || '');
     return `<h2>League Champions</h2><div class="card">${H.length ? H.map(h => `<div class="champ"><div class="yr">S${seasonNum(h.season)}<div class="muted small" style="font-family:system-ui">${h.season}</div></div><div>${(() => { const g = D.games.find(x => x.season === h.season && x.type === 'ccg' && played(x)); return g ? `<a class="reclink" href="#game/${esc(g.id)}"><b>${champLine(h)}</b></a>` : `<b>${champLine(h)}</b>`; })()}${h.notes ? `<div class="muted small">${esc(h.notes)}</div>` : ''}</div></div>`).join('') : '<div class="muted">No completed seasons yet.</div>'}</div>
       ${seasonAwardsCard(H)}
-      <h2>All-Time Coaches</h2><div class="card"><div class="tablewrap"><table><tr><th>Coach</th><th class="num hide-sm">Seasons</th><th class="num">W-L</th><th class="num">Win %</th><th class="num">Titles</th></tr>
-        ${C.map(c => `<tr><td><a href="#coach/${slug(c.name)}">${esc(c.name)}</a></td><td class="num hide-sm">${c.seasons.size}</td><td class="num">${c.w}-${c.l}</td><td class="num">${c.w + c.l ? (c.w / (c.w + c.l) * 100).toFixed(1) + '%' : '–'}</td><td class="num">${c.titles ? '🏆'.repeat(Math.min(c.titles, 5)) : '–'}</td></tr>`).join('')}
-      </table></div><p class="muted small">Tap a coach for their profile: season-by-season records, every team they've coached, head-to-head and betting.</p></div>
       ${coachBoard()}
       ${carousel(C)}`;
   },
@@ -1770,8 +1767,8 @@ function teamStatsCard(tid, s) {
 // Coach page: career stats across every team a coach has run (each game counts for whoever coached that side).
 function coachCareerLine(name, season = null, upto = null) {
   const o = { w: 0, l: 0, hw: 0, hl: 0, aw: 0, al: 0, cl: [0, 0], gp: 0, pf: 0, pa: 0, ats: [0, 0, 0], ou: [0, 0, 0], fav: [0, 0], dog: [0, 0], cw: 0, cll: 0, big: 0, sho: 0, tg: [0, 0] };
-  // Records (overall and vs league coaches) count every game, forfeits included, the same way the standings and
-  // All-Time Coaches do. Every other stat skips forfeits. Names match case-insensitively.
+  // Records (overall and vs league coaches) count every game, forfeits included, the same way the standings do.
+  // Every other stat skips forfeits. Names match case-insensitively.
   const key = String(name || '').trim().toLowerCase(), isMe = side => String(coachOf(g0, side) || '').trim().toLowerCase() === key; let g0;
   D.games.filter(g => played(g) && (season == null || g.season === season) && (!upto || g.season < upto.s || (g.season === upto.s && g.week <= upto.w))).forEach(g => ['home', 'away'].forEach(side => {
     g0 = g; if (!isMe(side)) return;
@@ -1839,14 +1836,14 @@ function coachBoard() {
     const latest = l.cs[l.cs.length - 1], col = latest.teams[0] ? teamColor(team(latest.teams[0])) : "#888";
     const seen = new Set(), chips = l.cs.slice().reverse().flatMap(c => c.teams.map(id => [id, c.season])).filter(([id]) => !seen.has(id) && seen.add(id));
     const w = l.x.v == null ? 0 : Math.max(4, Math.abs(l.x.v) / (top || 1) * 100);
-    return `<tr class="${l.n.toLowerCase() === me ? 'me' : ''}"><td class="rank">${r ? (tie ? 'T-' : '') + r : '–'}</td><td><a href="#coach/${slug(l.n)}"><b>${esc(l.n)}</b></a><div class="small cbteams">${chips.map(([id, ss]) => chip(id, { abbr: true, rank: false, season: ss })).join(' ')}</div></td>
+    return `<tr class="${l.n.toLowerCase() === me ? 'me' : ''}"><td class="rank">${r ? (tie ? 'T-' : '') + r : '–'}</td><td><a href="#coach/${slug(l.n)}"><b>${esc(l.n)}</b></a>${(() => { const t = D.history.filter(h => (se == null || h.season === se) && String(h.champCoach || '').toLowerCase() === l.n.toLowerCase()).length; return t ? ` <span title="League titles">${'🏆'.repeat(Math.min(t, 5))}</span>` : ''; })()}<div class="small cbteams">${chips.map(([id, ss]) => chip(id, { abbr: true, rank: false, season: ss })).join(' ')}</div></td>
       <td class="num tsv"><b>${l.x.f}</b>${w ? `<i style="width:${w.toFixed(0)}%;background:${esc(liftColor(col))}"></i>` : ''}</td></tr>`; }).join('');
   return `<h2>Coach Stats</h2><div class="card"><div class="row" style="gap:8px;flex-direction:column;align-items:center;text-align:center">
       <div class="seg segscroll" role="group" aria-label="Stats span"><button data-cbspan="all" class="${se == null ? 'on' : ''}">All-time</button>${seas.map(x => `<button data-cbspan="${x}" class="${se === x ? 'on' : ''}" aria-label="Season ${seasonNum(x)}, ${x}">S${seasonNum(x)}</button>`).join('')}</div>
       <select data-cbstat aria-label="Stat">${opts.map(([g, rows]) => `<optgroup label="${g}">${rows.map(([k, l]) => `<option value="${k}" ${k === key ? 'selected' : ''}>${l}</option>`).join('')}</optgroup>`).join('')}</select>
       <span class="muted small">${se == null ? 'Every season' : `Season ${seasonNum(se)} · ${se}`}${key === 'vsc' ? ' · only games against league coaches' : key === 'rec' ? ' · every game, same as the standings' : ''}</span></div>
     <div class="tablewrap" style="margin-top:8px"><table class="tsboard"><tr><th>#</th><th>Coach</th><th class="num sortable" data-cbflip="1">${esc(label)} ${UI.cbFlip ? '▲' : '▼'}</th></tr>${rows}</table></div>
-    <p class="muted small" style="margin:8px 0 0">Tap the stat header to flip the order. Records include forfeits like the standings; other stats skip them.</p>
+    <p class="muted small" style="margin:8px 0 0">Tap a coach for their profile, or the stat header to flip the order. 🏆 = league titles. Records include forfeits like the standings; other stats skip them.</p>
     ${coachTrend(se, key, label, dir0 || 1, lines.map(l => ({ n: l.n, col: (() => { const c = l.cs[l.cs.length - 1]; return c.teams[0] ? teamColor(team(c.teams[0])) : '#888'; })() })))}</div>`;
 }
 // Coach Stats chart: the picked stat after every advance (each week with games), for the span picked above.
