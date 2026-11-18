@@ -845,7 +845,7 @@ function evalParlay(w) {
    Current lines never enter into it, so there is no way to profit from line movement. ---- */
 export const CASHOUT_SHARE = 0.75;
 export function cashOutValue(w) {
-  if (!w || w.market !== 'parlay' || w.status !== 'open') return null;
+  if (!w || w.market !== 'parlay' || w.status !== 'open' || !D.league.bettingOpen) return null;   // no cashing out while betting is locked
   const legs = w.legs || [], won = legs.filter(l => l.result === 'won');
   if (legs.some(l => l.result === 'lost') || won.length * 2 <= legs.length || !legs.some(l => !l.result || l.result === 'open')) return null;
   const profit = Math.floor(w.stake * (won.reduce((p, l) => p * decOf(l.odds), 1) - 1) * CASHOUT_SHARE);

@@ -107,6 +107,7 @@ service cloud.firestore {
       let pending = openN(ls, 0) + openN(ls, 1) + openN(ls, 2) + openN(ls, 3) + openN(ls, 4) + openN(ls, 5);
       let dec = wonD(ls, 0) * wonD(ls, 1) * wonD(ls, 2) * wonD(ls, 3) * wonD(ls, 4) * wonD(ls, 5);
       return signedIn() && o.uid == request.auth.uid && o.market == 'parlay' && o.status == 'open' && ls.size() <= 6
+        && league().bettingOpen == true
         && n.diff(o).affectedKeys().hasOnly(['status', 'payout', 'cashedAt', 'settledAt', 'upd'])
         && n.status == 'cashed' && n.payout is number && n.payout >= 0
         && won * 2 > ls.size() && lost == 0 && pending > 0
