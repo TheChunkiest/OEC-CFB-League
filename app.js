@@ -1728,13 +1728,18 @@ function teamStatsCard(tid, s) {
 // Coach page: career stats across every team a coach has run (each game counts for whoever coached that side).
 function coachCareerLine(name, season = null) {
   const o = { w: 0, l: 0, hw: 0, hl: 0, aw: 0, al: 0, cl: [0, 0], gp: 0, pf: 0, pa: 0, ats: [0, 0, 0], ou: [0, 0, 0], fav: [0, 0], dog: [0, 0], cw: 0, cll: 0, big: 0, sho: 0, tg: [0, 0] };
-  D.games.filter(g => played(g) && !g.forfeit && (season == null || g.season === season)).forEach(g => ['home', 'away'].forEach(side => {
-    if (coachOf(g, side) !== name) return;
+  // Records (overall and vs league coaches) count every game, forfeits included, the same way the standings and
+  // All-Time Coaches do. Every other stat skips forfeits. Names match case-insensitively.
+  const key = String(name || '').trim().toLowerCase(), isMe = side => String(coachOf(g0, side) || '').trim().toLowerCase() === key; let g0;
+  D.games.filter(g => played(g) && (season == null || g.season === season)).forEach(g => ['home', 'away'].forEach(side => {
+    g0 = g; if (!isMe(side)) return;
     const home = side === 'home', my = home ? +g.homeScore : +g.awayScore, th = home ? +g.awayScore : +g.homeScore, won = my > th, other = coachOf(g, home ? 'away' : 'home'), l = lineOf(g);
-    won ? o.w++ : o.l++; o.gp++; o.pf += my; o.pa += th;
+    won ? o.w++ : o.l++;
+    if (other && other.toUpperCase() !== 'CPU') won ? o.cw++ : o.cll++;
+    if (g.forfeit) return;
+    o.gp++; o.pf += my; o.pa += th;
     if (!g.neutral) { if (home) won ? o.hw++ : o.hl++; else won ? o.aw++ : o.al++; }
     if (Math.abs(my - th) <= 8) won ? o.cl[0]++ : o.cl[1]++;
-    if (other && other !== 'CPU') won ? o.cw++ : o.cll++;
     if (won && my - th >= 21) o.big++;
     if (won && th === 0) o.sho++;
     if (g.type === 'ccg') won ? o.tg[0]++ : o.tg[1]++;
@@ -1757,7 +1762,7 @@ function coachCareerLine(name, season = null) {
   };
 }
 const COACH_STATS = [
-  ['Results', [['vsc', 'Career record', 1], ['home', 'Home', 1], ['away', 'Away', 1], ['close', 'One-score games', 1], ['tg', 'Title games', 1]]],
+  ['Results', [['rec', 'Overall record', 1], ['vsc', 'Vs league coaches', 1], ['home', 'Home', 1], ['away', 'Away', 1], ['close', 'One-score games', 1], ['tg', 'Title games', 1]]],
   ['Scoring', [['ppg', 'Points / game', 1], ['papg', 'Allowed / game', -1], ['diff', 'Point diff / game', 1], ['big', 'Wins by 21+', 1], ['sho', 'Shutouts', 1]]],
   ['Betting', [['ats', 'Against the spread', 1], ['ou', 'Over / under', 0], ['fav', 'As favorite', 1], ['dog', 'As underdog', 1]]],
 ];
@@ -1773,15 +1778,15 @@ function coachStatsCard(name) {
   };
   return `<div class="card"><div class="row spread"><h3 style="margin:0">Career stats</h3><span class="muted small">Every team, every season · rank among ${n} coaches</span></div>
     <div class="tstats">${COACH_STATS.map(([grp, rows]) => `<div class="tsg"><div class="tsh">${grp}</div><table>${rows.map(([k, label, dir]) => `<tr><td>${label}</td><td class="num"><b>${me[k].f}</b></td><td class="num">${pill(k, dir)}</td></tr>`).join('')}</table></div>`).join('')}</div>
-    <p class="muted small" style="margin:8px 0 0"><span class="srk top">Green</span> = top quarter of league coaches, <span class="srk bot">red</span> = bottom quarter. Forfeits aren't counted.</p></div>`;
+    <p class="muted small" style="margin:8px 0 0"><span class="srk top">Green</span> = top quarter of league coaches, <span class="srk bot">red</span> = bottom quarter. Records count every game, forfeits included (same as the standings); the other stats skip forfeits.</p></div>`;
 }
 // History page: coach leaderboard. Span buttons (All-time / each season), a stat dropdown, tap the header to flip.
 function coachBoard() {
   const seas = [...new Set(D.games.filter(played).map(g => g.season))].sort((a, b) => b - a); if (!seas.length) return '';
   const se = seas.includes(+UI.cbSpan) ? +UI.cbSpan : null;
   const names = [...new Set(D.games.filter(g => played(g) && !g.forfeit && (se == null || g.season === se)).flatMap(g => [coachOf(g, 'home'), coachOf(g, 'away')]))].filter(c => c && c !== 'CPU');
-  const opts = COACH_STATS.map(([g, rows]) => [g, rows.filter(r => r[0] !== 'ou').map(r => r[0] === 'vsc' && se != null ? ['vsc', 'Record', 1] : r)]);
-  const flat = opts.flatMap(([, rows]) => rows), key = flat.some(r => r[0] === UI.cbKey) ? UI.cbKey : 'vsc';
+  const opts = COACH_STATS.map(([g, rows]) => [g, rows.filter(r => r[0] !== 'ou')]);
+  const flat = opts.flatMap(([, rows]) => rows), key = flat.some(r => r[0] === UI.cbKey) ? UI.cbKey : 'rec';
   const [, label, dir0] = flat.find(r => r[0] === key), dir = (dir0 || 1) * (UI.cbFlip ? -1 : 1);
   const lines = names.map(n => ({ n, x: coachCareerLine(n, se)[key], cs: coachSeasons(n).filter(c => se == null || c.season === se) })).filter(l => l.cs.length);
   const has = lines.filter(l => l.x.v != null).sort((p, q) => (q.x.v - p.x.v) * dir || p.n.localeCompare(q.n)), none = lines.filter(l => l.x.v == null).sort((p, q) => p.n.localeCompare(q.n));
@@ -1797,9 +1802,9 @@ function coachBoard() {
   return `<h2>Coach Stats</h2><div class="card"><div class="row" style="gap:8px;flex-direction:column;align-items:center;text-align:center">
       <div class="seg segscroll" role="group" aria-label="Stats span"><button data-cbspan="all" class="${se == null ? 'on' : ''}">All-time</button>${seas.map(x => `<button data-cbspan="${x}" class="${se === x ? 'on' : ''}" aria-label="Season ${seasonNum(x)}, ${x}">S${seasonNum(x)}</button>`).join('')}</div>
       <select data-cbstat aria-label="Stat">${opts.map(([g, rows]) => `<optgroup label="${g}">${rows.map(([k, l]) => `<option value="${k}" ${k === key ? 'selected' : ''}>${l}</option>`).join('')}</optgroup>`).join('')}</select>
-      <span class="muted small">${se == null ? 'Every season' : `Season ${seasonNum(se)} · ${se}`}${key === 'vsc' ? ' · games vs league coaches' : ''}</span></div>
+      <span class="muted small">${se == null ? 'Every season' : `Season ${seasonNum(se)} · ${se}`}${key === 'vsc' ? ' · only games against league coaches' : key === 'rec' ? ' · every game, same as the standings' : ''}</span></div>
     <div class="tablewrap" style="margin-top:8px"><table class="tsboard"><tr><th>#</th><th>Coach</th><th class="num sortable" data-cbflip="1">${esc(label)} ${UI.cbFlip ? '▲' : '▼'}</th></tr>${rows}</table></div>
-    <p class="muted small" style="margin:8px 0 0">Tap the stat header to flip the order. Forfeits aren't counted.</p></div>`;
+    <p class="muted small" style="margin:8px 0 0">Tap the stat header to flip the order. Records include forfeits like the standings; other stats skip them.</p></div>`;
 }
 function coachMeetings(c1, c2, exceptId) {
   if (!c1 || !c2 || c1 === 'CPU' || c2 === 'CPU') return [];
