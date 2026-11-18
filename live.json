@@ -1,15 +1,5 @@
 {
- "live": true,
- "videoId": "mkzu1AxNdmE",
- "url": "https://www.youtube.com/watch?v=mkzu1AxNdmE",
- "title": "PUR @ IU",
- "streams": [
-  {
-   "videoId": "mkzu1AxNdmE",
-   "url": "https://www.youtube.com/watch?v=mkzu1AxNdmE",
-   "title": "PUR @ IU"
-  }
- ],
+ "live": false,
  "notified": "mkzu1AxNdmE",
  "notifiedIds": [
   "qwkTlJND-FM",
@@ -17,6 +7,5 @@
   "5qPkG2_ar0Y",
   "hNqDgJ5w08g",
   "mkzu1AxNdmE"
- ],
- "checkedAt": 1794983687523
+ ]
 }
