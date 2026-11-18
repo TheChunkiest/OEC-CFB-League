@@ -1113,3 +1113,9 @@ table.h2h .h2hrow.on td{border-bottom-color:transparent}
 .h2hg:hover{border-color:var(--gold);text-decoration:none}
 .h2hg b{text-align:center}
 .h2hg .go{color:var(--muted)}
+/* fix207: Coach Stats trend chart (History) */
+.cbtrendbox{margin-top:14px;padding-top:10px;border-top:1px solid var(--line)}
+.cbtrendbox>summary{list-style:none;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.cbtrendbox>summary::-webkit-details-marker{display:none}
+.cbtrendbox>summary::after{content:'▾';margin-left:auto;color:var(--muted);transition:transform .15s}
+.cbtrendbox[open]>summary::after{transform:rotate(180deg)}

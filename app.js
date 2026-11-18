@@ -1580,17 +1580,18 @@ function trHover(e) {
   const vx = ((e.touches ? e.touches[0].clientX : e.clientX) - r.left) / r.width * D0.W, span = D0.W - D0.P.l - D0.P.r;
   const i = D0.n === 1 ? 0 : Math.max(0, Math.min(D0.n - 1, Math.round((vx - D0.P.l) / span * (D0.n - 1))));
   if (card.dataset.i === String(i)) return; card.dataset.i = i;
-  const X = D0.P.l + (D0.n === 1 ? span / 2 : i * span / (D0.n - 1)), Y = v => D0.P.t + (1 - v / D0.maxY) * (D0.H - D0.P.t - D0.P.b);
+  const lo = D0.minY || 0, X = D0.P.l + (D0.n === 1 ? span / 2 : i * span / (D0.n - 1)), Y = v => D0.P.t + (1 - (v - lo) / (D0.maxY - lo)) * (D0.H - D0.P.t - D0.P.b);
   const g = svg.querySelector('.trx'); g.style.display = '';
   g.querySelector('line').setAttribute('x1', X); g.querySelector('line').setAttribute('x2', X);
-  g.querySelectorAll('circle').forEach(c => { const t = D0.teams.find(z => z.id === c.dataset.tid); c.setAttribute('cx', X); c.setAttribute('cy', Y(t.v[i])); });
-  card.querySelector('.trread').innerHTML = trendReadout(D0, i);
+  g.querySelectorAll('circle').forEach(c => { const t = D0.teams.find(z => z.id === c.dataset.tid), v = t.v[i]; c.style.display = v == null ? 'none' : ''; if (v != null) { c.setAttribute('cx', X); c.setAttribute('cy', Y(v)); } });
+  card.querySelector('.trread').innerHTML = D0.kind === 'cb' ? cbReadout(D0, i) : trendReadout(D0, i);
 }
 function trReset(card) {
   const D0 = JSON.parse(card.dataset.tr); delete card.dataset.i;
-  card.querySelector('.trx').style.display = 'none'; card.querySelector('.trread').innerHTML = trendReadout(D0, D0.n - 1);
+  card.querySelector('.trx').style.display = 'none'; card.querySelector('.trread').innerHTML = D0.kind === 'cb' ? cbReadout(D0, D0.n - 1) : trendReadout(D0, D0.n - 1);
 }
 document.addEventListener('pointermove', e => { if (e.target.closest && e.target.closest('.trchart svg')) trHover(e); });
+document.addEventListener('toggle', e => { if (e.target.matches && e.target.matches('.cbtrendbox')) UI.cbTrendOpen = e.target.open; }, true);
 document.addEventListener('pointerdown', e => { if (e.target.closest && e.target.closest('.trchart svg')) trHover(e); });
 document.addEventListener('pointerout', e => { const c = e.target.closest && e.target.closest('.trchart svg'); if (c && !c.contains(e.relatedTarget)) trReset(c.closest('.trchart')); });
 
@@ -1767,12 +1768,12 @@ function teamStatsCard(tid, s) {
     <p class="muted small" style="margin:8px 0 0"><span class="srk top">Green</span> = top quarter of the league, <span class="srk bot">red</span> = bottom quarter. One-score games are decided by 8 or fewer. Schedule strength is the average model rating of opponents played (1st = toughest).</p></div>`;
 }
 // Coach page: career stats across every team a coach has run (each game counts for whoever coached that side).
-function coachCareerLine(name, season = null) {
+function coachCareerLine(name, season = null, upto = null) {
   const o = { w: 0, l: 0, hw: 0, hl: 0, aw: 0, al: 0, cl: [0, 0], gp: 0, pf: 0, pa: 0, ats: [0, 0, 0], ou: [0, 0, 0], fav: [0, 0], dog: [0, 0], cw: 0, cll: 0, big: 0, sho: 0, tg: [0, 0] };
   // Records (overall and vs league coaches) count every game, forfeits included, the same way the standings and
   // All-Time Coaches do. Every other stat skips forfeits. Names match case-insensitively.
   const key = String(name || '').trim().toLowerCase(), isMe = side => String(coachOf(g0, side) || '').trim().toLowerCase() === key; let g0;
-  D.games.filter(g => played(g) && (season == null || g.season === season)).forEach(g => ['home', 'away'].forEach(side => {
+  D.games.filter(g => played(g) && (season == null || g.season === season) && (!upto || g.season < upto.s || (g.season === upto.s && g.week <= upto.w))).forEach(g => ['home', 'away'].forEach(side => {
     g0 = g; if (!isMe(side)) return;
     const home = side === 'home', my = home ? +g.homeScore : +g.awayScore, th = home ? +g.awayScore : +g.homeScore, won = my > th, other = coachOf(g, home ? 'away' : 'home'), l = lineOf(g);
     won ? o.w++ : o.l++;
@@ -1845,7 +1846,59 @@ function coachBoard() {
       <select data-cbstat aria-label="Stat">${opts.map(([g, rows]) => `<optgroup label="${g}">${rows.map(([k, l]) => `<option value="${k}" ${k === key ? 'selected' : ''}>${l}</option>`).join('')}</optgroup>`).join('')}</select>
       <span class="muted small">${se == null ? 'Every season' : `Season ${seasonNum(se)} · ${se}`}${key === 'vsc' ? ' · only games against league coaches' : key === 'rec' ? ' · every game, same as the standings' : ''}</span></div>
     <div class="tablewrap" style="margin-top:8px"><table class="tsboard"><tr><th>#</th><th>Coach</th><th class="num sortable" data-cbflip="1">${esc(label)} ${UI.cbFlip ? '▲' : '▼'}</th></tr>${rows}</table></div>
-    <p class="muted small" style="margin:8px 0 0">Tap the stat header to flip the order. Records include forfeits like the standings; other stats skip them.</p></div>`;
+    <p class="muted small" style="margin:8px 0 0">Tap the stat header to flip the order. Records include forfeits like the standings; other stats skip them.</p>
+    ${coachTrend(se, key, label, dir0 || 1, lines.map(l => ({ n: l.n, col: (() => { const c = l.cs[l.cs.length - 1]; return c.teams[0] ? teamColor(team(c.teams[0])) : '#888'; })() })))}</div>`;
+}
+// Coach Stats chart: the picked stat after every advance (each week with games), for the span picked above.
+// Same look and touch behaviour as the Coach Odds Trend chart on the Odds page.
+const CB_PCT = new Set(['rec', 'vsc', 'home', 'away', 'close', 'tg', 'ats', 'fav', 'dog']);
+let _cbt = { k: '', v: null };
+function coachTrend(se, key, label, better, coaches) {
+  if (!coaches.length) return '';
+  const pts = [...new Map(D.games.filter(g => played(g) && (se == null || g.season === se)).sort((a, b) => a.season - b.season || a.week - b.week)
+    .map(g => [g.season + '|' + g.week, { s: g.season, w: g.week, ccg: g.type === 'ccg', bowl: g.type === 'bowl' }])).values()];
+  if (pts.length < 2) return '';
+  const ck = [se, key, D.games.filter(played).length, coaches.map(c => c.n).join(',')].join('|');
+  if (_cbt.k !== ck) _cbt = { k: ck, v: coaches.map(c => { const v = [], f = []; pts.forEach(p => { const r = coachCareerLine(c.n, se, p), x = r[key], none = r.rec.f === '0-0'; v.push(none ? null : x.v); f.push(none ? '–' : x.f); }); return { v, f }; }) };
+  const pct = CB_PCT.has(key), all = _cbt.v.flatMap(x => x.v).filter(v => v != null);
+  let minY = pct ? 0 : Math.min(0, ...all), maxY = pct ? 1 : Math.max(1, ...all);
+  if (!pct) { const span = maxY - minY, stepN = span <= 5 ? 1 : span <= 12 ? 2 : span <= 30 ? 5 : span <= 60 ? 10 : 20; maxY = Math.ceil(maxY / stepN) * stepN; minY = Math.floor(minY / stepN) * stepN; }
+  const label0 = p => p.ccg ? `S${seasonNum(p.s)} Title` : p.bowl ? `S${seasonNum(p.s)} Bowls` : `S${seasonNum(p.s)} Wk${p.w}`;
+  const series = coaches.map((c, i) => ({ id: c.n, ab: c.n, c: liftColor(c.col), v: _cbt.v[i].v, f: _cbt.v[i].f }));
+  const sel = series.some(t => t.id === UI.cbTrend) ? UI.cbTrend : 'all', one = sel !== 'all';
+  const narrow = innerWidth < 640, W = narrow ? 360 : 860, H = narrow ? 220 : 280, P = { l: narrow ? 34 : 42, r: narrow ? 58 : 70, t: 12, b: 26 }, n = pts.length;
+  const x = i => P.l + i * (W - P.l - P.r) / (n - 1), y = v => P.t + (1 - (v - minY) / (maxY - minY)) * (H - P.t - P.b);
+  const tickStep = pct ? .25 : (maxY - minY) / 4, ticks = [...Array(5).keys()].map(i => minY + i * tickStep);
+  const tf = v => pct ? Math.round(v * 100) + '%' : (Math.round(v * 10) / 10).toString();
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)} after every advance" class="trsvg">`;
+  ticks.forEach(v => svg += `<line x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}" stroke="#2b2024"/><text x="${P.l - 6}" y="${y(v) + 4}" fill="#a69a9c" font-size="11" text-anchor="end">${tf(v)}</text>`);
+  // x labels: the start of each season (All-time) or a few weeks (one season).
+  const marks = se == null ? pts.map((p, i) => i === 0 || p.s !== pts[i - 1].s ? i : -1).filter(i => i >= 0) : pts.map((_, i) => i).filter(i => i % Math.max(1, Math.ceil(n / (narrow ? 5 : 9))) === 0);
+  marks.forEach(i => { if (se == null && i > 0) svg += `<line x1="${x(i)}" x2="${x(i)}" y1="${P.t}" y2="${H - P.b}" stroke="#3a2c30" stroke-dasharray="3 4"/>`; svg += `<text x="${x(i)}" y="${H - 7}" fill="#a69a9c" font-size="11" text-anchor="${i === 0 ? 'start' : 'middle'}">${esc(se == null ? 'S' + seasonNum(pts[i].s) : 'Wk' + pts[i].w)}</text>`; });
+  const path = t => { let d = '', pen = false; t.v.forEach((v, i) => { if (v == null) { pen = false; return; } d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(v).toFixed(1); pen = true; }); return d; };
+  const order = one ? [...series.filter(t => t.id !== sel), series.find(t => t.id === sel)] : series;
+  order.forEach(t => { const me = t.id === sel; svg += `<path fill="none" d="${path(t)}" stroke-linejoin="round" ${one && !me ? 'stroke="#6f6266" stroke-width="1.2" opacity=".35"' : `stroke="${t.c}" stroke-width="${me ? 3 : 1.8}"`}/>`; });
+  const lastV = t => t.v[n - 1];
+  const ends = (one ? series.filter(t => t.id === sel) : [...series].filter(t => lastV(t) != null).sort((a, b) => (lastV(b) - lastV(a)) * better).slice(0, 3)).filter(t => lastV(t) != null).map(t => ({ t, yy: y(lastV(t)) })).sort((a, b) => a.yy - b.yy);
+  for (let i = 1; i < ends.length; i++) if (ends[i].yy - ends[i - 1].yy < 12) ends[i].yy = ends[i - 1].yy + 12;
+  ends.forEach(e => svg += `<text x="${x(n - 1) + 7}" y="${e.yy + 4}" fill="#f3eeee" font-size="${one ? 12 : 10.5}" font-weight="800">${esc(e.t.ab.slice(0, 8))}</text>`);
+  svg += `<g class="trx" style="display:none"><line y1="${P.t}" y2="${H - P.b}" stroke="#a69a9c" stroke-width="1"/>${(one ? series.filter(t => t.id === sel) : series).map(t => `<circle r="${one ? 5 : 3.5}" fill="${t.c}" stroke="#1a1416" stroke-width="1.5" data-tid="${esc(t.id)}"/>`).join('')}</g>`;
+  svg += `<rect x="${P.l}" y="0" width="${W - P.l - P.r}" height="${H}" fill="transparent"/></svg>`;
+  const data = { kind: 'cb', W, H, P, n, minY, maxY, one, sel, better, stat: label, labels: pts.map(label0), teams: series };
+  const picker = `<div class="trpick"><button data-cbtrend="all" class="${one ? '' : 'on'}">League</button>${series.map(t => `<button data-cbtrend="${esc(t.id)}" class="${sel === t.id ? 'on' : ''}"><i class="sw" style="background:${t.c}"></i>${esc(t.ab)}</button>`).join('')}</div>`;
+  return `<details class="cbtrendbox" ${UI.cbTrendOpen === false ? '' : 'open'}><summary><b>📈 ${esc(label)} over time</b> <span class="muted small">${se == null ? 'every season' : 'Season ' + seasonNum(se)}</span></summary>
+    ${picker}<div class="trchart" data-tr="${esc(JSON.stringify(data))}"><div class="trread">${cbReadout(data, n - 1)}</div><div class="trwrap">${svg}</div></div>
+    <p class="muted small" style="margin:6px 0 0">Updates after every advance. Touch or hover to see any week; tap a coach above to follow just them.</p></details>`;
+}
+function cbReadout(D0, i) {
+  const when = 'After ' + D0.labels[i].replace(/^S(\d+) Wk(\d+)$/, 'Season $1, Week $2').replace(/^S(\d+) (Title|Bowls)$/, (m, a, b) => `Season ${a}, ${b === 'Title' ? 'the title game' : 'bowl season'}`);
+  const live = D0.teams.filter(t => t.v[i] != null).sort((a, b) => (b.v[i] - a.v[i]) * D0.better);
+  if (D0.one) {
+    const t = D0.teams.find(x => x.id === D0.sel), r = t.v[i] == null ? null : live.findIndex(x => x.id === t.id) + 1;
+    return `<div class="trone"><div><span class="muted small">${esc(when)}</span><div class="trbig"><i class="sw" style="background:${t.c}"></i>${esc(t.ab)} <b>${esc(t.f[i])}</b></div></div>
+      <div class="trstats"><span>${r ? `<b>#${r}</b> <em>of ${live.length} coaches</em>` : '<em>Not in the league yet</em>'}</span><span><em>${esc(D0.stat)}</em></span></div></div>`;
+  }
+  return `<div class="muted small" style="margin-bottom:6px">${esc(when)} · ${esc(D0.stat)}</div><ol class="trlist" style="grid-template-rows:repeat(${Math.ceil(live.length / 2)},auto)">${live.map(t => `<li data-cbtrend="${esc(t.id)}"><i class="sw" style="background:${t.c}"></i><span class="ab">${esc(t.ab)}</span><b>${esc(t.f[i])}</b></li>`).join('')}</ol>`;
 }
 function coachMeetings(c1, c2, exceptId) {
   if (!c1 || !c2 || c1 === 'CPU' || c2 === 'CPU') return [];
@@ -2293,6 +2346,7 @@ document.addEventListener('click', async e => {
   if (lx) { try { localStorage.setItem('oecLiveDismissed', lx.dataset.livex); } catch (err) { /* ignore */ } showLive(); return; }
   const tf = e.target.closest('[data-tsflip]'); if (tf) { UI.tsFlip = !UI.tsFlip; route(); return; }
   const hh = e.target.closest('[data-h2h]'); if (hh && !e.target.closest('a')) { const k = hh.dataset.h2h; UI.h2h = { ...(UI.h2h || {}), [k]: !(UI.h2h || {})[k] }; const y = scrollY; route(); scrollTo(0, y); return; }
+  const ct = e.target.closest('[data-cbtrend]'); if (ct) { const v = ct.dataset.cbtrend; UI.cbTrend = UI.cbTrend === v && v !== 'all' ? 'all' : v; const y = scrollY; route(); scrollTo(0, y); return; }
   const cf = e.target.closest('[data-cbflip]'); if (cf) { UI.cbFlip = !UI.cbFlip; route(); return; }
   const cb = e.target.closest('[data-cbspan]'); if (cb) { UI.cbSpan = cb.dataset.cbspan; route(); return; }
   const tr = e.target.closest('tr[data-team]'); if (tr && !e.target.closest('a')) { location.hash = '#team/' + tr.dataset.team; return; }
