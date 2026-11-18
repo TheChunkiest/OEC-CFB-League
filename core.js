@@ -1045,6 +1045,7 @@ export function legLabel(l) {
   const g = D.games.find(x => x.id === l.gameId) || {}, side = l.pick === 'home' ? g.home : g.away;
   if (l.market === 'ml') return `${ab(side)} ML`;
   if (l.market === 'spread') return `${ab(side)} ${fmtLine(l.pick === 'home' ? l.line : -l.line)}`;
+  if (l.market === 'tth' || l.market === 'tta') return `${ab(l.market === 'tth' ? g.home : g.away)} ${l.pick === 'over' ? 'Over' : 'Under'} ${l.line} team total`;
   return `${l.pick === 'over' ? 'Over' : 'Under'} ${l.line} · ${ab(g.away)} @ ${ab(g.home)}`;
 }
 // Parlay legs as a tap-to-open dropdown. The closed row shows one status icon per leg.
