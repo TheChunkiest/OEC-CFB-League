@@ -1086,11 +1086,13 @@ export function regWinsInfo(season, tid) {
   });
   return { w, rem };
 }
+// A team's win total comes off the board while one of its regular-season games is locked (being played).
+export const winsLockedTeam = (id, s = D.league.season) => D.games.some(g => g.season === s && g.locked && !played(g) && (g.type || 'reg') === 'reg' && (g.home === id || g.away === id));
 export function winTotalsSnapshot() {
   const L = D.league, sim = simulate(L.season, nowUpto()), odds = {};
   leagueTeams().forEach(t => {
     const o = sim[t.id], info = regWinsInfo(L.season, t.id);
-    if (!o || info.rem < 1) { odds[t.id] = null; return; }
+    if (!o || info.rem < 1 || winsLockedTeam(t.id)) { odds[t.id] = null; return; }
     const n = o.dist.reduce((a, b) => a + b, 0) || 1;
     let best = null;
     for (let k = info.w; k < info.w + info.rem; k++) {
@@ -1106,7 +1108,7 @@ export function winsBoard() {
   const L = D.league; if (L.phase !== PHASES.REG) return [];
   const sim = simulate(L.season, nowUpto()), W = L.winTotals, posted = W && W.season === L.season && W.odds ? W.odds : null;
   const snap = posted ? null : winTotalsSnapshot().odds;
-  return leagueTeams().map(t => ({ id: t.id, proj: sim[t.id]?.expW || 0, ...regWinsInfo(L.season, t.id), o: posted ? (posted[t.id] || null) : snap[t.id] }))
+  return leagueTeams().map(t => ({ id: t.id, proj: sim[t.id]?.expW || 0, ...regWinsInfo(L.season, t.id), o: winsLockedTeam(t.id) ? null : posted ? (posted[t.id] || null) : snap[t.id] }))
     .sort((a, b) => b.proj - a.proj);
 }
 // Decided as soon as it's mathematically settled; otherwise at the end of the regular season.

@@ -3,8 +3,8 @@ import {
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum, divOf, oneConference, playbookOf, pbSeason, pbOpen, pbLocked
 , loadAI, kickoffOf, fmtKick
-, reliefPatch, postEarlyCcg, earlyCcg, raceSim, AWARD_DEFS, tallyAwards, awardGames, awardGameLabel, awardCoaches, sameName
-} from './core.js?v=95';
+, reliefPatch, winTotalsSnapshot, winsLockedTeam, postEarlyCcg, earlyCcg, raceSim, AWARD_DEFS, tallyAwards, awardGames, awardGameLabel, awardCoaches, sameName
+} from './core.js?v=96';
 // Broadcast scouting nudges the ratings a little, so load it before any lines get posted from here.
 loadAI();
 import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
@@ -536,6 +536,15 @@ function readReview() {
 async function earlyCcgMsg() {
   try { const g = await postEarlyCcg(); return g ? `🏆 Title game set: ${team(g.away).name} vs ${team(g.home).name} — posted with lines for championship week, betting open now.` : ''; } catch (e) { console.warn(e); return ''; }
 }
+// Win totals follow game locks: a team playing a locked game has its win total pulled (set to null, which the database
+// rules also refuse); unlocking puts a fresh price back up.
+async function syncWinLocks() {
+  const lg = L(), W = lg.winTotals; if (lg.phase !== PHASES.REG || !W || W.season !== lg.season || !W.odds) return;
+  const fresh = winTotalsSnapshot().odds, patch = {};
+  // Only touch teams whose lock state changed; everyone else keeps the price already posted.
+  Object.keys(fresh).forEach(id => { const lk = winsLockedTeam(id); if (lk && W.odds[id] != null) patch[id] = null; else if (!lk && W.odds[id] == null && fresh[id]) patch[id] = fresh[id]; });
+  if (Object.keys(patch).length) await put('meta', 'league', { winTotals: { ...W, odds: { ...W.odds, ...patch } } });
+}
 // This Week (regular season): where the League Title game stands. It posts itself once both division winners clinch;
 // the button covers the case where that hasn't happened yet on this device.
 function titleCard() {
@@ -555,9 +564,9 @@ async function giveRelief() {
   return `${R.given.join(', ')} ${R.given.length === 1 ? 'was' : 'were'} out of Crackers and got 25 relief Crackers.`;
 }
 const ACT = {
-  async gameLock(t) { const g = D.games.find(x => x.id === t.dataset.g); if (!g) return; await put('games', g.id, { locked: !g.locked }); flash(`${team(g.away).abbr} @ ${team(g.home).abbr}: bets ${g.locked ? 'locked' : 'unlocked'}.`); },
+  async gameLock(t) { const g = D.games.find(x => x.id === t.dataset.g); if (!g) return; await batch([{ op: 'set', col: 'games', id: g.id, data: { locked: !g.locked } }]); await syncWinLocks(); flash(`${team(g.away).abbr} @ ${team(g.home).abbr}: bets ${g.locked ? 'locked' : 'unlocked'}.`); },
   async lockWeek() { const lg = L(), gs = D.games.filter(g => g.season === lg.season && g.week === lg.week && !played(g) && !g.locked); if (!gs.length) return flash('Every game this week is already locked or final.');
-    await batch(gs.map(g => ({ op: 'set', col: 'games', id: g.id, data: { locked: true } }))); flash(`Locked bets on ${gs.length} Week ${lg.week} game${gs.length === 1 ? '' : 's'}. Other weeks stay open.`); },
+    await batch(gs.map(g => ({ op: 'set', col: 'games', id: g.id, data: { locked: true } }))); await syncWinLocks(); flash(`Locked bets on ${gs.length} Week ${lg.week} game${gs.length === 1 ? '' : 's'} (and those teams' win totals). Other weeks stay open.`); },
   async toggleBet() { await put('meta', 'league', { bettingOpen: !L().bettingOpen }); flash('Betting ' + (L().bettingOpen ? 'opened' : 'locked') + '.'); },
   async saveScores() {
     const games = D.games.filter(g => g.season === L().season && g.week === L().week);
@@ -1012,6 +1021,7 @@ document.addEventListener('change', e => {
       if (!isCommish()) { $('#panel').innerHTML = `<div class="card"><h2>Commissioner only</h2><p class="muted">Your account doesn't have commissioner access.</p></div>`; $('#tabs').innerHTML = ''; return; }
       if (L().awards?.open || L().phase === PHASES.CCG || L().phase === PHASES.POST) { try { await loadBallots(true); } catch (e) { console.warn('ballots', e); } }
       try { if (await ensureFutures()) ST.msg = 'Posted lines for upcoming games and League Champion futures odds.'; } catch (e) { ST.msg = 'Could not post futures odds: ' + e.message + ' — check the Firestore rules are the latest version.'; }
+      try { await syncWinLocks(); } catch (e) { console.warn('win locks', e); }
       render();
     });
   } catch (e) {
