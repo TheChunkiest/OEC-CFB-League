@@ -1,15 +1,5 @@
 {
- "live": true,
- "videoId": "KpqUcx8Jmv4",
- "url": "https://www.youtube.com/watch?v=KpqUcx8Jmv4",
- "title": "OEC CFB League S3 w13 Liberty vs West Virginia",
- "streams": [
-  {
-   "videoId": "KpqUcx8Jmv4",
-   "url": "https://www.youtube.com/watch?v=KpqUcx8Jmv4",
-   "title": "OEC CFB League S3 w13 Liberty vs West Virginia"
-  }
- ],
+ "live": false,
  "notified": "KpqUcx8Jmv4",
  "notifiedIds": [
   "qwkTlJND-FM",
@@ -19,6 +9,5 @@
   "mkzu1AxNdmE",
   "OkBtvgGP_44",
   "KpqUcx8Jmv4"
- ],
- "checkedAt": 1795051701985
+ ]
 }
