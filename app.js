@@ -5,7 +5,7 @@ import {
   gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, wkName, gWeek, champOpen, titleSet, DIAG, storylines, seasonStorylines, RELIEF, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory, legLabel
 , playbookOf, pbSeason, pbText
 , AWARD_DEFS, awardGames, awardGameLabel, awardCoaches
-} from './core.js?v=92';
+} from './core.js?v=93';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -596,11 +596,11 @@ const PAGES = {
     else if (!me.teamId) html += `<div class="notice">Game of the Week votes are for league coaches. As a spectator you can still bet the winner, boost and all.</div>`;
     const canVote = me && me.teamId;
     // Game of the Week
-    const next = D.games.filter(g => g.season === s && g.week === nw);
+    const next = D.games.filter(g => g.season === s && g.week === nw && (g.type || 'reg') === 'reg');   // title/bowl games aren't voted on
     const mine = me && D.gotw.find(v => v.season === s && v.week === nw && v.uid === me.id);
     const tally = gotwTally(s, nw);
-    html += `<h2>Game of the Week · Week ${nw}</h2>`;
-    if (L.phase === PHASES.REG && !next.length && L.week >= L.finalWeek) html += `<div class="card empty">That's the last regular-season week, so Game of the Week voting is done for the season.</div>`;
+    html += `<h2>Game of the Week · ${esc(wkName(nw, s))}</h2>`;
+    if (L.phase === PHASES.REG && !next.length && L.week >= L.finalWeek) html += `<div class="card empty">That's the last regular-season week, so Game of the Week voting is done for the season.${D.games.some(g => g.season === s && g.type === 'ccg') ? ' Next week is all about the League Title game.' : ''}</div>`;
     else if (L.phase === PHASES.REG && !next.length) html += `<div class="card empty">No league games are scheduled for Week ${nw}, so there's no Game of the Week vote this time.</div>`;
     else if (L.phase !== PHASES.REG) html += `<div class="card empty">Game of the Week voting opens during the regular season for the following week's games.</div>`;
     else html += `<div class="card"><p class="muted small" style="margin-top:0">Vote during ${esc(weekLabel())} for next week's featured game. The winner shows on the Home page once we advance to Week ${nw}.</p>

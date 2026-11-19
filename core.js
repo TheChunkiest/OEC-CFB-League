@@ -1163,7 +1163,8 @@ export function gotwTally(season, week, { includeOpen = false } = {}) {
     return { game: null, counts, total: Object.values(counts).reduce((a, b) => a + b, 0) };
   }
   D.gotw.filter(v => v.season === season && v.week === week).forEach(v => counts[v.gameId] = (counts[v.gameId] || 0) + 1);
-  const games = D.games.filter(g => g.season === season && g.week === week && counts[g.id]);
+  // Only regular-season games can be Game of the Week (the title game is already the featured game that week).
+  const games = D.games.filter(g => g.season === season && g.week === week && counts[g.id] && (g.type || 'reg') === 'reg');
   if (!games.length) return { game: null, counts, total: 0 };
   games.sort((a, b) => counts[b.id] - counts[a.id] || Math.abs(lineOf(a)?.spread ?? 99) - Math.abs(lineOf(b)?.spread ?? 99));
   return { game: games[0], counts, total: Object.values(counts).reduce((a, b) => a + b, 0) };
