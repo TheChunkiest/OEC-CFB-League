@@ -30,9 +30,12 @@ async function fbInit() {
   const base = `https://www.gstatic.com/firebasejs/${FBV}/`;
   const [app, au, fs] = await Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-firestore.js')]);
   const a = app.initializeApp(firebaseConfig);
-  // On-device cache: reopening the site within ~30 minutes only downloads what changed.
+  // In-memory cache only. The on-device (IndexedDB) cache could get stuck missing a document (a new game never
+  // showed up after a reload), and season.json already keeps page loads cheap: each visit reads only what
+  // changed since that file was built. Old on-device caches are cleared once.
+  try { if (indexedDB.databases) (await indexedDB.databases()).forEach(d => { if (d.name && d.name.startsWith('firestore/')) indexedDB.deleteDatabase(d.name); }); } catch (e) { }
   let db;
-  try { db = fs.initializeFirestore(a, { localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() }) }); }
+  try { db = fs.initializeFirestore(a, { localCache: fs.memoryLocalCache() }); }
   catch (e) { db = fs.getFirestore(a); }
   fb = { au, fs, auth: au.getAuth(a), db, app: a, base };
   return fb;
