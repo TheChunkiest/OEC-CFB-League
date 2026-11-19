@@ -1,5 +1,15 @@
 {
- "live": false,
+ "live": true,
+ "videoId": "OkBtvgGP_44",
+ "url": "https://www.youtube.com/watch?v=OkBtvgGP_44",
+ "title": "UCF at BC",
+ "streams": [
+  {
+   "videoId": "OkBtvgGP_44",
+   "url": "https://www.youtube.com/watch?v=OkBtvgGP_44",
+   "title": "UCF at BC"
+  }
+ ],
  "notified": "mkzu1AxNdmE",
  "notifiedIds": [
   "qwkTlJND-FM",
@@ -7,5 +17,6 @@
   "5qPkG2_ar0Y",
   "hNqDgJ5w08g",
   "mkzu1AxNdmE"
- ]
+ ],
+ "checkedAt": 1795047329394
 }
