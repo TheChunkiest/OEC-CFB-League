@@ -1138,7 +1138,7 @@ export function legLabel(l) {
 export function legsHtml(w) {
   if (w.market !== 'parlay') return '';
   const legs = w.legs || [];
-  const wk = l => l.market === 'future' ? 'Title' : l.market === 'wins' ? 'Season' : 'Wk ' + (D.games.find(x => x.id === l.gameId)?.week ?? '?');
+  const wk = l => { if (l.market === 'future') return 'Title'; if (l.market === 'wins') return 'Season'; const g = D.games.find(x => x.id === l.gameId); return !g ? 'Wk ?' : g.type === 'ccg' ? 'League Title' : g.type === 'bowl' ? (g.note || 'Bowl') : 'Wk ' + g.week; };
   const ic = r => r === 'won' ? '✅' : r === 'lost' ? '❌' : r === 'push' || r === 'void' ? '➖' : '⏳';
   return `<details class="legs"><summary><span class="lgic">${legs.map(l => ic(l.result)).join('')}</span><span class="lgtx">${legs.length} legs</span></summary>
     <ul>${legs.map(l => `<li><span class="li">${ic(l.result)}</span><span class="lt">${esc(legLabel(l))} <span class="lw">${wk(l)}</span></span><span class="lo">${fmtOdds(l.odds)}</span></li>`).join('')}</ul></details>`;

@@ -5,7 +5,7 @@ import {
   gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, wkName, gWeek, champOpen, titleSet, DIAG, storylines, seasonStorylines, RELIEF, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory, legLabel
 , playbookOf, pbSeason, pbText
 , AWARD_DEFS, awardGames, awardGameLabel, awardCoaches
-} from './core.js?v=93';
+} from './core.js?v=94';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -266,7 +266,7 @@ function raceSection() {
 function raceCard(r) {
   const nm = id => esc(team(id).name), ab = id => esc(team(id).abbr || team(id).name);
   const prize = r.K === 1 && r.div ? `the ${esc(r.div)}` : 'the title game';
-  const vsTxt = (g, me) => `${g.home === me ? 'vs' : g.neutral ? 'vs' : 'at'} ${ab(g.home === me ? g.away : g.home)} <span class="muted">(Wk ${g.week})</span>`;
+  const vsTxt = (g, me) => `${g.home === me ? 'vs' : g.neutral ? 'vs' : 'at'} ${ab(g.home === me ? g.away : g.home)} <span class="muted">(${g.type === 'ccg' ? 'League Title' : 'Wk ' + g.week})</span>`;
   const list = a => a.length <= 1 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
   const beat = x => `${ab(x.winner)} beats ${ab(x.loser)}`;
   const ordn = n => ordinal(n);
@@ -1281,7 +1281,7 @@ function showFutureSlip(tid) {
 // team total). Picking another in the same group swaps it in. Different games never conflict.
 const legGroup = l => l.market === 'future' ? 'future' : l.market === 'wins' ? 'wins:' + l.team
   : `${l.market === 'ml' || l.market === 'spread' ? 'side' : 'pts'}:${l.gameId}`;
-const legWeek = l => l.market === 'future' ? 'Title' : l.market === 'wins' ? 'Wins' : 'Wk ' + (D.games.find(x => x.id === l.gameId)?.week ?? '?');
+const legWeek = l => { if (l.market === 'future') return 'Title'; if (l.market === 'wins') return 'Wins'; const g = D.games.find(x => x.id === l.gameId); return !g ? 'Wk ?' : g.type === 'ccg' ? 'League Title' : g.type === 'bowl' ? (g.note || 'Bowl') : 'Wk ' + g.week; };
 function legFor(gid, market, pick, tid) {
   if (ownLeg({ gameId: gid, market, pick, team: tid })) return null;
   if (market === 'wins') { const r = winsBoard().find(x => x.id === tid); return r && r.o ? { gameId: '', market, pick, team: tid, line: r.o.line, odds: pick === 'over' ? r.o.over : r.o.under } : null; }
