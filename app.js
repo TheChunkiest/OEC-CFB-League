@@ -254,8 +254,9 @@ let racePicks = {}; try { racePicks = JSON.parse(sessionStorage.getItem('oecRace
 const saveRacePicks = () => { try { sessionStorage.setItem('oecRace', JSON.stringify(racePicks)); } catch (e) { } };
 function raceSection() {
   const s = S(); if (s !== D.league.season || D.league.phase !== PHASES.REG) return '';
-  const sims = divisions(s).map(d => raceSim(d, racePicks, s)).filter(r => r && r.left.length);
-  if (!sims.length) return '';
+  // Keep both division buttons even after one race is settled (it then shows who clinched); hide only when both are done.
+  const sims = divisions(s).map(d => raceSim(d, racePicks, s)).filter(r => r);
+  if (!sims.some(r => r.left.length)) return '';
   if (sims.length < 2) return `<h2>Title Game Race</h2>` + sims.map(raceCard).join('');
   // Two divisions: one button per division; tapping one drops its race open below (tap again to close).
   const open = sims.find(r => r.div === UI.raceDiv);
