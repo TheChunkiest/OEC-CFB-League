@@ -344,7 +344,13 @@ export const fmtOdds = o => o == null ? '–' : (o > 0 ? '+' + o : String(o));
 export const fmtLine = l => l == null ? '–' : (l === 0 ? 'PK' : (l > 0 ? '+' + l : String(l)));
 export const pctStr = p => p >= 0.995 ? '>99%' : p > 0 && p < 0.005 ? '<1%' : Math.round(p * 100) + '%';
 export const seasonNum = (y = D.league.season) => y - (D.league.firstSeason || 2026) + 1;
-export const weekLabel = (L = D.league) => L.phase === PHASES.CCG ? 'Conf Champ' : L.phase === PHASES.POST ? 'Postseason' : L.phase === PHASES.PRE ? 'Preseason' : 'Week ' + L.week;
+// Name of a week: the title-game week is "League Title", an all-bowl week is "Bowls", anything else "Week N".
+export function wkName(w, season = D.league.season) {
+  const gs = D.games.filter(g => g.season === season && g.week === w);
+  return gs.some(g => g.type === 'ccg') ? 'League Title' : gs.length && gs.every(g => g.type === 'bowl') ? 'Bowls' : 'Week ' + w;
+}
+export const gWeek = g => g.type === 'ccg' ? 'League Title' : g.type === 'bowl' ? (g.note || 'Bowl') : 'Week ' + g.week;
+export const weekLabel = (L = D.league) => L.phase === PHASES.CCG ? 'League Title' : L.phase === PHASES.POST ? 'Postseason' : L.phase === PHASES.PRE ? 'Preseason' : 'Week ' + L.week;
 /* ---- Top 25: league.polls = { "2028_10": [{ id, r }, ...] } — the poll in effect entering that week ---- */
 export function pollFor(season = D.league.season, week = D.league.week) {
   const P = D.league.polls || {}; let best = null, bw = -Infinity;

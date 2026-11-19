@@ -2,10 +2,10 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, batch, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout, PUSH_PREFS, pushDefaults, pushLocal, pushSupported, pushEnable, pushPrefs, pushDisable,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, raceSim, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, storylines, seasonStorylines, RELIEF, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory, legLabel
+  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, wkName, gWeek, storylines, seasonStorylines, RELIEF, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory, legLabel
 , playbookOf, pbSeason, pbText
 , AWARD_DEFS, awardGames, awardGameLabel, awardCoaches
-} from './core.js?v=86';
+} from './core.js?v=87';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -187,7 +187,7 @@ function gameCard(g, opts = {}) {
     odds = `${l.spread === 0 ? 'PK' : esc(team(fav).abbr) + ' ' + fmtLine(-Math.abs(l.spread))} · ${esc(cov)} · ${tot > l.total ? 'Over' : tot < l.total ? 'Under' : 'Push'} ${l.total}`;
   }
   const sc = (side, won) => done ? `<b class="msc ${won ? 'w' : 'l'}">${g.forfeit ? (won ? 'FW' : 'FL') : g[side + 'Score']}</b>` : '';
-  const status = `<b class="gstat">${done ? 'Final' : 'Week ' + g.week}</b>${done && videoOf(g) ? ' · <span class="vidtag">▶ Broadcast</span>' : ''}`;
+  const status = `<b class="gstat">${done ? 'Final' : esc(gWeek(g))}</b>${done && videoOf(g) ? ' · <span class="vidtag">▶ Broadcast</span>' : ''}`;
   // Finished games show who actually coached them (saved on the game); upcoming ones show today's coaches.
   const ca = done ? coachOf(g, 'away') : isUserTeam(a) ? a.coach : 'CPU', ch = done ? coachOf(g, 'home') : isUserTeam(h) ? h.coach : 'CPU';
   const who = ca !== 'CPU' || ch !== 'CPU' ? ` · ${esc(ca)} ${g.neutral ? 'vs' : '@'} ${esc(ch)}` : '';
@@ -391,7 +391,7 @@ const PAGES = {
     const games = D.games.filter(g => g.season === s && g.week === wk);
     const gt = gotwTally(s, wk).game;
     return `<div class="row spread schedhead"><h2 style="margin:0">Schedule &amp; Scores</h2>
-      <select data-nav="schedule" aria-label="Week">${weeks.map(w => `<option value="${w}" ${w === wk ? 'selected' : ''}>Week ${w}</option>`).join('')}</select></div>
+      <select data-nav="schedule" aria-label="Week">${weeks.map(w => `<option value="${w}" ${w === wk ? 'selected' : ''}>${esc(wkName(w, s))}</option>`).join('')}</select></div>
       ${games.length ? weekOrder(games, gt && gt.id).map(g => gameCard(g, { gotw: gt && gt.id === g.id })).join('') : '<div class="card empty">No games for this week.</div>'}`;
   },
 
@@ -430,7 +430,7 @@ const PAGES = {
     html += !open ? `<div class="card empty">Betting is ${L.phase === PHASES.PRE ? 'closed until the season is published' : 'locked right now'}.</div>` :
       games.length ? `<div class="row" style="margin-bottom:10px"><div class="seg"><button data-mode="single" class="${UI.mode === 'single' ? 'on' : ''}">Single bets</button><button data-mode="parlay" class="${UI.mode === 'parlay' ? 'on' : ''}">Parlay</button></div>${UI.mb}
         ${UI.mode === 'parlay' ? `<span class="muted small">Tap 2–${MAX_LEGS} picks from any upcoming week, plus League Champion and Win Total picks below. Per game: one side (spread or moneyline) and one points pick (game total or a team total). Tapping another in the same group swaps it in. All must hit; payouts multiply. Once more than half the legs have won, you can cash out early for your stake plus ${Math.round(CASHOUT_SHARE * 100)}% of what the winning legs would pay.</span>` : ''}</div>
-        <div class="row" style="margin-bottom:14px"><select data-betweek="1" aria-label="Week to bet on">${bwks.map(w => `<option value="${w}" ${w === bw ? 'selected' : ''}>Week ${w}${w === L.week ? ' (this week)' : ''}</option>`).join('')}</select>
+        <div class="row" style="margin-bottom:14px"><select data-betweek="1" aria-label="Week to bet on">${bwks.map(w => `<option value="${w}" ${w === bw ? 'selected' : ''}>${esc(wkName(w, s))}${w === L.week ? ' (this week)' : ''}</option>`).join('')}</select>
         <span class="muted small">${bw === L.week ? '' : 'Early lines: they move after every advance, but your bet keeps the line you took.'}</span></div><div class="card"><div class="betgrid"><div class="hdr">Spread</div><div class="hdr">Moneyline</div><div class="hdr">Total</div>
         ${games.slice().sort((x, y) => (y.id === gotwGameId()) - (x.id === gotwGameId())).map(g => betRows(g)).join('')}</div></div>${bw === L.week ? `<div id="popular">${popularCard()}</div>` : ''}<div id="value">${valueCard(games)}</div>` : '<div class="card empty">No open games this week.</div>';
     html += futuresSection();
@@ -691,7 +691,7 @@ function myWagersHtml(me, s, open) {
       const mine = cur === 'all' ? all : all.filter(w => grp(w) === cur);
       myW += all.length ? `<div class="bfilters">${FL.filter(([k]) => cnt(k)).map(([k, l]) => `<button class="bfilter${k === cur ? ' on' : ''}" data-bfilter="${k}">${l} <span>${cnt(k)}</span></button>`).join('')}</div>` : '';
       // One block per wager: the bet gets the full width; stake, time, result and buttons sit underneath.
-      const whenOf = (w, g) => w.market === 'future' ? 'Title' : w.market === 'wins' ? 'Win total' : w.market === 'parlay' ? 'Parlay' : 'Week ' + (g ? g.week : w.week);
+      const whenOf = (w, g) => w.market === 'future' ? 'Title' : w.market === 'wins' ? 'Win total' : w.market === 'parlay' ? 'Parlay' : g ? gWeek(g) : 'Week ' + w.week;
       const resOf = w => w.status === 'open' ? `Open · to win ${winProfit(w).toLocaleString()}` : w.status === 'cashed' ? `Cashed out +${(w.payout || 0).toLocaleString()}` : (w.status === 'void' ? 'Void · refunded' : w.status === 'won' ? 'Won' : w.status === 'lost' ? 'Lost' : 'Push') + (w.payout ? ' ' + (w.payout > 0 ? '+' : '') + w.payout.toLocaleString() : '');
       myW += `<div class="card">${mine.length ? `<div class="wlist">${mine.map(w => { const g = D.games.find(x => x.id === w.gameId); const canCancel = w.status === 'open' && w.market !== 'parlay' && (w.market === 'future' || w.market === 'wins' ? futuresOpen() && !(w.market === 'future' && titleOut(w.season).has(w.pick)) : open && g && !played(g));
           return `<div class="wager"><div class="wtop"><div class="wlbl">${esc(wagerLabel(w))}${w.boost ? ` <span class="boosttag">⚡ +${Math.round((w.boost - 1) * 100)}%</span>` : ''}</div><span class="pill ${w.status}">${resOf(w)}</span></div>${legsHtml(w)}
@@ -800,7 +800,7 @@ function valuePick(games) {
 function valueCard(games) {
   const L = D.league; if (L.phase === PHASES.PRE || L.phase === PHASES.POST) return '';
   const v = valuePick(games);
-  const wkl = games.length && games[0].week !== L.week ? `Week ${games[0].week}` : weekLabel();
+  const wkl = games.length && games[0].week !== L.week ? wkName(games[0].week) : weekLabel();
   const head = `<span class="ribbon vrib">💎 Hidden Value · ${esc(wkl)}</span>`;
   if (!v) return `<div class="card popular value">${head}<div class="muted">Nothing stands out this week: the lines and the teams' scoring averages agree. Check back after scores come in.</div></div>`;
   const { g, l, market, pick, odds, edge, n, projH, projA, PH, PA } = v, s = L.season;
@@ -877,7 +877,7 @@ function slipRows(w) {
   return legs.map(l => {
     const g = D.games.find(x => x.id === l.gameId), side = g ? (l.pick === 'home' ? g.home : g.away) : null;
     const rn = id => rankName(id, g.season, g.week);
-    const match = g ? `${rn(g.away)} @ ${rn(g.home)} · Week ${g.week}` : '';
+    const match = g ? `${rn(g.away)} @ ${rn(g.home)} · ${gWeek(g)}` : '';
     if (l.market === 'ml') return { t: `${rn(side)} Moneyline`, s: match, o: l.odds };
     if (l.market === 'spread') return { t: `${rn(side)} ${fmtLine(l.pick === 'home' ? l.line : -l.line)}`, s: 'Spread · ' + match, o: l.odds };
     if (l.market === 'total') return { t: `${l.pick === 'over' ? 'Over' : 'Under'} ${l.line} points`, s: 'Total · ' + match, o: l.odds };
@@ -2113,9 +2113,9 @@ PAGES.game = function (id) {
     // Lead.
     const ko = kickoffOf(g), v = venueOf(g);
     const opener = pick([
-      `${Cap(who(A))} (${recTxt(A)}) ${g.neutral ? 'meets' : 'travels to face'} ${who(H)} (${recTxt(H)}) in Week ${g.week}${v && !g.neutral ? ` at ${v.name}` : g.neutral ? ' at a neutral site' : ''}.`,
-      `Week ${g.week} brings ${who(A)} (${recTxt(A)}) ${g.neutral ? 'and' : 'to'} ${who(H)} (${recTxt(H)})${v && !g.neutral ? ` at ${v.name}` : ''}.`,
-      `${Cap(who(H))} (${recTxt(H)}) ${g.neutral ? 'meets' : 'welcomes'} ${who(A)} (${recTxt(A)}) in Week ${g.week}.`]);
+      `${Cap(who(A))} (${recTxt(A)}) ${g.neutral ? 'meets' : 'travels to face'} ${who(H)} (${recTxt(H)}) ${g.type === 'ccg' ? ' in the league title game' : ` in Week ${g.week}`}${v && !g.neutral ? ` at ${v.name}` : g.neutral ? ' at a neutral site' : ''}.`,
+      `${g.type === 'ccg' ? 'The league title game' : `Week ${g.week}`} brings ${who(A)} (${recTxt(A)}) ${g.neutral ? 'and' : 'to'} ${who(H)} (${recTxt(H)})${v && !g.neutral ? ` at ${v.name}` : ''}.`,
+      `${Cap(who(H))} (${recTxt(H)}) ${g.neutral ? 'meets' : 'welcomes'} ${who(A)} (${recTxt(A)})${g.type === 'ccg' ? ' in the league title game' : ` in Week ${g.week}`}.`]);
     let line = '';
     const an = n => (/^(8|11|18)/.test(String(n)) ? 'an' : 'a');
     if (l && p) line = !fav || l.spread === 0 ? `The books can't separate them: it's a pick'em with a total of ${l.total}.` : pick([`${fav.name} is laying ${Math.abs(l.spread)} with ${an(Math.max(p.a, p.h))} ${Math.max(p.a, p.h)}% chance to win, and the total sits at ${l.total}.`, `The line has ${fav.name} by ${Math.abs(l.spread)} (${Math.max(p.a, p.h)}% to win), total ${l.total}.`, `${dog.name} is getting ${Math.abs(l.spread)} points. The model gives it ${an(Math.min(p.a, p.h))} ${Math.min(p.a, p.h)}% shot at the outright win, and the total is ${l.total}.`]);
@@ -2213,7 +2213,7 @@ PAGES.game = function (id) {
     rec: { a: recTxt(A), h: recTxt(H) }, paras: (() => { const vs = {}; return paras.map(t => vary(t, vs)); })(),
     trends: trends.slice(0, 6).map(t => t.replace(/<[^>]+>/g, '')),
     series: coachA !== 'CPU' && coachH !== 'CPU' && meets.length ? `${coachA} vs. ${coachH}: ${mw[coachA] || 0}-${mw[coachH] || 0} all-time` + (() => { const w = meetingWinner(meets[0]); return `. Last: S${seasonNum(meets[0].season)} ${meets[0].type === 'ccg' ? 'title game' : 'Wk ' + meets[0].week}, ${w.coach} won ${w.ws}-${w.ls}.`; })() : (coachA !== 'CPU' && coachH !== 'CPU' ? `First-ever meeting between ${coachA} and ${coachH}.` : '') };
-  return `<p><a href="#schedule/${g.week}">← Week ${g.week} schedule</a></p>
+  return `<p><a href="#schedule/${g.week}">← ${esc(gWeek(g))} schedule</a></p>
     <div class="card gp-head${isGotw || g.type === 'ccg' ? ' gotw' : ''}">${g.type === 'ccg' ? `<span class="ribbon">${champRibbon()}</span>` : isGotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}
       <div class="muted small" style="text-transform:uppercase;letter-spacing:.8px;font-weight:800">Season ${seasonNum(s)} · ${g.type === 'ccg' ? 'League Championship' : g.type === 'bowl' ? 'Postseason' : 'Week ' + g.week}${done ? ' · Final' : ''}${gameTags(g) ? ' · ' + gameTags(g) : ''}</div>
       <div class="gp-vs">${side(A, coachA, g.awayScore, !hw)}<div class="gp-at">${g.neutral ? 'vs' : '@'}</div>${side(H, coachH, g.homeScore, hw)}</div>
