@@ -704,14 +704,15 @@ function futuresSection() {
   const board = futuresBoard();
   let h = `<h2>Season ${n} League Champion</h2>`;
   if (!board.length) return h + `<div class="card empty">Futures are open during the regular season. ${L.phase === PHASES.PRE ? 'They open when the season is published.' : 'Betting has closed for this season; open bets settle when the championship is decided.'}</div>`;
-  const open = champOpen() && futuresPosted(), set = titleSet();
+  // Closed for the title game: either this device already has the game, or the league says futures are shut.
+  const open = champOpen() && futuresPosted(), set = titleSet() || (L.futures && L.futures.season === L.season && L.futures.open === false && L.phase === PHASES.REG);
   const live = board.filter(r => r.odds != null), dead = board.filter(r => r.odds == null);
   const deadLine = (list, label) => list.length ? `<div class="offboard"><span>${label}</span>${list.map(r => chip(r.id, { abbr: true, rank: false })).join('')}</div>` : '';
   h += `<div class="card"><p class="muted small" style="margin-top:0">Pick the ${esc(L.conference)} champion${board[0].posted ? '' : ' (odds projected until this week\'s lines post)'}. Your odds lock when you bet, it pays when the title game is final, and a team that's eliminated loses right away.</p>
     <div class="tablewrap"><table class="compact"><tr><th>Team</th><th class="num">Chance</th><th class="num">Odds</th></tr>
     ${live.map(r => { const t = team(r.id); return `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td>${chip(r.id)} <span class="muted small">${isUserTeam(t) ? esc(t.coach) : 'CPU'}</span></td><td class="num">${pctStr(r.p)}</td>
       <td class="num">${open && r.id !== myTeam()?.id ? `<button class="pick${UI.mode === 'parlay' && UI.legs.some(x => x.market === 'future' && x.pick === r.id) ? ' sel' : ''}" data-fut="${esc(r.id)}"><b>${fmtOdds(r.odds)}</b></button>` : `<b>${fmtOdds(r.odds)}</b>`}</td></tr>`; }).join('')}
-    </table></div>${deadLine(dead.filter(r => r.out), 'Eliminated')}${deadLine(dead.filter(r => !r.out), 'Off the board')}${open ? '' : set ? `<p class="muted small">🔒 Closed: the title game is set (${(() => { const c = D.games.find(g => g.season === L.season && g.type === 'ccg'); return c ? esc(team(c.away).abbr || team(c.away).name) + ' vs ' + esc(team(c.home).abbr || team(c.home).name) : ''; })()}), so bet its moneyline instead. Open bets still pay when it's final.</p>` : futuresOpen() ? '<p class="muted small">Futures odds open once the commissioner posts this week\'s lines.</p>' : '<p class="muted small">Betting is locked right now.</p>'}</div>`;
+    </table></div>${deadLine(dead.filter(r => r.out), 'Eliminated')}${deadLine(dead.filter(r => !r.out), 'Off the board')}${open ? '' : set ? `<p class="muted small">🔒 Closed: the title game is set${(() => { const c = D.games.find(g => g.season === L.season && g.type === 'ccg'); return c ? ' (' + esc(team(c.away).abbr || team(c.away).name) + ' vs ' + esc(team(c.home).abbr || team(c.home).name) + ')' : ''; })()}, so bet its moneyline instead. Open bets still pay when it's final.</p>` : futuresOpen() ? '<p class="muted small">Futures odds open once the commissioner posts this week\'s lines.</p>' : '<p class="muted small">Betting is locked right now.</p>'}</div>`;
   return h;
 }
 function winsSection() {
