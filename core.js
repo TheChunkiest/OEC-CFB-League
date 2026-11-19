@@ -35,8 +35,8 @@ async function fbInit() {
   // changed since that file was built. Old on-device caches are cleared once.
   try { if (indexedDB.databases) (await indexedDB.databases()).forEach(d => { if (d.name && d.name.startsWith('firestore/')) indexedDB.deleteDatabase(d.name); }); } catch (e) { }
   let db;
-  try { db = fs.initializeFirestore(a, { localCache: fs.memoryLocalCache() }); }
-  catch (e) { db = fs.getFirestore(a); }
+  try { db = fs.initializeFirestore(a, { localCache: fs.memoryLocalCache() }); DIAG.cache = 'memory'; }
+  catch (e) { db = fs.getFirestore(a); DIAG.cache = 'default (' + (e.message || e) + ')'; }
   fb = { au, fs, auth: au.getAuth(a), db, app: a, base };
   return fb;
 }
@@ -81,6 +81,8 @@ const withMine = (c, list) => {
   return [...byId.values()].filter(live1);
 };
 let unsubs = [], liveSeason = null;
+// Load diagnostics, shown on the hidden #debug page.
+export const DIAG = { cache: '', snapT: 0, snapSeason: 0, snapCounts: {}, live: {}, errors: [] };
 async function startListeners() {
   const { fs, db } = await fbInit();
   unsubs.forEach(u => u()); unsubs = [];
@@ -96,9 +98,10 @@ async function startListeners() {
   const watch = (ref, apply, name) => first.push(new Promise((res, rej) => {
     let initial = true;
     unsubs.push(fs.onSnapshot(ref, snap => {
+      if (snap.docs) DIAG.live[name] = { n: snap.docs.length, ids: snap.docs.map(d => d.id).slice(-12), cache: snap.metadata.fromCache, at: Date.now() };
       apply(snap); clearCache();
       if (initial) { initial = false; res(); } else liveSubs.forEach(f => { try { f(name); } catch (e) { console.error(e); } });
-    }, err => { if (initial) rej(err); else console.error(err); }));
+    }, err => { DIAG.errors.push(name + ': ' + (err.message || err)); if (initial) rej(err); else console.error(err); }));
   }));
   // League doc first: it says which season is current.
   watch(fs.doc(db, 'meta', 'league'), s => {
@@ -110,6 +113,7 @@ async function startListeners() {
   watch(fs.doc(db, 'meta', 'recruiting'), s => { D.recruiting = s.exists() ? s.data() : { class: '', rows: [] }; }, 'recruiting');
   let snap = null;
   try { const r = await fetch('season.json?t=' + Math.floor(Date.now() / 60000), { cache: 'no-cache' }); if (r.ok) snap = await r.json(); } catch (e) { /* not built yet */ }
+  DIAG.snapT = snap ? snap.T : 0; DIAG.snapSeason = snap ? snap.season : 0; DIAG.snapCounts = snap ? Object.fromEntries(SNAP.map(c => [c, (snap[c] || []).length])) : {};
   if (snap && snap.season === season && snap.T) {
     const since = fs.Timestamp.fromMillis(snap.T);
     SNAP.forEach(c => {

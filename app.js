@@ -2,10 +2,10 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, batch, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout, PUSH_PREFS, pushDefaults, pushLocal, pushSupported, pushEnable, pushPrefs, pushDisable,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, raceSim, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, wkName, gWeek, champOpen, titleSet, storylines, seasonStorylines, RELIEF, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory, legLabel
+  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, wkName, gWeek, champOpen, titleSet, DIAG, storylines, seasonStorylines, RELIEF, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory, legLabel
 , playbookOf, pbSeason, pbText
 , AWARD_DEFS, awardGames, awardGameLabel, awardCoaches
-} from './core.js?v=90';
+} from './core.js?v=91';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -342,6 +342,18 @@ const mvHtml = m => m > 0 ? `<span class="up">+${m}</span>` : m < 0 ? `<span cla
 
 /* ---------- pages ---------- */
 const PAGES = {
+  // Hidden page for troubleshooting data loading: #debug
+  debug() {
+    const L = D.league, s = L.season, c = D.games.find(g => g.season === s && g.type === 'ccg');
+    const ver = [...document.scripts].map(x => x.src).filter(x => /app\.js/.test(x)).join(' ');
+    const row = (k, v) => `<tr><td class="muted">${esc(k)}</td><td class="wrap">${esc(String(v))}</td></tr>`;
+    return `<h2>Debug</h2><div class="card"><table>${row('Script', ver || '?')}${row('Cache', DIAG.cache)}${row('Signed in', auth.profile ? auth.profile.name + ' (' + (auth.profile.role || 'coach') + ')' : 'no')}
+      ${row('League', `season ${s} · week ${L.week} · ${L.phase} · finalWeek ${L.finalWeek}`)}${row('Futures open', JSON.stringify(L.futures && { s: L.futures.season, open: L.futures.open }))}
+      ${row('season.json', `season ${DIAG.snapSeason} · T ${DIAG.snapT ? new Date(DIAG.snapT).toLocaleString() : '-'} · games ${DIAG.snapCounts.games ?? '-'}`)}
+      ${row('Games this season', D.games.filter(g => g.season === s).length)}${row('Title game', c ? `${c.id} · wk ${c.week} · ${c.away} @ ${c.home}` : 'NOT LOADED')}
+      ${Object.entries(DIAG.live).map(([k, v]) => row('Live ' + k, `${v.n} changed · ${v.cache ? 'from cache' : 'server'} · ${v.ids.join(', ')}`)).join('')}
+      ${row('Errors', DIAG.errors.join(' | ') || 'none')}</table></div>`;
+  },
   home() {
     const L = D.league, s = S(), wk = L.week;
     const games = D.games.filter(g => g.season === s && g.week === wk).sort((a, b) => (isUserTeam(team(b.home)) + isUserTeam(team(b.away))) - (isUserTeam(team(a.home)) + isUserTeam(team(a.away))));
