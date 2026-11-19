@@ -3,8 +3,8 @@ import {
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum, divOf, oneConference, playbookOf, pbSeason, pbOpen, pbLocked
 , loadAI, kickoffOf, fmtKick
-, reliefPatch, AWARD_DEFS, tallyAwards, awardGames, awardGameLabel, awardCoaches, sameName
-} from './core.js?v=85';
+, reliefPatch, postEarlyCcg, AWARD_DEFS, tallyAwards, awardGames, awardGameLabel, awardCoaches, sameName
+} from './core.js?v=86';
 // Broadcast scouting nudges the ratings a little, so load it before any lines get posted from here.
 loadAI();
 import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
@@ -529,6 +529,10 @@ function readReview() {
 }
 
 /* ---------- actions ---------- */
+// The title game goes up as soon as both division winners are known (see earlyCcg in core).
+async function earlyCcgMsg() {
+  try { const g = await postEarlyCcg(); return g ? `🏆 Title game set: ${team(g.away).name} vs ${team(g.home).name} — posted with lines for championship week, betting open now.` : ''; } catch (e) { console.warn(e); return ''; }
+}
 // Relief top-ups at an advance that opens betting. Waits a moment so the bets just graded are in D.wagers.
 async function giveRelief() {
   await new Promise(r => setTimeout(r, 400));
@@ -571,23 +575,27 @@ const ACT = {
     const ops = draftScoreOps(); await batch(ops); await batch(settleOps(ops.map(o => o.id)));
     const desk = dr.desk.on && dr.desk.text ? { show: true, text: dr.desk.text } : { show: false, text: '' };
     if (dr.poll && pollChanged(dr.poll, W)) await put('meta', 'league', { polls: { [pollKey(W + 1)]: dr.poll } });
+    const early = last && D.games.find(g => g.season === lg.season && g.type === 'ccg');
     if (last) {
-      await put('meta', 'league', { week: W + 1, advancedAt: Date.now(), advExt: 0, phase: PHASES.CCG, bettingOpen: false, desk, futures: { ...(lg.futures || {}), open: false }, winTotals: { season: 0, odds: {} }, awards: { open: false, season: lg.season, categories: lg.awards?.season === lg.season ? (lg.awards.categories || []) : [] } });
+      // If the title game was posted early, championship week goes live now: betting stays open and voting opens.
+      await put('meta', 'league', { week: W + 1, advancedAt: Date.now(), advExt: 0, phase: PHASES.CCG, bettingOpen: !!early, desk, futures: { ...(lg.futures || {}), open: false }, winTotals: { season: 0, odds: {} }, awards: early ? { open: true, season: lg.season, categories: [], results: [] } : { open: false, season: lg.season, categories: lg.awards?.season === lg.season ? (lg.awards.categories || []) : [] } });
       await batch(settleOps([]));
+      if (early) { await batch(lineOps(W + 1)); dr.relief = await giveRelief(); }
     } else {
       const gotwG = gotwTally(lg.season, W + 1, { includeOpen: true }).game;
       await put('meta', 'league', { week: W + 1, advancedAt: Date.now(), advExt: 0, bettingOpen: true, desk, gotw: { season: lg.season, week: W + 1, gameId: gotwG ? gotwG.id : '' } });
       await batch(lineOps(W + 1));
       dr.relief = await giveRelief();
+      dr.ccg = await earlyCcgMsg();
     }
     const settled = D.wagers.filter(w => w.settledAt && Date.now() - w.settledAt < 60000).length;
     ST.draft = null; ST.step = 1; ST.desk = 'no';
     ST.done = `<div class="card banner"><h2>✅ ${last ? 'Regular season complete' : `Week ${W + 1} is live`}</h2><ul class="clean">
       <li>${ops.length} result${ops.length === 1 ? '' : 's'} saved; ${settled} bet${settled === 1 ? '' : 's'} graded and paid.</li>
-      ${last ? '<li>Win totals settled and League Champion futures closed.</li>' : `<li>Lines posted for every upcoming game; betting is open for Week ${W + 1}.</li><li>Standings, odds, power rankings and storylines are updated.</li>`}
+      ${last ? `<li>Win totals settled and League Champion futures closed.</li>${early ? '<li>🏆 Championship week is live: the title game was already posted, betting stays open and awards voting is open.</li>' : ''}` : `<li>Lines posted for every upcoming game; betting is open for Week ${W + 1}.</li><li>Standings, odds, power rankings and storylines are updated.</li>`}${dr.ccg ? `<li>${esc(dr.ccg)}</li>` : ''}
       ${dr.poll && pollChanged(dr.poll, W) ? `<li>Top 25 updated (${dr.poll.length} ranked teams).</li>` : '<li>Top 25 carried over.</li>'}
       <li>${desk.show ? "Commissioner's Desk note posted." : "Commissioner's Desk cleared."}</li>${dr.relief ? `<li>🪙 ${esc(dr.relief)}</li>` : ''}</ul>
-      <div class="row" style="margin-top:10px"><a class="btn" style="padding:8px 14px;border-radius:8px" href="index.html" target="_blank">View the site</a><button class="gold" data-act="wizDone">${last ? 'Set up the championship →' : `Start Week ${W + 1} →`}</button></div></div>`;
+      <div class="row" style="margin-top:10px"><a class="btn" style="padding:8px 14px;border-radius:8px" href="index.html" target="_blank">View the site</a><button class="gold" data-act="wizDone">${last ? (early ? 'Go to championship week →' : 'Set up the championship →') : `Start Week ${W + 1} →`}</button></div></div>`;
     render(); window.scrollTo(0, 0);
   },
   wizDone() { ST.done = null; ST.step = 1; render(); },
@@ -599,16 +607,18 @@ const ACT = {
     await saveScoresAndSettle(games);
     const desk = deskValue();
     if (W >= lg.finalWeek) {
+      const early = D.games.find(g => g.season === lg.season && g.type === 'ccg');
       if (poll && pollChanged(poll, W)) await put('meta', 'league', { polls: { [pollKey(W + 1)]: poll } });
-      await put('meta', 'league', { week: W + 1, advancedAt: Date.now(), advExt: 0, phase: PHASES.CCG, bettingOpen: false, desk, futures: { ...(lg.futures || {}), open: false }, winTotals: { season: 0, odds: {} }, awards: { open: false, season: lg.season, categories: lg.awards?.season === lg.season ? (lg.awards.categories || []) : [] } });
+      await put('meta', 'league', { week: W + 1, advancedAt: Date.now(), advExt: 0, phase: PHASES.CCG, bettingOpen: !!early, desk, futures: { ...(lg.futures || {}), open: false }, winTotals: { season: 0, odds: {} }, awards: early ? { open: true, season: lg.season, categories: [], results: [] } : { open: false, season: lg.season, categories: lg.awards?.season === lg.season ? (lg.awards.categories || []) : [] } });
       await batch(settleOps([]));
-      ST.desk = 'no'; flash('Regular season complete. Win-total bets are settled. Set up the championship game and awards ballot below.');
+      if (early) { await batch(lineOps(W + 1)); const rel = await giveRelief(); ST.desk = 'no'; flash('Regular season complete. Championship week is live: the title game was already posted, betting stays open and awards voting is open.' + (rel ? ' ' + rel : '')); }
+      else { ST.desk = 'no'; flash('Regular season complete. Win-total bets are settled. Set up the championship game and awards ballot below.'); }
     } else {
       if (poll && pollChanged(poll, W)) await put('meta', 'league', { polls: { [pollKey(W + 1)]: poll } });
       await put('meta', 'league', { week: W + 1, advancedAt: Date.now(), advExt: 0, bettingOpen: true, desk });
       await batch(lineOps(W + 1));
-      const rel = await giveRelief();
-      ST.desk = 'no'; flash(`Advanced to Week ${W + 1}. Lines posted, betting open, odds and power rankings updated.${rel ? ' ' + rel : ''}`);
+      const rel = await giveRelief(), cc = await earlyCcgMsg();
+      ST.desk = 'no'; flash(`Advanced to Week ${W + 1}. Lines posted, betting open, odds and power rankings updated.${rel ? ' ' + rel : ''}${cc ? ' ' + cc : ''}`);
     }
   },
   async openCcg() {

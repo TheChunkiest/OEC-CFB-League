@@ -1027,6 +1027,7 @@ export async function ensureFutures() {
   const keyOps = D.games.filter(g => g.season === L.season && !played(g) && g.lines && g.lines.spread != null && !g.lines.o)
     .map(g => ({ op: 'set', col: 'games', id: g.id, data: { lines: lineKeys(g.lines) } }));
   if (keyOps.length) await batch(keyOps);
+  try { await postEarlyCcg(); } catch (e) { console.warn('early title game', e); }
   if (!missingLines && (L.phase !== PHASES.REG || (futuresPosted() && winsPosted()))) return !!outOps.length;
   await batch(boardOps(L.week)); return true;
 }
@@ -1692,4 +1693,28 @@ export function reliefPatch() {
     u[x.id] = { amt: cur.amt + amt, n: cur.n + 1 }; given.push(x.name);
   });
   return given.length ? { patch: { relief: { season: s, u } }, given } : null;
+}
+
+// Title game posted early: once every division winner has clinched (or the top two, with one division), the league
+// title game goes up right away, a week or more ahead, with lines, so it can be bet before championship week.
+// Neutral site; the better overall team is listed as "home". Returns the game doc to write, or null.
+export function earlyCcg() {
+  const L = D.league, s = L.season;
+  if (L.phase !== PHASES.REG || D.games.some(g => g.season === s && g.type === 'ccg')) return null;
+  const divs = divisions(s), K = divs.length > 1 ? 1 : 2;
+  const sims = (divs.length > 1 ? divs : [null]).map(d => raceSim(d, {}, s));
+  if (sims.some(r => !r || r.teams.filter(t => t.status === 'clinched').length !== K)) return null;
+  const champs = sims.flatMap(r => r.teams.filter(t => t.status === 'clinched').map(t => t.id));
+  if (champs.length !== 2) return null;
+  const [home, away] = orderGroup(champs, s);
+  const g = { id: `g${s}_ccg`, season: s, week: (L.finalWeek || 13) + 1, type: 'ccg', home, away, neutral: true, homeScore: null, awayScore: null, early: true };
+  const l = freshLine(g); if (l) { g.lines = { ...l, ...lineKeys(l) }; const h = histPoint(g, l); if (h) g.hist = h; }
+  return g;
+}
+export async function postEarlyCcg() {
+  if (DEMO ? false : !isCommish()) return null;
+  const g = earlyCcg(); if (!g) return null;
+  const { id, ...data } = g;
+  await batch([{ op: 'set', col: 'games', id, data }]);
+  return g;
 }
