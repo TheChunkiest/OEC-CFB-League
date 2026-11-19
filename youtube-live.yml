@@ -35,6 +35,12 @@ jobs:
           HANDLE = "@originalentertainingcrackers"
           key = (os.environ.get("YT_API_KEY") or "").strip()
 
+          # Only league games count. Other streams on the channel (GTA, other games) are ignored: no pop-up on the
+          # site and no phone notification. A league stream's title has a matchup ("PUR @ UAB", "IU vs PUR") or
+          # league words (CFB, College Football, "S3, W5", Bowl, Title game). Put "OEC" + "CFB" in any title to force it.
+          LEAGUE = re.compile(r"\s@\s|\bvs\.?\s|\bCFB\b|college football|\bS\d{1,2}\s*,?\s*W(?:k|eek)?\s*\d{1,2}\b|\bbowl\b|\btitle game\b|league title|championship", re.I)
+          def league_stream(title): return bool(LEAGUE.search(title or ""))
+
           def via_api():
               def api(path, **q):
                   q["key"] = key
@@ -47,6 +53,9 @@ jobs:
               vids = api("videos", part="snippet", id=",".join(ids))["items"] if ids else []
               # Every stream that's live right now (two games can stream at once), oldest first.
               on = sorted([v for v in vids if v["snippet"].get("liveBroadcastContent") == "live"], key=lambda v: v["snippet"].get("publishedAt", ""))
+              for v in on:
+                  if not league_stream(v["snippet"]["title"]): print("Ignoring non-league stream:", v["snippet"]["title"])
+              on = [v for v in on if league_stream(v["snippet"]["title"])]
               if not on:
                   return {"live": False}
               streams = [{"videoId": v["id"], "url": "https://www.youtube.com/watch?v=" + v["id"], "title": v["snippet"]["title"]} for v in on]
@@ -66,6 +75,8 @@ jobs:
               title = re.search(r'<meta name="title" content="([^"]*)"', html)
               one = {"videoId": vid.group(1), "url": "https://www.youtube.com/watch?v=" + vid.group(1),
                      "title": (title.group(1) if title else "Live on YouTube").replace("&amp;", "&").replace("&#39;", "'").replace("&quot;", '"')}
+              if not league_stream(one["title"]):
+                  print("Ignoring non-league stream:", one["title"]); return {"live": False}
               return {"live": True, **one, "streams": [one]}
 
           import subprocess
