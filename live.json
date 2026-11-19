@@ -1,13 +1,13 @@
 {
  "live": true,
- "videoId": "OkBtvgGP_44",
- "url": "https://www.youtube.com/watch?v=OkBtvgGP_44",
- "title": "UCF at BC",
+ "videoId": "KpqUcx8Jmv4",
+ "url": "https://www.youtube.com/watch?v=KpqUcx8Jmv4",
+ "title": "OEC CFB League S3 w13 Liberty vs West Virginia",
  "streams": [
   {
-   "videoId": "OkBtvgGP_44",
-   "url": "https://www.youtube.com/watch?v=OkBtvgGP_44",
-   "title": "UCF at BC"
+   "videoId": "KpqUcx8Jmv4",
+   "url": "https://www.youtube.com/watch?v=KpqUcx8Jmv4",
+   "title": "OEC CFB League S3 w13 Liberty vs West Virginia"
   }
  ],
  "notified": "OkBtvgGP_44",
@@ -19,5 +19,5 @@
   "mkzu1AxNdmE",
   "OkBtvgGP_44"
  ],
- "checkedAt": 1795047329394
+ "checkedAt": 1795050803932
 }
