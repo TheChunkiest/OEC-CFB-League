@@ -1,5 +1,15 @@
 {
- "live": false,
+ "live": true,
+ "videoId": "ZIiNV2zaP1I",
+ "url": "https://www.youtube.com/watch?v=ZIiNV2zaP1I",
+ "title": "GTA 6 NIGHT 1",
+ "streams": [
+  {
+   "videoId": "ZIiNV2zaP1I",
+   "url": "https://www.youtube.com/watch?v=ZIiNV2zaP1I",
+   "title": "GTA 6 NIGHT 1"
+  }
+ ],
  "notified": "KpqUcx8Jmv4",
  "notifiedIds": [
   "qwkTlJND-FM",
@@ -9,5 +19,6 @@
   "mkzu1AxNdmE",
   "OkBtvgGP_44",
   "KpqUcx8Jmv4"
- ]
+ ],
+ "checkedAt": 1795066060178
 }
