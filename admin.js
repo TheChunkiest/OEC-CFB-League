@@ -4,7 +4,7 @@ import {
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum, divOf, oneConference, playbookOf, pbSeason, pbOpen, pbLocked
 , loadAI, kickoffOf, fmtKick
 , reliefPatch, postEarlyCcg, earlyCcg, raceSim, AWARD_DEFS, tallyAwards, awardGames, awardGameLabel, awardCoaches, sameName
-} from './core.js?v=94';
+} from './core.js?v=95';
 // Broadcast scouting nudges the ratings a little, so load it before any lines get posted from here.
 loadAI();
 import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
@@ -101,7 +101,9 @@ function scoreRows(games, dr) {
     const ko = kickoffOf(g), dl = x => { const d = new Date(x - new Date(x).getTimezoneOffset() * 6e4); return d.toISOString().slice(0, 16); };
     const kick = played(g) ? '' : `<div class="kickrow"><span class="muted small">🕗 Kickoff</span><input type="datetime-local" data-kick="${esc(g.id)}" value="${ko ? dl(ko) : ''}">
       <button class="sm" data-act="setKick" data-g="${esc(g.id)}">${ko ? 'Update' : 'Set'}</button>${ko ? `<button class="sm ghost" data-act="clearKick" data-g="${esc(g.id)}">Clear</button>` : ''}</div>`;
-    return `<div class="card scorecard">${row('away', av)}${row('home', hv)}${kick}
+    // Per-game bet lock: e.g. lock a game once it kicks off while the rest of the board (the title game) stays open.
+    const lock = played(g) ? '' : `<div class="kickrow"><span class="muted small">${g.locked ? '🔒 Bets on this game are locked' : '🎟️ Bets on this game are open'}</span><button class="sm ${g.locked ? '' : 'ghost'}" data-act="gameLock" data-g="${esc(g.id)}">${g.locked ? 'Unlock' : 'Lock bets'}</button></div>`;
+    return `<div class="card scorecard">${row('away', av)}${row('home', hv)}${kick}${lock}
       <div class="row spread" style="margin-top:6px"><span class="meta" style="margin:0">${g.week !== L().week ? `<b class="gstat">Week ${g.week}</b> · ` : ''}${l ? `${g.lines ? 'Line' : 'Projected'}: ${esc(team(g.home).abbr)} ${fmtLine(l.spread)} · O/U ${l.total}` : ''} ${g.type && g.type !== 'reg' ? '· <span class="tag gold">' + esc(g.type.toUpperCase()) + '</span>' : ''}</span>
       <select data-ff="${esc(g.id)}" style="font-size:13px;padding:4px 8px"><option value="">Played</option><option value="away" ${ff === 'away' ? 'selected' : ''}>Away forfeit win</option><option value="home" ${ff === 'home' ? 'selected' : ''}>Home forfeit win</option></select></div></div>`;
   }).join('');
@@ -172,7 +174,8 @@ function wizard() {
   if (ST.done) return ST.done;
   if (ST.step === 1) {
     const g = wizGames(), cur = g.filter(x => x.week === W), late = g.filter(x => x.week < W);
-    return `${stepper(1)}<div class="card"><h2>Week ${W} results</h2><p class="muted small" style="margin:0">Enter every score (or mark a forfeit). Use <b>Save scores now</b> to lock finished user games mid-week. Betting is <b>${lg.bettingOpen ? 'OPEN' : 'LOCKED'}</b> <button class="sm ghost" data-act="toggleBet">${lg.bettingOpen ? 'Lock betting' : 'Unlock'}</button></p></div>
+    return `${stepper(1)}<div class="card"><h2>Week ${W} results</h2><p class="muted small" style="margin:0">Enter every score (or mark a forfeit). Use <b>Save scores now</b> to lock finished user games mid-week. Betting is <b>${lg.bettingOpen ? 'OPEN' : 'LOCKED'}</b> <button class="sm ghost" data-act="toggleBet">${lg.bettingOpen ? 'Lock all betting' : 'Unlock'}</button>${lg.bettingOpen ? ` <button class="sm" data-act="lockWeek">Lock Week ${W} games only</button>` : ''}</p>
+      <p class="muted small" style="margin:6px 0 0">"Lock all" stops every bet (including the League Title and future weeks). "Week ${W} only" locks this week's games and leaves the rest open; you can also lock a single game on its card below.</p></div>
       ${late.length ? `<div class="notice">⚠️ ${late.length} earlier game${late.length === 1 ? ' is' : 's are'} still missing a result. Enter ${late.length === 1 ? 'it' : 'them'} here too.</div>${scoreRows(late, dr)}` : ''}
       ${cur.length ? scoreRows(cur, dr) : '<div class="card empty">No games scheduled this week. Add them on Scores &amp; Schedule, or continue.</div>'}
       <div class="card row spread"><button class="ghost" data-act="wizSave">Save scores now</button><button data-act="wizNext">Next: set up ${nextLbl} →</button></div>`;
@@ -552,6 +555,9 @@ async function giveRelief() {
   return `${R.given.join(', ')} ${R.given.length === 1 ? 'was' : 'were'} out of Crackers and got 25 relief Crackers.`;
 }
 const ACT = {
+  async gameLock(t) { const g = D.games.find(x => x.id === t.dataset.g); if (!g) return; await put('games', g.id, { locked: !g.locked }); flash(`${team(g.away).abbr} @ ${team(g.home).abbr}: bets ${g.locked ? 'locked' : 'unlocked'}.`); },
+  async lockWeek() { const lg = L(), gs = D.games.filter(g => g.season === lg.season && g.week === lg.week && !played(g) && !g.locked); if (!gs.length) return flash('Every game this week is already locked or final.');
+    await batch(gs.map(g => ({ op: 'set', col: 'games', id: g.id, data: { locked: true } }))); flash(`Locked bets on ${gs.length} Week ${lg.week} game${gs.length === 1 ? '' : 's'}. Other weeks stay open.`); },
   async toggleBet() { await put('meta', 'league', { bettingOpen: !L().bettingOpen }); flash('Betting ' + (L().bettingOpen ? 'opened' : 'locked') + '.'); },
   async saveScores() {
     const games = D.games.filter(g => g.season === L().season && g.week === L().week);

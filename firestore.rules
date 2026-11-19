@@ -63,7 +63,7 @@ service cloud.firestore {
     function validGameWager(d, t, L) {
       let g = gameOf(d.gameId);
       let ln = g.get('lines', {});
-      return g.home != t && g.away != t && g.season == L.season && g.week >= L.week && g.get('homeScore', null) == null
+      return g.home != t && g.away != t && g.season == L.season && g.week >= L.week && g.get('homeScore', null) == null && g.get('locked', false) != true
         && ('o' in ln ? fastGame(d, ln) : slowGame(d, ln));
     }
     function validFuture(d, L, t) {

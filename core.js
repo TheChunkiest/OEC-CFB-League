@@ -903,6 +903,8 @@ export const CASHOUT_SHARE = 0.75;
 export function cashOutValue(w) {
   if (!w || w.market !== 'parlay' || w.status !== 'open' || !D.league.bettingOpen) return null;   // no cashing out while betting is locked
   const legs = w.legs || [], won = legs.filter(l => l.result === 'won');
+  // No cashing out while a remaining leg's game is locked (in progress).
+  if (legs.some(l => (!l.result || l.result === 'open') && l.gameId && (D.games.find(g => g.id === l.gameId) || {}).locked)) return null;
   if (legs.some(l => l.result === 'lost') || won.length * 2 <= legs.length || !legs.some(l => !l.result || l.result === 'open')) return null;
   const profit = Math.floor(w.stake * (won.reduce((p, l) => p * decOf(l.odds), 1) - 1) * CASHOUT_SHARE);
   return { profit, total: w.stake + profit, won: won.length, legs: legs.length };

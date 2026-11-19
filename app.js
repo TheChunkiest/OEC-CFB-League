@@ -5,7 +5,7 @@ import {
   gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, wkName, gWeek, champOpen, titleSet, DIAG, storylines, seasonStorylines, RELIEF, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory, legLabel
 , playbookOf, pbSeason, pbText
 , AWARD_DEFS, awardGames, awardGameLabel, awardCoaches
-} from './core.js?v=94';
+} from './core.js?v=95';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -427,9 +427,9 @@ const PAGES = {
 
   betting() {
     const L = D.league, s = S(), me = auth.profile;
-    const bwks = [...new Set(D.games.filter(g => g.season === s && g.week >= L.week && !played(g)).map(g => g.week))].sort((a, b) => a - b);
+    const bwks = [...new Set(D.games.filter(g => g.season === s && g.week >= L.week && !played(g) && !g.locked).map(g => g.week))].sort((a, b) => a - b);
     const bw = bwks.includes(UI.betWeek) ? UI.betWeek : bwks[0];
-    const games = D.games.filter(g => g.season === s && g.week === bw && !played(g));
+    const games = D.games.filter(g => g.season === s && g.week === bw && !played(g) && !g.locked);
     const open = L.bettingOpen && L.phase !== PHASES.PRE && L.phase !== PHASES.POST;
     const bk = me ? bankroll(me.id) : null;
     let html = `<div class="sbhead"><h2>Sportsbook · ${esc(weekLabel())}</h2>${bk ? `<div class="bkmini"><div><span>Balance</span><b>${bk.balance.toLocaleString()}</b></div><div class="hide-sm"><span>In play</span><b>${bk.open}</b></div><div><span>Record</span><b>${bk.w}-${bk.l}${bk.p ? '-' + bk.p : ''}</b></div><div><span>Net</span><b class="${bk.net >= 0 ? 'win' : 'loss'}">${bk.net >= 0 ? '+' : ''}${bk.net}</b></div></div>` : ''}</div>`;
@@ -1381,7 +1381,7 @@ async function placeBet() {
   if (UI.slip.parlay) {
     if (!L.bettingOpen) return $('#smsg').textContent = 'Betting is locked.';
     const bad = UI.legs.find(l => { if (l.market === 'future') return !(champOpen() && futuresPosted());
-      if (l.market === 'wins') return !(futuresOpen() && winsPosted()); const g = D.games.find(x => x.id === l.gameId); return !g || played(g) || g.week < L.week || g.season !== L.season; });
+      if (l.market === 'wins') return !(futuresOpen() && winsPosted()); const g = D.games.find(x => x.id === l.gameId); return !g || played(g) || g.locked || g.week < L.week || g.season !== L.season; });
     if (bad || UI.legs.length < 2) return $('#smsg').textContent = 'One of these games is locked. Remove it and try again.';
     try {
       const legs = UI.legs.map(l => ({ gameId: l.gameId, market: l.market, pick: l.pick, line: l.line, odds: l.odds, ...(l.team ? { team: l.team } : {}) }));
@@ -1408,7 +1408,7 @@ async function placeBet() {
     } catch (e) { await lineMoved(e); }
     return;
   }
-  if (!L.bettingOpen || played(g) || g.week < L.week || g.season !== L.season) return $('#smsg').textContent = 'This game is locked.';
+  if (!L.bettingOpen || played(g) || g.locked || g.week < L.week || g.season !== L.season) return $('#smsg').textContent = 'This game is locked.';
   try {
     await placeWager({ uid: me.id, coach: me.name, season: L.season, week: L.week, gameId: g.id, market, pick, line, odds, stake, status: 'open', payout: 0, ts: Date.now() });
     await reload(); showPlacedSlip();
