@@ -1027,13 +1027,14 @@ export async function ensureFutures() {
   const L = D.league;
   if (DEMO || !isCommish() || (L.phase !== PHASES.REG && L.phase !== PHASES.CCG)) return false;
   if (L.phase === PHASES.REG && !(L.gotw && L.gotw.season === L.season && L.gotw.week === L.week)) await put('meta', 'league', { gotw: { season: L.season, week: L.week, gameId: gotwTally(L.season, L.week).game?.id || '' } });
+  // Title game first, on its own, so nothing below can hold it up.
+  try { await postEarlyCcg(); } catch (e) { console.warn('early title game', e); }
   const missingLines = D.games.some(g => g.season === L.season && g.week >= L.week && !played(g) && !(g.lines && g.lines.spread != null && g.lines.spreadOddsHome != null));
   const outOps = titleOutOps(); if (outOps.length) await batch(outOps.concat(parlayOps()));
   // Lines posted before the quick-check maps existed: add them (same prices and lines, nothing re-priced).
   const keyOps = D.games.filter(g => g.season === L.season && !played(g) && g.lines && g.lines.spread != null && !g.lines.o)
     .map(g => ({ op: 'set', col: 'games', id: g.id, data: { lines: lineKeys(g.lines) } }));
   if (keyOps.length) await batch(keyOps);
-  try { await postEarlyCcg(); } catch (e) { console.warn('early title game', e); }
   // Title game already set (posted before this update): make sure League Champion bets are closed in the database too.
   if (titleSet(L.season) && L.futures && L.futures.open) await batch([{ op: 'set', col: 'meta', id: 'league', data: { futures: { ...L.futures, open: false } } }]);
   if (!missingLines && (L.phase !== PHASES.REG || (futuresPosted() && winsPosted()))) return !!outOps.length;

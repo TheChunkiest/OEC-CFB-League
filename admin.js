@@ -3,8 +3,8 @@ import {
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum, divOf, oneConference, playbookOf, pbSeason, pbOpen, pbLocked
 , loadAI, kickoffOf, fmtKick
-, reliefPatch, postEarlyCcg, AWARD_DEFS, tallyAwards, awardGames, awardGameLabel, awardCoaches, sameName
-} from './core.js?v=88';
+, reliefPatch, postEarlyCcg, earlyCcg, raceSim, AWARD_DEFS, tallyAwards, awardGames, awardGameLabel, awardCoaches, sameName
+} from './core.js?v=89';
 // Broadcast scouting nudges the ratings a little, so load it before any lines get posted from here.
 loadAI();
 import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
@@ -289,7 +289,7 @@ const views = {
     const lg = L(), s = lg.season;
     if (!D.teams.length) return `<div class="card"><h2>Welcome, Commissioner</h2><p>The database is empty. Load the league history and the current season (Seasons 1–3 through Week 9) from <code>league-data.json</code>. This adds all teams, coaches, divisions, results, champions and awards, then posts Week 10 lines.</p><button class="gold" data-act="importSeed">Load league data</button></div>`;
     if (lg.phase === PHASES.PRE) return `<div class="card"><h2>Offseason</h2><p>The ${s} season is wrapped up${D.history.find(h => h.season === s) ? ' and in the history books' : ''}. Fill out the <b>New Season</b> form to set up next season: coaches, team ratings and the schedule. Publishing it opens Week 0 betting and posts preseason odds.</p><button data-tab="preseason">Open New Season form →</button></div>`;
-    if (lg.phase === PHASES.REG || ST.done) return wizard();
+    if (lg.phase === PHASES.REG || ST.done) return (lg.phase === PHASES.REG && !ST.done ? titleCard() : '') + wizard();
     if (lg.phase === PHASES.CCG) {
       const ccg = D.games.find(g => g.season === s && g.type === 'ccg');
       if (!ccg) {
@@ -533,6 +533,17 @@ function readReview() {
 async function earlyCcgMsg() {
   try { const g = await postEarlyCcg(); return g ? `🏆 Title game set: ${team(g.away).name} vs ${team(g.home).name} — posted with lines for championship week, betting open now.` : ''; } catch (e) { console.warn(e); return ''; }
 }
+// This Week (regular season): where the League Title game stands. It posts itself once both division winners clinch;
+// the button covers the case where that hasn't happened yet on this device.
+function titleCard() {
+  const lg = L(), s = lg.season, c = D.games.find(g => g.season === s && g.type === 'ccg');
+  const nm = id => esc(team(id).name);
+  if (c) return `<div class="card"><b>🏆 League Title game is posted:</b> ${nm(c.away)} vs ${nm(c.home)}. Betting on it is open; League Champion futures are closed.</div>`;
+  const e = earlyCcg();
+  if (e) return `<div class="card"><b>🏆 Both division winners have clinched:</b> ${nm(e.away)} vs ${nm(e.home)}. <button class="gold sm" data-act="postEarly">Post the League Title game now</button></div>`;
+  const alive = divisions(s).map(d => { const r = raceSim(d, {}, s); if (!r) return ''; const cl = r.teams.find(t => t.status === 'clinched'); return `${esc(d)}: ${cl ? nm(cl.id) + ' (clinched)' : r.teams.filter(t => t.status === 'alive').map(t => esc(team(t.id).abbr || team(t.id).name)).join(' or ') + ' still alive'}`; }).filter(Boolean);
+  return `<div class="card"><span class="muted small">🏆 The League Title game posts itself (with betting open) as soon as both division winners clinch. ${alive.join(' · ')}</span></div>`;
+}
 // Relief top-ups at an advance that opens betting. Waits a moment so the bets just graded are in D.wagers.
 async function giveRelief() {
   await new Promise(r => setTimeout(r, 400));
@@ -597,6 +608,11 @@ const ACT = {
       <li>${desk.show ? "Commissioner's Desk note posted." : "Commissioner's Desk cleared."}</li>${dr.relief ? `<li>🪙 ${esc(dr.relief)}</li>` : ''}</ul>
       <div class="row" style="margin-top:10px"><a class="btn" style="padding:8px 14px;border-radius:8px" href="index.html" target="_blank">View the site</a><button class="gold" data-act="wizDone">${last ? (early ? 'Go to championship week →' : 'Set up the championship →') : `Start Week ${W + 1} →`}</button></div></div>`;
     render(); window.scrollTo(0, 0);
+  },
+  async postEarly() {
+    if (!earlyCcg()) return flash(D.games.some(g => g.season === L().season && g.type === 'ccg') ? 'The League Title game is already posted.' : 'Not posted: both division winners have to be clinched first.');
+    try { const g = await postEarlyCcg(); flash(g ? `🏆 Posted: ${team(g.away).name} vs ${team(g.home).name}. Betting on it is open now.` : 'Not posted.'); }
+    catch (e) { flash('Could not post the title game: ' + (e.message || e)); }
   },
   wizDone() { ST.done = null; ST.step = 1; render(); },
   async advanceWeek() {

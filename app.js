@@ -5,7 +5,7 @@ import {
   gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, wkName, gWeek, champOpen, titleSet, storylines, seasonStorylines, RELIEF, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory, legLabel
 , playbookOf, pbSeason, pbText
 , AWARD_DEFS, awardGames, awardGameLabel, awardCoaches
-} from './core.js?v=88';
+} from './core.js?v=89';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -859,9 +859,25 @@ function alreadyHolding(sel) {
   return me && D.wagers.some(w => w.uid === me.id && w.status === 'open' && w.market !== 'parlay' && selKey(w) === selKey(sel));
 }
 // Live updates (no polling): refresh the Most Popular Bet card when bets change, and the live pop-up when the league doc changes.
+// When league data changes underneath an open page (a score saved, the title game posted, an advance), redraw the
+// page so nobody has to reload. Waits a moment so a burst of updates redraws once, and never interrupts typing,
+// an open pop-up or a bet slip in progress.
+let _redraw = null;
+const quietRedraw = () => {
+  const a = document.activeElement;
+  if (a && /^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)) return false;
+  if ($('#modal') && $('#modal').innerHTML.trim()) return false;
+  if (UI.legs && UI.legs.length) return false;
+  const y = scrollY; route(); scrollTo(0, y); return true;
+};
 onLiveChange(what => {
   if (what === 'wagers') { const el = document.getElementById('popular'); if (el) el.innerHTML = popularCard(); }
   if (what === 'league') checkLive();
+  if (['games', 'league', 'teams', 'history', 'gotw'].includes(what)) {
+    clearTimeout(_redraw);
+    const tryIt = (n) => { _redraw = setTimeout(() => { if (!quietRedraw() && n < 20) tryIt(n + 1); }, n ? 3000 : 800); };
+    tryIt(0);
+  }
 });
 
 /* ---------- Shareable bet slip image ---------- */
