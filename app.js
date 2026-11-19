@@ -2,10 +2,10 @@ import {
   $, $$, esc, D, DEMO, PHASES, START_CREDITS, loadAll, put, del, batch, newId, loadBallots, auth, isCommish, myTeam, watchAuth, login, signup, logout, PUSH_PREFS, pushDefaults, pushLocal, pushSupported, pushEnable, pushPrefs, pushDisable,
   resetPassword, refreshProfile, team, teamColor, isUserTeam, leagueTeams, userTeams, played, seasonGames, coachOf, slug, fmtOdds, fmtLine,
   pctStr, weekLabel, chip, lineOf, records, streak, rec, orderGroup, raceSim, divisions, simulate, oddsHistory, currentPower, bankroll, wagerLabel,
-  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, wkName, gWeek, storylines, seasonStorylines, RELIEF, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory, legLabel
+  gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, wkName, gWeek, champOpen, titleSet, storylines, seasonStorylines, RELIEF, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory, legLabel
 , playbookOf, pbSeason, pbText
 , AWARD_DEFS, awardGames, awardGameLabel, awardCoaches
-} from './core.js?v=87';
+} from './core.js?v=88';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -704,14 +704,14 @@ function futuresSection() {
   const board = futuresBoard();
   let h = `<h2>Season ${n} League Champion</h2>`;
   if (!board.length) return h + `<div class="card empty">Futures are open during the regular season. ${L.phase === PHASES.PRE ? 'They open when the season is published.' : 'Betting has closed for this season; open bets settle when the championship is decided.'}</div>`;
-  const open = futuresOpen() && futuresPosted();
+  const open = champOpen() && futuresPosted(), set = titleSet();
   const live = board.filter(r => r.odds != null), dead = board.filter(r => r.odds == null);
   const deadLine = (list, label) => list.length ? `<div class="offboard"><span>${label}</span>${list.map(r => chip(r.id, { abbr: true, rank: false })).join('')}</div>` : '';
   h += `<div class="card"><p class="muted small" style="margin-top:0">Pick the ${esc(L.conference)} champion${board[0].posted ? '' : ' (odds projected until this week\'s lines post)'}. Your odds lock when you bet, it pays when the title game is final, and a team that's eliminated loses right away.</p>
     <div class="tablewrap"><table class="compact"><tr><th>Team</th><th class="num">Chance</th><th class="num">Odds</th></tr>
     ${live.map(r => { const t = team(r.id); return `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td>${chip(r.id)} <span class="muted small">${isUserTeam(t) ? esc(t.coach) : 'CPU'}</span></td><td class="num">${pctStr(r.p)}</td>
       <td class="num">${open && r.id !== myTeam()?.id ? `<button class="pick${UI.mode === 'parlay' && UI.legs.some(x => x.market === 'future' && x.pick === r.id) ? ' sel' : ''}" data-fut="${esc(r.id)}"><b>${fmtOdds(r.odds)}</b></button>` : `<b>${fmtOdds(r.odds)}</b>`}</td></tr>`; }).join('')}
-    </table></div>${deadLine(dead.filter(r => r.out), 'Eliminated')}${deadLine(dead.filter(r => !r.out), 'Off the board')}${open ? '' : futuresOpen() ? '<p class="muted small">Futures odds open once the commissioner posts this week\'s lines.</p>' : '<p class="muted small">Betting is locked right now.</p>'}</div>`;
+    </table></div>${deadLine(dead.filter(r => r.out), 'Eliminated')}${deadLine(dead.filter(r => !r.out), 'Off the board')}${open ? '' : set ? `<p class="muted small">🔒 Closed: the title game is set (${(() => { const c = D.games.find(g => g.season === L.season && g.type === 'ccg'); return c ? esc(team(c.away).abbr || team(c.away).name) + ' vs ' + esc(team(c.home).abbr || team(c.home).name) : ''; })()}), so bet its moneyline instead. Open bets still pay when it's final.</p>` : futuresOpen() ? '<p class="muted small">Futures odds open once the commissioner posts this week\'s lines.</p>' : '<p class="muted small">Betting is locked right now.</p>'}</div>`;
   return h;
 }
 function winsSection() {
@@ -745,7 +745,7 @@ function popularPick() {
   });
   const live = Object.values(counts).map(c => ({ ...c, cur: legFor(c.leg.gameId, c.leg.market, c.leg.pick, c.leg.team) })).filter(c => {
     if (!c.cur) return false;
-    if (c.leg.market === 'future') return futuresOpen() && futuresPosted();
+    if (c.leg.market === 'future') return champOpen() && futuresPosted();
     if (c.leg.market === 'wins') return futuresOpen() && winsPosted();
     const g = D.games.find(x => x.id === c.leg.gameId); return g && !played(g) && g.week >= L.week && L.bettingOpen;
   });
@@ -1351,7 +1351,7 @@ async function placeBet() {
   if (stake > bal) return $('#smsg').textContent = 'Not enough Crackers.';
   if (UI.slip.parlay) {
     if (!L.bettingOpen) return $('#smsg').textContent = 'Betting is locked.';
-    const bad = UI.legs.find(l => { if (l.market === 'future') return !(futuresOpen() && futuresPosted());
+    const bad = UI.legs.find(l => { if (l.market === 'future') return !(champOpen() && futuresPosted());
       if (l.market === 'wins') return !(futuresOpen() && winsPosted()); const g = D.games.find(x => x.id === l.gameId); return !g || played(g) || g.week < L.week || g.season !== L.season; });
     if (bad || UI.legs.length < 2) return $('#smsg').textContent = 'One of these games is locked. Remove it and try again.';
     try {
@@ -1372,7 +1372,7 @@ async function placeBet() {
     return;
   }
   if (UI.slip.future) {
-    if (!futuresOpen()) return $('#smsg').textContent = 'Futures are locked.';
+    if (!champOpen()) return $('#smsg').textContent = titleSet() ? 'League Champion bets closed once the title game was set. Bet its moneyline instead.' : 'Futures are locked.';
     try {
       await placeWager({ uid: me.id, coach: me.name, season: L.season, week: L.week, gameId: '', market: 'future', pick, line: null, odds, stake, status: 'open', payout: 0, ts: Date.now() });
       await reload(); showPlacedSlip();

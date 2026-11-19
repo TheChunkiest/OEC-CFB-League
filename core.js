@@ -1034,6 +1034,8 @@ export async function ensureFutures() {
     .map(g => ({ op: 'set', col: 'games', id: g.id, data: { lines: lineKeys(g.lines) } }));
   if (keyOps.length) await batch(keyOps);
   try { await postEarlyCcg(); } catch (e) { console.warn('early title game', e); }
+  // Title game already set (posted before this update): make sure League Champion bets are closed in the database too.
+  if (titleSet(L.season) && L.futures && L.futures.open) await batch([{ op: 'set', col: 'meta', id: 'league', data: { futures: { ...L.futures, open: false } } }]);
   if (!missingLines && (L.phase !== PHASES.REG || (futuresPosted() && winsPosted()))) return !!outOps.length;
   await batch(boardOps(L.week)); return true;
 }
@@ -1042,6 +1044,10 @@ export function friendlyError(e) {
   return (e && e.message) || 'Something went wrong.';
 }
 export function futuresOpen() { const L = D.league; return L.phase === PHASES.REG && L.bettingOpen; }
+// League Champion futures close for good once the title game matchup is set: from then on a moneyline on the title
+// game is the same bet. (Win totals stay open until the regular season ends.)
+export const titleSet = (s = D.league.season) => D.games.some(g => g.season === s && g.type === 'ccg');
+export const champOpen = () => futuresOpen() && !titleSet();
 export function futuresBoard() {
   const L = D.league; if (L.phase !== PHASES.REG) return [];
   const sim = simulate(L.season, nowUpto()), F = L.futures, posted = F && F.season === L.season && F.odds ? F.odds : null;
@@ -1053,7 +1059,7 @@ export function futuresSnapshot() {
   const L = D.league, sim = simulate(L.season, nowUpto()), odds = {};
   const out = titleOut(L.season);
   leagueTeams().forEach(t => odds[t.id] = out.has(t.id) ? null : futuresOdds(sim[t.id]?.titlePct || 0));
-  return { season: L.season, week: L.week, open: true, odds };
+  return { season: L.season, week: L.week, open: !titleSet(L.season), odds };
 }
 /* ---- Season win totals (regular season wins). Line = the .5 mark closest to a 50/50 split in the simulation. ---- */
 const winOdds = p => { const q = clamp(p + 0.0238, 0.03, 0.97); return q >= 0.5 ? -Math.max(100, round5(100 * q / (1 - q))) : Math.max(100, round5(100 * (1 - q) / q)); };
@@ -1721,6 +1727,6 @@ export async function postEarlyCcg() {
   if (DEMO ? false : !isCommish()) return null;
   const g = earlyCcg(); if (!g) return null;
   const { id, ...data } = g;
-  await batch([{ op: 'set', col: 'games', id, data }]);
+  await batch([{ op: 'set', col: 'games', id, data }, { op: 'set', col: 'meta', id: 'league', data: { futures: { ...(D.league.futures || {}), open: false } } }]);
   return g;
 }
