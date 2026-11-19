@@ -117,9 +117,12 @@ async function startListeners() {
   if (snap && snap.season === season && snap.T) {
     const since = fs.Timestamp.fromMillis(snap.T);
     SNAP.forEach(c => {
-      const base = new Map((snap[c] || []).map(d => [d.id, d]));
+      // Every version we've been sent is kept: a doc can drop out of a "changed since" result for a moment (our
+      // own save with its server time still pending), and that must not make it vanish. Deletes arrive as a
+      // `deleted` flag, so removing something still works.
+      const m = new Map((snap[c] || []).map(d => [d.id, d]));
       watch(fs.query(fs.collection(db, c), fs.where('upd', '>', since)), s => {
-        const m = new Map(base); s.docs.forEach(d => m.set(d.id, { ...d.data(), id: d.id }));
+        s.docs.forEach(d => m.set(d.id, { ...d.data(), id: d.id }));
         const all = [...m.values()].filter(live1);
         if (PAST.includes(c)) s.docs.forEach(d => { const x = { ...d.data(), id: d.id }; if (x.season < season) pastLive[c].set(d.id, x); });
         if (SEASONAL.includes(c)) { cur[c] = all.filter(d => d.season === season); merge(c); } else D[c] = withMine(c, all);
@@ -1044,7 +1047,9 @@ export async function ensureFutures() {
   if (keyOps.length) await batch(keyOps);
   // Title game already set (posted before this update): make sure League Champion bets are closed in the database too.
   if (titleSet(L.season) && L.futures && L.futures.open) await batch([{ op: 'set', col: 'meta', id: 'league', data: { futures: { ...L.futures, open: false } } }]);
-  if (!missingLines && (L.phase !== PHASES.REG || (futuresPosted() && winsPosted()))) return !!outOps.length;
+  // Once the title game is set, League Champion futures stay closed on purpose: that's not "missing" odds, so don't
+  // re-post every line on each visit.
+  if (!missingLines && (L.phase !== PHASES.REG || ((futuresPosted() || titleSet(L.season)) && winsPosted()))) return !!outOps.length;
   await batch(boardOps(L.week)); return true;
 }
 export function friendlyError(e) {
