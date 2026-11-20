@@ -3,8 +3,8 @@ import {
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum, divOf, oneConference, playbookOf, pbSeason, pbOpen, pbLocked
 , loadAI, kickoffOf, fmtKick
-, reliefPatch, winTotalsSnapshot, winsLockedTeam, postEarlyCcg, earlyCcg, raceSim, AWARD_DEFS, tallyAwards, awardGames, awardGameLabel, awardCoaches, sameName, curWeek, wkName
-} from './core.js?v=101';
+, reliefPatch, winTotalsSnapshot, winsLockedTeam, postEarlyCcg, earlyCcg, raceSim, AWARD_DEFS, tallyAwards, awardGames, awardGameLabel, awardCoaches, sameName, curWeek, wkName, wkShort, wkOf, phaseName
+} from './core.js?v=104';
 // Broadcast scouting nudges the ratings a little, so load it before any lines get posted from here.
 loadAI();
 import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
@@ -86,7 +86,7 @@ const pollWk = () => { const c = curWeek(L()); return ST.pollWk != null && ST.po
 function pollWeekPick() {
   const c = curWeek(L()), wks = [];
   for (let w = c; w >= Math.max(1, c - 3); w--) wks.push(w);
-  return `<label class="row" style="margin:0 0 8px;gap:8px"><span class="muted small">Rankings entering</span><select id="pollWkSel" style="width:auto">${wks.map(w => `<option value="${w}"${w === pollWk() ? ' selected' : ''}>${esc(wkName(w))}${/^Week /.test(wkName(w)) ? '' : ` (Week ${w})`}</option>`).join('')}</select></label>`;
+  return `<label class="row" style="margin:0 0 8px;gap:8px"><span class="muted small">Rankings entering</span><select id="pollWkSel" style="width:auto">${wks.map(w => `<option value="${w}"${w === pollWk() ? ' selected' : ''}>${esc(wkName(w))}</option>`).join('')}</select></label>`;
 }
 const pollChanged = (arr, week) => { const cur = pollFor(L().season, week); return arr.length !== Object.keys(cur).length || arr.some(x => cur[x.id] !== x.r); };
 
@@ -111,7 +111,7 @@ function scoreRows(games, dr) {
     // Per-game bet lock: e.g. lock a game once it kicks off while the rest of the board (the title game) stays open.
     const lock = played(g) ? '' : `<div class="kickrow"><span class="muted small">${g.locked ? '🔒 Bets on this game are locked' : '🎟️ Bets on this game are open'}</span><button class="sm ${g.locked ? '' : 'ghost'}" data-act="gameLock" data-g="${esc(g.id)}">${g.locked ? 'Unlock' : 'Lock bets'}</button></div>`;
     return `<div class="card scorecard">${row('away', av)}${row('home', hv)}${kick}${lock}
-      <div class="row spread" style="margin-top:6px"><span class="meta" style="margin:0">${g.week !== L().week ? `<b class="gstat">Week ${g.week}</b> · ` : ''}${l ? `${g.lines ? 'Line' : 'Projected'}: ${esc(team(g.home).abbr)} ${fmtLine(l.spread)} · O/U ${l.total}` : ''} ${g.type && g.type !== 'reg' ? '· <span class="tag gold">' + esc(g.type.toUpperCase()) + '</span>' : ''}</span>
+      <div class="row spread" style="margin-top:6px"><span class="meta" style="margin:0">${g.week !== L().week ? `<b class="gstat">${wkOf(g)}</b> · ` : ''}${l ? `${g.lines ? 'Line' : 'Projected'}: ${esc(team(g.home).abbr)} ${fmtLine(l.spread)} · O/U ${l.total}` : ''} ${g.type && g.type !== 'reg' ? '· <span class="tag gold">' + esc(g.type.toUpperCase()) + '</span>' : ''}</span>
       <select data-ff="${esc(g.id)}" style="font-size:13px;padding:4px 8px"><option value="">Played</option><option value="away" ${ff === 'away' ? 'selected' : ''}>Away forfeit win</option><option value="home" ${ff === 'home' ? 'selected' : ''}>Home forfeit win</option></select></div></div>`;
   }).join('');
 }
@@ -177,12 +177,12 @@ function stepper(n) {
   return `<div class="stepper">${steps.map((t, i) => `<div class="st ${i + 1 === n ? 'on' : i + 1 < n ? 'done' : ''}"><b>${i + 1 < n ? '✓' : i + 1}</b><span>${t}</span></div>`).join('<i></i>')}</div>`;
 }
 function wizard() {
-  const lg = L(), s = lg.season, W = lg.week, last = W >= lg.finalWeek, dr = draft(), nextLbl = last ? 'championship week' : `Week ${W + 1}`;
+  const lg = L(), s = lg.season, W = lg.week, last = W >= lg.finalWeek, dr = draft(), nextLbl = last ? 'League Title' : `${wkName(W + 1)}`;
   if (ST.done) return ST.done;
   if (ST.step === 1) {
     const g = wizGames(), cur = g.filter(x => x.week === W), late = g.filter(x => x.week < W);
-    return `${stepper(1)}<div class="card"><h2>Week ${W} results</h2><p class="muted small" style="margin:0">Enter every score (or mark a forfeit). Use <b>Save scores now</b> to lock finished user games mid-week. Betting is <b>${lg.bettingOpen ? 'OPEN' : 'LOCKED'}</b> <button class="sm ghost" data-act="toggleBet">${lg.bettingOpen ? 'Lock all betting' : 'Unlock'}</button>${lg.bettingOpen ? ` <button class="sm" data-act="lockWeek">Lock Week ${W} games only</button>` : ''}</p>
-      <p class="muted small" style="margin:6px 0 0">"Lock all" stops every bet (including the League Title and future weeks). "Week ${W} only" locks this week's games and leaves the rest open; you can also lock a single game on its card below.</p></div>
+    return `${stepper(1)}<div class="card"><h2>${wkName(W)} results</h2><p class="muted small" style="margin:0">Enter every score (or mark a forfeit). Use <b>Save scores now</b> to lock finished user games mid-week. Betting is <b>${lg.bettingOpen ? 'OPEN' : 'LOCKED'}</b> <button class="sm ghost" data-act="toggleBet">${lg.bettingOpen ? 'Lock all betting' : 'Unlock'}</button>${lg.bettingOpen ? ` <button class="sm" data-act="lockWeek">Lock ${wkName(W)} games only</button>` : ''}</p>
+      <p class="muted small" style="margin:6px 0 0">"Lock all" stops every bet (including the League Title and future weeks). "${wkName(W)} only" locks this week's games and leaves the rest open; you can also lock a single game on its card below.</p></div>
       ${late.length ? `<div class="notice">⚠️ ${late.length} earlier game${late.length === 1 ? ' is' : 's are'} still missing a result. Enter ${late.length === 1 ? 'it' : 'them'} here too.</div>${scoreRows(late, dr)}` : ''}
       ${cur.length ? scoreRows(cur, dr) : '<div class="card empty">No games scheduled this week. Add them on Scores &amp; Schedule, or continue.</div>'}
       <div class="card row spread"><button class="ghost" data-act="wizSave">Save scores now</button><button data-act="wizNext">Next: set up ${nextLbl} →</button></div>`;
@@ -193,7 +193,7 @@ function wizard() {
         <h3>Top 25 entering ${nextLbl}</h3><p class="muted small" style="margin-top:0">Copy the new in-game poll. Leave everything as-is to keep this week's rankings.</p>${pollEditor(W, dr.poll)}</div>
       ${deskBlock()}
       ${last ? `<div class="card"><h3 style="margin-top:0">Up next: championship setup</h3><p class="muted small" style="margin:0">After you confirm, you'll set the championship matchup and the awards ballot.</p></div>` :
-      `<div class="card"><h3 style="margin-top:0">Week ${W + 1} schedule (${nxt.length} game${nxt.length === 1 ? '' : 's'})</h3>${nxt.length ? `<div class="tablewrap"><table>${nxt.map(g => `<tr><td class="wrap">${esc(team(g.away).name)} ${g.neutral ? 'vs' : '@'} ${esc(team(g.home).name)}${!isUserTeam(team(g.home)) || !isUserTeam(team(g.away)) ? ' <span class="h2h cputag">CPU GAME</span>' : ''}</td><td class="num"><button class="sm danger" data-delgame="${esc(g.id)}">✕</button></td></tr>`).join('')}</table></div>` : '<p class="muted">No games scheduled yet.</p>'}
+      `<div class="card"><h3 style="margin-top:0">${wkName(W + 1)} schedule (${nxt.length} game${nxt.length === 1 ? '' : 's'})</h3>${nxt.length ? `<div class="tablewrap"><table>${nxt.map(g => `<tr><td class="wrap">${esc(team(g.away).name)} ${g.neutral ? 'vs' : '@'} ${esc(team(g.home).name)}${!isUserTeam(team(g.home)) || !isUserTeam(team(g.away)) ? ' <span class="h2h cputag">CPU GAME</span>' : ''}</td><td class="num"><button class="sm danger" data-delgame="${esc(g.id)}">✕</button></td></tr>`).join('')}</table></div>` : '<p class="muted">No games scheduled yet.</p>'}
         <div class="row" style="margin-top:8px"><select id="wA">${teamOpts('', 'Away')}</select> @ <select id="wH">${teamOpts('', 'Home')}</select><button class="ghost sm" data-act="wizAddGame">+ Add game</button></div></div>`}
       <div class="card row spread"><button class="ghost" data-act="wizBack">← Back</button><button data-act="wizNext">Next: review →</button></div>`;
   }
@@ -202,8 +202,8 @@ function wizard() {
   const lines = games.map(g => {
     const v = sc[g.id] || { a: g.awayScore ?? '', h: g.homeScore ?? '', ff: '' }, a = team(g.away).abbr || team(g.away).name, h = team(g.home).abbr || team(g.home).name;
     if (v.ff) { ids.add(g.id); return `<li>✅ ${esc(a)} @ ${esc(h)} — <b>${esc(v.ff === 'away' ? a : h)} wins by forfeit</b> <span class="muted small">(bets on this game are refunded)</span></li>`; }
-    if (v.a === '' || v.h === '') return `<li class="err">⚠️ Wk ${g.week}: ${esc(a)} @ ${esc(h)} — no score (bets stay open)</li>`;
-    ids.add(g.id); return `<li>✅ ${g.week < W ? `<span class="muted small">Wk ${g.week}</span> ` : ''}${esc(a)} <b>${esc(v.a)}</b> @ ${esc(h)} <b>${esc(v.h)}</b></li>`;
+    if (v.a === '' || v.h === '') return `<li class="err">⚠️ ${wkShort(g.week, g.season)}: ${esc(a)} @ ${esc(h)} — no score (bets stay open)</li>`;
+    ids.add(g.id); return `<li>✅ ${g.week < W ? `<span class="muted small">${wkShort(g.week, g.season)}</span> ` : ''}${esc(a)} <b>${esc(v.a)}</b> @ ${esc(h)} <b>${esc(v.h)}</b></li>`;
   });
   const missing = lines.filter(x => x.includes('class="err"')).length;
   const singles = D.wagers.filter(w => w.status === 'open' && ids.has(w.gameId)).length, parl = D.wagers.filter(w => w.status === 'open' && w.market === 'parlay' && (w.legs || []).some(l => ids.has(l.gameId))).length;
@@ -212,14 +212,14 @@ function wizard() {
   const moves = allIds.map(id => ({ id, a: cur[id], b: npm[id] })).filter(x => x.a !== x.b).sort((x, y) => (x.b || 99) - (y.b || 99));
   const gv = gotwTally(s, W + 1, { includeOpen: true });
   const nxt = D.games.filter(g => g.season === s && g.week === W + 1);
-  return `${stepper(3)}<div class="card"><h2>Review Week ${W}</h2>
+  return `${stepper(3)}<div class="card"><h2>Review ${wkName(W)}</h2>
       <h3>Results (${ids.size} of ${games.length})</h3><ul class="clean review">${lines.join('') || '<li class="muted">No games.</li>'}</ul>
-      <h3>Sportsbook</h3><p style="margin:4px 0">${singles + parl ? `${singles} single bet${singles === 1 ? '' : 's'}${parl ? ` and ${parl} parlay${parl === 1 ? '' : 's'}` : ''} will be graded and paid out.` : 'No open bets on these games.'}${last ? ' Win-total bets settle and League Champion futures close.' : ` Lines post for every upcoming game, and betting opens for Week ${W + 1}.`}</p>
+      <h3>Sportsbook</h3><p style="margin:4px 0">${singles + parl ? `${singles} single bet${singles === 1 ? '' : 's'}${parl ? ` and ${parl} parlay${parl === 1 ? '' : 's'}` : ''} will be graded and paid out.` : 'No open bets on these games.'}${last ? ' Win-total bets settle and League Champion futures close.' : ` Lines post for every upcoming game, and betting opens for ${wkName(W + 1)}.`}</p>
       <h3>Top 25 entering ${nextLbl}</h3>${moves.length ? `<ul class="clean review">${moves.map(m => `<li>${esc(team(m.id).name)}: ${m.a ? '#' + m.a : 'unranked'} → <b>${m.b ? '#' + m.b : 'unranked'}</b></li>`).join('')}</ul>` : `<p style="margin:4px 0" class="muted">No changes (${Object.keys(cur).length} ranked teams carry over).</p>`}
       <h3>Commissioner's Desk</h3>${dr.desk.on && dr.desk.text ? `<div class="notice" style="white-space:pre-wrap;margin:4px 0">${esc(dr.desk.text)}</div>` : '<p style="margin:4px 0" class="muted">No note. Last week\'s note will be cleared.</p>'}
-      ${last ? '' : `<h3>Week ${W + 1}</h3><p style="margin:4px 0">${nxt.length} game${nxt.length === 1 ? '' : 's'} scheduled.${gv.total ? ` Game of the Week voting closes: <b>${esc(team(gv.game?.away).name)} @ ${esc(team(gv.game?.home).name)}</b> leads with ${gv.counts[gv.game?.id]} of ${gv.total} votes.` : ' No Game of the Week votes were cast.'}</p>`}
+      ${last ? '' : `<h3>${wkName(W + 1)}</h3><p style="margin:4px 0">${nxt.length} game${nxt.length === 1 ? '' : 's'} scheduled.${gv.total ? ` Game of the Week voting closes: <b>${esc(team(gv.game?.away).name)} @ ${esc(team(gv.game?.home).name)}</b> leads with ${gv.counts[gv.game?.id]} of ${gv.total} votes.` : ' No Game of the Week votes were cast.'}</p>`}
       ${missing ? `<div class="notice" style="margin-top:12px">⚠️ ${missing} game${missing === 1 ? ' has' : 's have'} no result. You can still advance and enter ${missing === 1 ? 'it' : 'them'} later from Scores &amp; Schedule.</div>` : ''}</div>
-    <div class="card row spread"><button class="ghost" data-act="wizBack">← Back</button><button class="gold" data-act="wizConfirm">✅ Confirm & ${last ? 'end the regular season' : `advance to Week ${W + 1}`}</button></div>`;
+    <div class="card row spread"><button class="ghost" data-act="wizBack">← Back</button><button class="gold" data-act="wizConfirm">✅ Confirm & ${last ? 'end the regular season' : `advance to ${wkName(W + 1)}`}</button></div>`;
 }
 
 /* ---------- views ---------- */
@@ -242,7 +242,7 @@ function momentsCard() {
   const head = `<details class="card" data-keepopen="mom" ${ST.open?.mom ? 'open' : ''}><summary><b>🤖 Key moments (AI)</b> `;
   if (!MOMS || !VIDS) return head + '<span class="muted small">loading…</span></summary></details>';
   const done = MOMS.games || {}, fails = MOMS.fails || {}, redo = L().momRedo || {}, q = MOMS.quota || {};
-  const glabel = g => `S${seasonNum(g.season)} ${g.type === 'ccg' ? 'Title' : g.type === 'bowl' ? 'Bowl' : 'Wk ' + g.week}: ${esc(team(g.away).abbr || team(g.away).name)} @ ${esc(team(g.home).abbr || team(g.home).name)} ${g.awayScore}-${g.homeScore}`;
+  const glabel = g => `S${seasonNum(g.season)} ${g.type === 'ccg' ? 'League Title' : g.type === 'bowl' ? 'Bowl Season' : wkShort(g.week, g.season)}: ${esc(team(g.away).abbr || team(g.away).name)} @ ${esc(team(g.home).abbr || team(g.home).name)} ${g.awayScore}-${g.homeScore}`;
   const link = g => `<a href="index.html#game/${esc(g.id)}" target="_blank">${glabel(g)}</a>`;
   const games = D.games.filter(g => played(g) && !g.forfeit && vidsOfGame(g).length);
   const same = (a, b) => JSON.stringify(a || []) === JSON.stringify(b || []);
@@ -266,7 +266,7 @@ function broadcastCard() {
   const vids = VIDS.videos || [], byId = Object.fromEntries(vids.map(v => [v.id, v]));
   const playedGames = D.games.filter(g => played(g)).sort((a, b) => b.season - a.season || b.week - a.week);
   const usedVid = new Set(playedGames.flatMap(vidsOfGame)), ignore = new Set(L().vidIgnore || []);
-  const glabel = g => `S${seasonNum(g.season)} ${g.type === 'ccg' ? 'Title' : 'Wk ' + g.week}: ${team(g.away).abbr || team(g.away).name} @ ${team(g.home).abbr || team(g.home).name}`;
+  const glabel = g => `S${seasonNum(g.season)} ${g.type === 'ccg' ? 'League Title' : g.type === 'bowl' ? 'Bowl Season' : wkShort(g.week, g.season)}: ${team(g.away).abbr || team(g.away).name} @ ${team(g.home).abbr || team(g.home).name}`;
   // User or CPU is decided per season: a league team that season has several games on record; CPU opponents
   // (never in the league that year) show up once or twice. Coach names come from what was saved on the game.
   const lg = {}; const inLeague = (g, side) => { const y = g.season; if (!lg[y]) { const c = {}; D.games.filter(x => x.season === y).forEach(x => { c[x.home] = (c[x.home] || 0) + 1; c[x.away] = (c[x.away] || 0) + 1; }); lg[y] = new Set(Object.keys(c).filter(t => c[t] >= 4)); } return lg[y].has(g[side]); };
@@ -298,7 +298,11 @@ const views = {
   advanceBody() {
     const lg = L(), s = lg.season;
     if (!D.teams.length) return `<div class="card"><h2>Welcome, Commissioner</h2><p>The database is empty. Load the league history and the current season (Seasons 1–3 through Week 9) from <code>league-data.json</code>. This adds all teams, coaches, divisions, results, champions and awards, then posts Week 10 lines.</p><button class="gold" data-act="importSeed">Load league data</button></div>`;
-    if (lg.phase === PHASES.PRE) return `<div class="card"><h2>Offseason</h2><p>The ${s} season is wrapped up${D.history.find(h => h.season === s) ? ' and in the history books' : ''}. Fill out the <b>New Season</b> form to set up next season: coaches, team ratings and the schedule. Publishing it opens Week 0 betting and posts preseason odds.</p><button data-tab="preseason">Open New Season form →</button></div>`;
+    if (lg.phase === PHASES.PRE) return `<div class="card"><h2>${lg.pre ? 'Preseason' : 'Postseason'}</h2><p>The ${s} season is wrapped up${D.history.find(h => h.season === s) ? ' and in the history books' : ''}. ${lg.pre
+        ? 'The league is in the <b>Preseason</b>.'
+        : 'The league is in the <b>Postseason</b> (offseason work). When that\'s done, move it to the Preseason: the header changes and everyone gets a notification.'}</p>
+      <div class="row" style="margin-bottom:10px">${lg.pre ? '<button class="ghost" data-act="toPreseason" data-back="1">Back to Postseason</button>' : '<button class="gold" data-act="toPreseason">Move to Preseason →</button>'}</div>
+      <p>Fill out the <b>New Season</b> form to set up next season: coaches, team ratings and the schedule. Publishing it opens Week 0 betting and posts preseason odds.</p><button data-tab="preseason">Open New Season form →</button></div>`;
     if (lg.phase === PHASES.REG || ST.done) return (lg.phase === PHASES.REG && !ST.done ? titleCard() : '') + wizard();
     if (lg.phase === PHASES.CCG) {
       const ccg = D.games.find(g => g.season === s && g.type === 'ccg');
@@ -319,10 +323,10 @@ const views = {
     }
     // Postseason
     const post = D.games.filter(g => g.season === s && g.type === 'bowl');
-    return `<div class="card"><h2>End of Season</h2><p class="muted">Add any bowl / playoff results (optional), check the award winners, then finalize. Finalizing closes awards voting, writes the champion and award winners to History and moves the league to the offseason.</p>
+    return `<div class="card"><h2>End of Season</h2><p class="muted">Add any bowl / playoff results (optional), check the award winners, then finalize. Finalizing closes awards voting, writes the champion and award winners to History and moves the league to the Postseason (offseason work) until you publish next season.</p>
       ${votingLine()}</div>
       ${awardsReview(true)}
-      <div class="card"><h3 style="margin-top:0">Postseason games</h3>
+      <div class="card"><h3 style="margin-top:0">Bowl Season games</h3>
         <p class="muted small" style="margin-top:0">Add a playoff or bowl game (name it, e.g. "CFP First Round"), then <b>Post lines & open betting</b>. Enter scores as games finish and tap <b>Save scores & settle bets</b>. Add the next round once it's set.</p>
         ${post.length ? scoreRows(post) : '<p class="muted">None added.</p>'}
         <div class="row"><input id="pW" type="number" value="${Math.max(curWeek(lg), ...post.map(g => g.week))}" style="width:70px" title="Week (use a later number for each round)"><select id="pA">${teamOpts('', 'Away/Team 1')}</select> vs <select id="pH">${teamOpts('', 'Home/Team 2')}</select><input id="pNote" placeholder="Game name, e.g. CFP First Round"><button class="ghost" data-act="addBowl">Add</button></div>
@@ -351,7 +355,7 @@ const views = {
       <div class="card"><h3 style="margin-top:0">${next} schedule (${sg.length} games)</h3><p class="muted small">Add user-vs-user games and each user team's games vs CPU teams.</p>
         <div class="row"><input id="sgW" type="number" value="0" style="width:70px" title="Week"><select id="sgA">${teamOpts('', 'Away')}</select> @ <select id="sgH">${teamOpts('', 'Home')}</select><label class="row" style="margin:0"><input type="checkbox" id="sgN" style="width:auto"> Neutral</label><button class="ghost" data-act="addSched">Add game</button></div>
         <label>Bulk add — one game per line: <code>week, away team, home team</code> (add <code>, neutral</code> if needed). Team name or abbreviation.</label><textarea id="bulk" rows="4" placeholder="0, Liberty, Kennesaw State&#10;1, KENN, Ohio"></textarea><button class="ghost sm" data-act="bulkSched" style="margin-top:6px">Add these games</button> <span id="bulkMsg" class="muted"></span>
-        <div class="tablewrap" style="margin-top:10px"><table>${sg.map(g => `<tr><td>Wk ${g.week}</td><td class="wrap">${esc(team(g.away).name)} ${g.neutral ? 'vs' : '@'} ${esc(team(g.home).name)}${!isUserTeam(team(g.home)) || !isUserTeam(team(g.away)) ? ' <span class="h2h cputag">CPU GAME</span>' : ''}</td><td class="num">${played(g) ? g.awayScore + '-' + g.homeScore : ''}</td><td class="num"><button class="sm danger" data-delgame="${esc(g.id)}">✕</button></td></tr>`).join('')}</table></div></div>
+        <div class="tablewrap" style="margin-top:10px"><table>${sg.map(g => `<tr><td>${wkShort(g.week, g.season)}</td><td class="wrap">${esc(team(g.away).name)} ${g.neutral ? 'vs' : '@'} ${esc(team(g.home).name)}${!isUserTeam(team(g.home)) || !isUserTeam(team(g.away)) ? ' <span class="h2h cputag">CPU GAME</span>' : ''}</td><td class="num">${played(g) ? g.awayScore + '-' + g.homeScore : ''}</td><td class="num"><button class="sm danger" data-delgame="${esc(g.id)}">✕</button></td></tr>`).join('')}</table></div></div>
       ${deskBlock()}
       <div class="card"><button class="gold" data-act="publish">Publish ${next} season → open Week ${sg.length ? Math.min(...sg.map(g => g.week)) : 0}</button>
         <p class="muted small">Publishing sets the current season and week, posts preseason odds and Week ${sg.length ? Math.min(...sg.map(g => g.week)) : 0} lines, opens betting (every coach starts with 1,000 Crackers) and starts a fresh odds chart. Save teams first.</p></div>`;
@@ -360,10 +364,10 @@ const views = {
   games() {
     const s = L().season, weeks = [...new Set(seasonGames().map(g => g.week))].sort((a, b) => a - b);
     const wk = ST.gamesWeek ?? L().week, games = D.games.filter(g => g.season === s && g.week === wk);
-    return `<div class="card"><div class="row"><b>Week</b><select id="gwSel">${[...new Set([...weeks, wk])].sort((a, b) => a - b).map(w => `<option ${w === wk ? 'selected' : ''}>${w}</option>`).join('')}</select><input id="gwNew" type="number" placeholder="Other week" style="width:110px"><span class="muted small">Fix any score here; bets on it are re-graded automatically.</span></div></div>
+    return `<div class="card"><div class="row"><b>Week</b><select id="gwSel">${[...new Set([...weeks, wk])].sort((a, b) => a - b).map(w => `<option value="${w}" ${w === wk ? 'selected' : ''}>${esc(wkName(w))}</option>`).join('')}</select><input id="gwNew" type="number" placeholder="Other week" style="width:110px"><span class="muted small">Fix any score here; bets on it are re-graded automatically.</span></div></div>
       ${scoreRows(games)}${games.length ? `<div class="card row"><button data-act="saveGames">Save scores</button> ${games.map(g => `<button class="sm danger" data-delgame="${esc(g.id)}">✕ ${esc(team(g.away).abbr)} @ ${esc(team(g.home).abbr)}</button>`).join('')}</div>` : ''}
-      <div class="card"><h3 style="margin-top:0">Add a game to week ${wk}</h3><div class="row"><select id="gA">${teamOpts('', 'Away')}</select> @ <select id="gH">${teamOpts('', 'Home')}</select>
-        <select id="gT"><option value="reg">Regular season</option><option value="ccg">League Championship</option><option value="bowl">Postseason</option></select><label class="row" style="margin:0"><input type="checkbox" id="gN" style="width:auto"> Neutral</label><button data-act="addGame">Add</button></div></div>
+      <div class="card"><h3 style="margin-top:0">Add a game to ${wkName(wk)}</h3><div class="row"><select id="gA">${teamOpts('', 'Away')}</select> @ <select id="gH">${teamOpts('', 'Home')}</select>
+        <select id="gT"><option value="reg">Regular season</option><option value="ccg">League Championship</option><option value="bowl">Bowl Season</option></select><label class="row" style="margin:0"><input type="checkbox" id="gN" style="width:auto"> Neutral</label><button data-act="addGame">Add</button></div></div>
       ${broadcastCard()}`;
   },
 
@@ -383,7 +387,7 @@ const views = {
     const lg = L(), ks = pbSeason(lg), open = pbOpen(lg), ts = D.teams.filter(isUserTeam).sort((a, b) => a.name.localeCompare(b.name));
     const used = k => [...new Set(D.teams.flatMap(t => Object.values(t.pb || {}).map(p => p && p[k]).filter(Boolean)))].sort();
     return `<details class="card" id="pbCard" data-keepopen="pb" ${ST.open?.pb ? 'open' : ''}><summary><b>Playbooks</b> <span class="muted small">(S${seasonNum(ks)})</span></summary>
-      <p class="muted small">${open ? `Playbook changes are open (${esc(lg.phase)}). Saves count for Season ${seasonNum(ks)}.` : 'Playbooks are locked during the season. They open again in the Postseason. A team with no playbook on record can still be filled in.'} Each season's playbook is kept for team pages and coach history.</p>
+      <p class="muted small">${open ? `Playbook changes are open (${esc(phaseName(lg))}). Saves count for Season ${seasonNum(ks)}.` : 'Playbooks are locked during the season. They open again once Bowl Season starts. A team with no playbook on record can still be filled in.'} Each season's playbook is kept for team pages and coach history.</p>
       <datalist id="pbOffL">${used('off').map(v => `<option value="${esc(v)}">`).join('')}</datalist><datalist id="pbDefL">${used('def').map(v => `<option value="${esc(v)}">`).join('')}</datalist>
       ${ts.map(t => { const p = playbookOf(t, ks, t.coach) || {}, lock = pbLocked(t, lg); return `<div class="row" data-pb="${esc(t.id)}" style="padding:8px 0;border-bottom:1px solid var(--line)">
         <div style="flex:1 1 100%"><i class="sw" style="background:${esc(teamColor(t))};margin-right:6px"></i><b>${esc(t.name)}</b> <span class="muted small">${esc(t.coach)}${lock ? ' · 🔒 locked' : ''}</span></div>
@@ -420,7 +424,7 @@ const views = {
       <div class="card"><h3 style="margin-top:0">${s} wagers (${wk.length})</h3>${(() => { const grp = w => w.status === 'void' ? 'push' : w.status, FL = [['open', 'Open'], ['all', 'All'], ['won', 'Won'], ['lost', 'Lost'], ['cashed', 'Cashed out'], ['push', 'Push / void']], cnt = k => k === 'all' ? wk.length : wk.filter(w => grp(w) === k).length, cur = ST.wf || 'open';
           ST.wfList = cur === 'all' ? wk : wk.filter(w => grp(w) === cur);
           return `<div class="bfilters">${FL.filter(([k]) => k === 'open' || k === 'all' || cnt(k)).map(([k, l]) => `<button class="bfilter${k === cur ? ' on' : ''}" data-act="wfilter" data-f="${k}">${l} <span>${cnt(k)}</span></button>`).join('')}</div>`; })()}${ST.wfList.length ? `<div class="tablewrap"><table><tr><th>Wk</th><th>Coach</th><th>Bet</th><th>Placed</th><th class="num">Stake</th><th class="num">Status</th><th></th></tr>
-        ${ST.wfList.map(w => `<tr><td>${w.week}</td><td>${esc(w.coach)}</td><td style="white-space:normal">${esc(wagerLabel(w))}${legsHtml(w)}</td><td class="muted small">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num"><span class="pill ${w.status}">${w.status}${w.payout ? ' ' + (w.payout > 0 ? '+' : '') + w.payout : ''}</span></td><td>${w.status !== 'void' ? `<button class="sm danger" data-void="${esc(w.id)}">Void</button>` : ''}</td></tr>`).join('')}</table></div>` : `<p class="muted">${wk.length ? 'No bets in this group.' : 'No wagers yet.'}</p>`}</div>`;
+        ${ST.wfList.map(w => `<tr><td>${esc(wkShort(w.week, w.season))}</td><td>${esc(w.coach)}</td><td style="white-space:normal">${esc(wagerLabel(w))}${legsHtml(w)}</td><td class="muted small">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num"><span class="pill ${w.status}">${w.status}${w.payout ? ' ' + (w.payout > 0 ? '+' : '') + w.payout : ''}</span></td><td>${w.status !== 'void' ? `<button class="sm danger" data-void="${esc(w.id)}">Void</button>` : ''}</td></tr>`).join('')}</table></div>` : `<p class="muted">${wk.length ? 'No bets in this group.' : 'No wagers yet.'}</p>`}</div>`;
   },
 
   awards() {
@@ -466,7 +470,7 @@ const views = {
 function gotyPicker(h) {
   const i = (h.awards || []).findIndex(a => /game of the year/i.test(a.award || '')); if (i < 0) return '';
   const a = h.awards[i], cur = awardGame(h, a), games = D.games.filter(g => g.season === h.season && played(g)).sort((x, y) => (x.type === 'ccg') - (y.type === 'ccg') || x.week - y.week);
-  const lbl = g => `${g.type === 'ccg' ? 'Title game' : 'Wk ' + g.week} · ${team(g.away).abbr || team(g.away).name} ${g.awayScore} @ ${team(g.home).abbr || team(g.home).name} ${g.homeScore} (${coachOf(g, 'away')} vs ${coachOf(g, 'home')})`;
+  const lbl = g => `${g.type === 'ccg' ? 'League Title' : g.type === 'bowl' ? (g.note || 'Bowl Season') : wkShort(g.week, g.season)} · ${team(g.away).abbr || team(g.away).name} ${g.awayScore} @ ${team(g.home).abbr || team(g.home).name} ${g.homeScore} (${coachOf(g, 'away')} vs ${coachOf(g, 'home')})`;
   return `<div class="row" style="margin:8px 0"><label style="margin:0">Game of the Year (“${esc(a.winner || '')}”)</label>
     <select data-goty="${esc(h.id)}" data-i="${i}" style="max-width:100%;min-width:0"><option value="">${cur ? 'Not linked' : 'Not linked: pick the game'}</option>${games.map(g => `<option value="${esc(g.id)}" ${cur && cur.id === g.id ? 'selected' : ''}>${esc(lbl(g))}</option>`).join('')}</select>
     <button class="sm" data-savegoty="${esc(h.id)}">Save link</button>${cur && !a.gameId ? '<span class="muted small">Matched automatically</span>' : ''}</div>`;
@@ -578,7 +582,7 @@ async function giveRelief() {
 const ACT = {
   async gameLock(t) { const g = D.games.find(x => x.id === t.dataset.g); if (!g) return; await batch([{ op: 'set', col: 'games', id: g.id, data: { locked: !g.locked } }]); await syncWinLocks(); flash(`${team(g.away).abbr} @ ${team(g.home).abbr}: bets ${g.locked ? 'locked' : 'unlocked'}.`); },
   async lockWeek() { const lg = L(), gs = D.games.filter(g => g.season === lg.season && g.week === lg.week && !played(g) && !g.locked); if (!gs.length) return flash('Every game this week is already locked or final.');
-    await batch(gs.map(g => ({ op: 'set', col: 'games', id: g.id, data: { locked: true } }))); await syncWinLocks(); flash(`Locked bets on ${gs.length} Week ${lg.week} game${gs.length === 1 ? '' : 's'} (and those teams' win totals). Other weeks stay open.`); },
+    await batch(gs.map(g => ({ op: 'set', col: 'games', id: g.id, data: { locked: true } }))); await syncWinLocks(); flash(`Locked bets on ${gs.length} ${wkName(lg.week)} game${gs.length === 1 ? '' : 's'} (and those teams' win totals). Other weeks stay open.`); },
   async toggleBet() { await put('meta', 'league', { bettingOpen: !L().bettingOpen }); flash('Betting ' + (L().bettingOpen ? 'opened' : 'locked') + '.'); },
   async saveScores() {
     const games = D.games.filter(g => g.season === L().season && g.week === L().week);
@@ -628,12 +632,12 @@ const ACT = {
     }
     const settled = D.wagers.filter(w => w.settledAt && Date.now() - w.settledAt < 60000).length;
     ST.draft = null; ST.step = 1; ST.desk = 'no';
-    ST.done = `<div class="card banner"><h2>✅ ${last ? 'Regular season complete' : `Week ${W + 1} is live`}</h2><ul class="clean">
+    ST.done = `<div class="card banner"><h2>✅ ${last ? 'Regular season complete' : `${wkName(W + 1)} is live`}</h2><ul class="clean">
       <li>${ops.length} result${ops.length === 1 ? '' : 's'} saved; ${settled} bet${settled === 1 ? '' : 's'} graded and paid.</li>
-      ${last ? `<li>Win totals settled and League Champion futures closed.</li>${early ? '<li>🏆 Championship week is live: the title game was already posted, betting stays open and awards voting is open.</li>' : ''}` : `<li>Lines posted for every upcoming game; betting is open for Week ${W + 1}.</li><li>Standings, odds, power rankings and storylines are updated.</li>`}${dr.ccg ? `<li>${esc(dr.ccg)}</li>` : ''}
+      ${last ? `<li>Win totals settled and League Champion futures closed.</li>${early ? '<li>🏆 Championship week is live: the title game was already posted, betting stays open and awards voting is open.</li>' : ''}` : `<li>Lines posted for every upcoming game; betting is open for ${wkName(W + 1)}.</li><li>Standings, odds, power rankings and storylines are updated.</li>`}${dr.ccg ? `<li>${esc(dr.ccg)}</li>` : ''}
       ${dr.poll && pollChanged(dr.poll, W) ? `<li>Top 25 updated (${dr.poll.length} ranked teams).</li>` : '<li>Top 25 carried over.</li>'}
       <li>${desk.show ? "Commissioner's Desk note posted." : "Commissioner's Desk cleared."}</li>${dr.relief ? `<li>🪙 ${esc(dr.relief)}</li>` : ''}</ul>
-      <div class="row" style="margin-top:10px"><a class="btn" style="padding:8px 14px;border-radius:8px" href="index.html" target="_blank">View the site</a><button class="gold" data-act="wizDone">${last ? (early ? 'Go to championship week →' : 'Set up the championship →') : `Start Week ${W + 1} →`}</button></div></div>`;
+      <div class="row" style="margin-top:10px"><a class="btn" style="padding:8px 14px;border-radius:8px" href="index.html" target="_blank">View the site</a><button class="gold" data-act="wizDone">${last ? (early ? 'Go to championship week →' : 'Set up the championship →') : `Start ${wkName(W + 1)} →`}</button></div></div>`;
     render(); window.scrollTo(0, 0);
   },
   async postEarly() {
@@ -661,7 +665,7 @@ const ACT = {
       await put('meta', 'league', { week: W + 1, advancedAt: Date.now(), advExt: 0, bettingOpen: true, desk });
       await batch(lineOps(W + 1));
       const rel = await giveRelief(), cc = await earlyCcgMsg();
-      ST.desk = 'no'; flash(`Advanced to Week ${W + 1}. Lines posted, betting open, odds and power rankings updated.${rel ? ' ' + rel : ''}${cc ? ' ' + cc : ''}`);
+      ST.desk = 'no'; flash(`Advanced to ${wkName(W + 1)}. Lines posted, betting open, odds and power rankings updated.${rel ? ' ' + rel : ''}${cc ? ' ' + cc : ''}`);
     }
   },
   async openCcg() {
@@ -694,17 +698,24 @@ const ACT = {
   // Postseason betting: price every unplayed postseason game and open the book.
   async postBowlLines() {
     const lg = L(), post = D.games.filter(g => g.season === lg.season && g.type === 'bowl' && !played(g));
-    if (!post.length) return flash('Add a postseason game first.');
+    if (!post.length) return flash('Add a bowl or playoff game first.');
     const wk = Math.min(...post.map(g => g.week));
     await batch(boardOps(wk));
     await put('meta', 'league', { bettingOpen: true });
-    flash(`Lines posted for ${post.length} postseason game${post.length === 1 ? '' : 's'}. Betting is open.`);
+    flash(`Lines posted for ${post.length} bowl/playoff game${post.length === 1 ? '' : 's'}. Betting is open.`);
   },
   async saveBowls() {
     const lg = L(), post = D.games.filter(g => g.season === lg.season && g.type === 'bowl');
     await saveScoresAndSettle(post);
     await batch(parlayOps());
-    flash('Postseason scores saved and bets settled.');
+    flash('Bowl Season scores saved and bets settled.');
+  },
+  // Cosmetic: flips the header to Preseason and (through the advance key) sends the league a notification.
+  async toPreseason(t) {
+    const back = !!(t && t.dataset && t.dataset.back);
+    if (!back && !confirm('Move the league to the Preseason? Everyone with notifications on gets an alert.')) return;
+    await put('meta', 'league', { pre: !back });
+    flash(back ? 'Back to the Postseason.' : 'The league is in the Preseason. Notification on its way.');
   },
   async finalize() {
     const lg = L(), s = lg.season;
@@ -717,11 +728,11 @@ const ACT = {
       const hw = +ccg.homeScore > +ccg.awayScore, w = hw ? 'home' : 'away', l = hw ? 'away' : 'home';
       Object.assign(H, { champTeam: ccg[w], champCoach: ccg[w + 'Coach'] || team(ccg[w]).coach || 'CPU', champScore: +ccg[w + 'Score'], runnerTeam: ccg[l], runnerCoach: ccg[l + 'Coach'] || team(ccg[l]).coach || 'CPU', runnerScore: +ccg[l + 'Score'] });
     }
-    if (!confirm(`Finalize ${s}? This closes awards voting, writes ${s} to History (${aw.length} award${aw.length === 1 ? '' : 's'}) and moves the league to the offseason.`)) return;
+    if (!confirm(`Finalize ${s}? This closes awards voting, writes ${s} to History (${aw.length} award${aw.length === 1 ? '' : 's'}) and moves the league to the Postseason.`)) return;
     await put('history', String(s), H, false);
     await batch(settleFuturesOps(s, ccg ? H.champTeam : null));
     await batch(parlayOps());
-    await put('meta', 'league', { phase: PHASES.PRE, bettingOpen: false, desk: deskValue(), awards: { ...(lg.awards || {}), open: false, season: s, results: aw } });
+    await put('meta', 'league', { phase: PHASES.PRE, pre: false, bettingOpen: false, desk: deskValue(), awards: { ...(lg.awards || {}), open: false, season: s, results: aw } });
     ST.desk = 'no'; ST.tab = 'preseason'; flash(`${s} is in the books. Set up next season below.`);
   },
   addTeam() {
@@ -778,9 +789,9 @@ const ACT = {
     const align = { ...(alignSnapshot() || L().align || {}), [s]: fmt === 'one' ? { _one: true } : { _one: false, ...Object.fromEntries(leagueTeams().map(t => [t.id, t.div])) } };
     D.league.align = align;
     await put('meta', 'league', { align });
-    await put('meta', 'league', { season: s, finalWeek: fw, week: first, advancedAt: Date.now(), advExt: 0, phase: PHASES.REG, bettingOpen: true, desk: deskValue(), awards: { open: false, season: s, categories: [], results: [] } });
+    await put('meta', 'league', { season: s, finalWeek: fw, week: first, advancedAt: Date.now(), advExt: 0, phase: PHASES.REG, pre: false, bettingOpen: true, desk: deskValue(), awards: { open: false, season: s, categories: [], results: [] } });
     await batch(lineOps(first, s));
-    ST.desk = 'no'; ST.tab = 'advance'; flash(`${s} season published. Week ${first} lines are posted and preseason odds are live.`);
+    ST.desk = 'no'; ST.tab = 'advance'; flash(`${s} season published. ${wkName(first)} lines are posted and preseason odds are live.`);
   },
   async saveGames() {
     const wk = ST.gamesWeek ?? L().week, games = D.games.filter(g => g.season === L().season && g.week === wk);
@@ -947,7 +958,7 @@ const ACT = {
   async seedRatings() {
     const r = await fetch('league-data.json?v=' + Date.now()); if (!r.ok) return alert('league-data.json not found on the site.');
     const d = await r.json(), ops = d.teams.filter(t => t.ovr && D.teams.find(x => x.id === t.id)).map(t => ({ op: 'set', col: 'teams', id: t.id, data: { ovr: t.ovr, off: t.off, def: t.def } }));
-    await batch(ops); ST.clear = true; await loadAll(); await batch(lineOps(L().week)); flash(`Updated OVR/OFF/DEF for ${ops.length} teams. Week ${L().week} lines were re-posted from the new ratings.`);
+    await batch(ops); ST.clear = true; await loadAll(); await batch(lineOps(L().week)); flash(`Updated OVR/OFF/DEF for ${ops.length} teams. ${wkName(L().week)} lines were re-posted from the new ratings.`);
   },
   async importSeed() {
     if (D.games.length && !confirm('This overwrites teams, games, history and league settings with league-data.json. Wagers, votes and accounts are kept. Continue?')) return;
@@ -957,7 +968,7 @@ const ACT = {
     await batch(ops);
     await put('meta', 'league', d.league);
     await batch(lineOps(d.league.week, d.league.season));
-    flash(`Loaded ${d.teams.length} teams, ${d.games.length} games and ${d.history.length} past seasons. Week ${d.league.week} lines are posted. Next: link coach accounts and set team ratings on Teams & Coaches.`);
+    flash(`Loaded ${d.teams.length} teams, ${d.games.length} games and ${d.history.length} past seasons. ${wkName(d.league.week)} lines are posted. Next: link coach accounts and set team ratings on Teams & Coaches.`);
   },
   async importLegacy() {
     const get = async f => { try { const r = await fetch(f + '?v=' + Date.now()); return r.ok ? await r.json() : []; } catch (e) { return []; } };
@@ -999,7 +1010,7 @@ function render() {
   const kept = {}; KEEP.forEach(id => { const el = document.getElementById(id); if (el) kept[id] = el.value; });
   const T = TABS(); if (!T.some(([k]) => k === ST.tab) && !['coaches', 'ratings', 'top25'].includes(ST.tab)) ST.tab = 'advance';
   $('#tabs').innerHTML = T.map(([k, l]) => `<a href="#" data-tab="${k}" class="${k === ST.tab ? 'on' : ''}">${l}</a>`).join('');
-  $('#sub').textContent = `${L().season} · ${weekLabel()} · ${L().phase}${DEMO ? ' · DEMO (changes are not saved)' : ''}`;
+  $('#sub').textContent = `${L().season} · ${weekLabel()}${DEMO ? ' · DEMO (changes are not saved)' : ''}`;
   $('#panel').innerHTML = (ST.msg ? `<div class="notice">${esc(ST.msg)}</div>` : '') + views[ST.tab]();
   nameFields($('#panel'));
   if (!ST.clear) KEEP.forEach(id => { const el = document.getElementById(id); if (el && kept[id] != null) el.value = kept[id]; });

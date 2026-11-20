@@ -8,6 +8,12 @@ export const $$ = s => [...document.querySelectorAll(s)];
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const START_CREDITS = 1000;
 export const PHASES = { PRE: 'Offseason', REG: 'Regular Season', CCG: 'Conference Championship', POST: 'Postseason' };
+// What each phase is called on the site. The stored values above stay as they are (the rules and notifications use them):
+// after the regular season comes League Title, then Bowl Season, then Postseason (season finalized, offseason work) until
+// the next season is published.
+export const PHASE_NAME = { [PHASES.PRE]: 'Postseason', [PHASES.REG]: 'Regular Season', [PHASES.CCG]: 'League Title', [PHASES.POST]: 'Bowl Season' };
+// Preseason is cosmetic: the same stored phase as Postseason, flagged by league.pre once the commissioner moves the league on.
+export const phaseName = (L = D.league) => L.phase === PHASES.PRE && L.pre ? 'Preseason' : PHASE_NAME[L.phase] || L.phase;
 
 export const DEMO = !firebaseConfig || !firebaseConfig.apiKey || /PASTE|YOUR/i.test(firebaseConfig.apiKey);
 const FBV = '10.12.2';
@@ -355,14 +361,21 @@ export const fmtLine = l => l == null ? '–' : (l === 0 ? 'PK' : (l > 0 ? '+' +
 export const pctStr = p => p >= 0.995 ? '>99%' : p > 0 && p < 0.005 ? '<1%' : Math.round(p * 100) + '%';
 export const seasonNum = (y = D.league.season) => y - (D.league.firstSeason || 2026) + 1;
 // Name of a week: the title-game week is "League Title", an all-bowl week is "Bowls", anything else "Week N".
+// The week after the regular season is "League Title" and anything after it is "Bowl Season": never "Week 14/15".
 export function wkName(w, season = D.league.season) {
-  const gs = D.games.filter(g => g.season === season && g.week === w);
+  w = +w; const gs = D.games.filter(g => g.season === season && g.week === w);
   if (gs.some(g => g.type === 'ccg')) return 'League Title';
   if (gs.length && gs.every(g => g.type === 'bowl')) return 'Bowl Season';
   const c = D.games.find(g => g.season === season && g.type === 'ccg');
-  if (c && w > c.week && !gs.length) return 'Bowl Season';
+  const tw = c ? c.week : season === D.league.season && D.league.finalWeek ? D.league.finalWeek + 1 : null;
+  if (tw != null && w === tw) return 'League Title';
+  if (tw != null && w > tw) return 'Bowl Season';
   return 'Week ' + w;
 }
+// Short form for tight spots: "Wk 6", but still "League Title" / "Bowl Season".
+export const wkShort = (w, season) => { const n = wkName(w, season); return n.startsWith('Week ') ? 'Wk ' + w : n; };
+// A game's week: by its type first, so a title game or bowl reads right even in an odd week slot.
+export const wkOf = g => g.type === 'ccg' ? 'League Title' : g.type === 'bowl' ? 'Bowl Season' : wkName(g.week, g.season);
 // The week the league is in. In the postseason that's bowl season, the week after the title game, even before the
 // commissioner's next load has moved league.week on.
 export function curWeek(L = D.league) {
@@ -370,8 +383,8 @@ export function curWeek(L = D.league) {
   const c = D.games.find(g => g.season === L.season && g.type === 'ccg');
   return c ? Math.max(L.week, c.week + 1) : L.week;
 }
-export const gWeek = g => g.type === 'ccg' ? 'League Title' : g.type === 'bowl' ? (g.note || 'Bowl') : 'Week ' + g.week;
-export const weekLabel = (L = D.league) => L.phase === PHASES.CCG ? 'League Title' : L.phase === PHASES.POST ? 'Bowl Season' : L.phase === PHASES.PRE ? 'Preseason' : 'Week ' + L.week;
+export const gWeek = g => g.type === 'ccg' ? 'League Title' : g.type === 'bowl' ? (g.note || 'Bowl Season') : wkName(g.week, g.season);
+export const weekLabel = (L = D.league) => L.phase === PHASES.CCG ? 'League Title' : L.phase === PHASES.POST ? 'Bowl Season' : L.phase === PHASES.PRE ? (L.pre ? 'Preseason' : 'Postseason') : wkName(L.week, L.season);
 /* ---- Top 25: league.polls = { "2028_10": [{ id, r }, ...] } — the poll in effect entering that week ---- */
 export function pollFor(season = D.league.season, week = curWeek()) {
   const P = D.league.polls || {}; let best = null, bw = -Infinity;
@@ -793,7 +806,7 @@ export function oddsHistory(season = D.league.season) {
   const first = Math.min(...wk), last = Math.max(...wk);
   const cur = season === L.season && L.phase === PHASES.REG ? Math.min(L.week, last + 1) : last + 1;
   const pts = [];
-  for (let u = first; u <= cur; u++) pts.push({ upto: u, label: u === first ? 'Pre' : u > last ? 'Final' : 'Wk ' + u, sim: simulate(season, u, 800) });
+  for (let u = first; u <= cur; u++) pts.push({ upto: u, label: u === first ? 'Pre' : u > last ? 'Final' : wkShort(u, season), sim: simulate(season, u, 800) });
   return pts;
 }
 
@@ -1033,7 +1046,7 @@ export function winHistory(g) {
   const at = u => { const l = lineFrom(ratings(s, u), g); return l ? { p: l.pHome, s: l.spread } : null; };
   const open = at(weeks[0]);
   if (open) pts.push({ label: 'Open', sub: 'Matchup open (preseason)', ...open });
-  weeks.filter(w => w < g.week && w + 1 < endU).forEach(w => { const v = at(w + 1); if (v) pts.push({ label: `Wk ${w}`, sub: `After Week ${w} results`, ...v }); });
+  weeks.filter(w => w < g.week && w + 1 < endU).forEach(w => { const v = at(w + 1); if (v) pts.push({ label: wkShort(w, s), sub: `After ${wkName(w, s)} results`, ...v }); });
   saved.forEach(h => pts.push({ label: fmtShort(h.t), sub: 'Re-priced ' + new Date(h.t).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }), p: h.p, s: h.s, t: h.t }));
   const cur = lineOf(g);
   if (cur && cur.pHome != null) {
@@ -1163,7 +1176,7 @@ export function legLabel(l) {
 export function legsHtml(w) {
   if (w.market !== 'parlay') return '';
   const legs = w.legs || [];
-  const wk = l => { if (l.market === 'future') return 'Title'; if (l.market === 'wins') return 'Season'; const g = D.games.find(x => x.id === l.gameId); return !g ? 'Wk ?' : g.type === 'ccg' ? 'League Title' : g.type === 'bowl' ? (g.note || 'Bowl') : 'Wk ' + g.week; };
+  const wk = l => { if (l.market === 'future') return 'Title'; if (l.market === 'wins') return 'Season'; const g = D.games.find(x => x.id === l.gameId); return !g ? 'Wk ?' : g.type === 'ccg' ? 'League Title' : g.type === 'bowl' ? (g.note || 'Bowl Season') : wkShort(g.week, g.season); };
   const ic = r => r === 'won' ? '✅' : r === 'lost' ? '❌' : r === 'push' || r === 'void' ? '➖' : '⏳';
   return `<details class="legs"><summary><span class="lgic">${legs.map(l => ic(l.result)).join('')}</span><span class="lgtx">${legs.length} legs</span></summary>
     <ul>${legs.map(l => `<li><span class="li">${ic(l.result)}</span><span class="lt">${esc(legLabel(l))} <span class="lw">${wk(l)}</span></span><span class="lo">${fmtOdds(l.odds)}</span></li>`).join('')}</ul></details>`;
@@ -1379,7 +1392,7 @@ export function storylines() {
   // Wording picks: seeded by season and week, so the page reads the same all week and differently next week.
   const vr = rng(s * 131 + (L.week || 0) * 17 + 3), pk = a => a[Math.floor(vr() * a.length)];
   const nextOf = id => D.games.filter(g => g.season === s && !played(g) && (g.home === id || g.away === id)).sort((a, b) => a.week - b.week)[0];
-  const nextTxt = id => { const n = nextOf(id); if (!n) return ''; const o = team(n.home === id ? n.away : n.home); return n.type === 'ccg' ? ' Next up: the title game.' : ` Next up: ${n.home === id ? o.name + ' at home' : 'a trip to ' + o.name} in Week ${n.week}.`; };
+  const nextTxt = id => { const n = nextOf(id); if (!n) return ''; const o = team(n.home === id ? n.away : n.home); return n.type === 'ccg' ? ' Next up: the title game.' : ` Next up: ${n.home === id ? o.name + ' at home' : 'a trip to ' + o.name} in ${wkOf(n)}.`; };
   const nextGames = D.games.filter(g => g.season === s && g.week === L.week && !played(g));
   const upNext = () => {
     const g = gotwTally(s, L.week).game || nextGames.filter(x => isUserTeam(team(x.home)) && isUserTeam(team(x.away))).sort((a, b) => Math.abs(lineOf(a)?.spread ?? 99) - Math.abs(lineOf(b)?.spread ?? 99))[0];
@@ -1569,7 +1582,7 @@ export function storylines() {
     if (/^W\d+$/.test(st) && +st.slice(1) >= 3) extra.push(`That's ${st.slice(1)} straight for ${team(w).name}.`);
     if (ln && ln.spread != null) { const m = +g.homeScore - +g.awayScore + ln.spread; if (pw < 0.5) extra.push(`They were ${fmtLine(Math.abs(ln.spread))} underdogs.`); else if (m !== 0) extra.push((m > 0) === hw ? 'Covered, too.' : `Won, but didn't cover ${fmtLine(-Math.abs(ln.spread))}.`); }
     extra.push(pk(['Full recap inside.', 'The recap has how it happened.', 'Read the recap.']));
-    pool.push({ href: '#game/' + g.id, tag: 'User Game', title, body: `${name(w)} beat ${name(l)} ${ws}-${ls} in Week ${lw}. ${extra.join(' ')}` });
+    pool.push({ href: '#game/' + g.id, tag: 'User Game', title, body: `${name(w)} beat ${name(l)} ${ws}-${ls} in ${wkName(lw, s)}. ${extra.join(' ')}` });
   });
   const r = rng(s * 97 + L.week * 13 + 7);
   // Once the league title is decided, title-odds and "needs a win" stories no longer make sense: the champion and
@@ -1586,7 +1599,7 @@ export function storylines() {
       .slice(0, 2).forEach(g => {
         const side = coachOf(g, 'home') !== 'CPU' ? 'home' : 'away', op = side === 'home' ? 'away' : 'home', c = coachOf(g, side), l = lineOf(g);
         const fav = l && l.spread != null ? (l.spread < 0 ? g.home : g.away) : null;
-        lead.push({ href: '#game/' + g.id, tag: 'Postseason', title: `${poss(c)} ${team(g[side]).name} ${pk(['heads to the', 'is in the', 'plays in the'])} ${g.note || 'postseason'}`,
+        lead.push({ href: '#game/' + g.id, tag: 'Bowl Season', title: `${poss(c)} ${team(g[side]).name} ${pk(['heads to the', 'is in the', 'plays in the'])} ${g.note || 'a bowl game'}`,
           body: `${team(g[side]).name} faces ${rankName(g[op])}${l && l.spread ? `, ${fav === g[side] ? 'favored' : 'an underdog'} by ${Math.abs(l.spread)}` : ''}. ${coachOf(g, op) !== 'CPU' ? `It's a coach-vs-coach game against ${coachOf(g, op)}.` : pk(['Represent the league.', 'One game at a time.', 'Survive and advance.'])}` });
       });
     shuffle(pool, r);
@@ -1664,7 +1677,7 @@ export const AWARD_DEFS = [
 export const awardDefs = () => AWARD_DEFS;
 export const awardGames = s => D.games.filter(g => g.season === s && played(g) && (team(g.home).conf === D.league.conference || team(g.away).conf === D.league.conference))
   .sort((a, b) => b.week - a.week || String(a.id).localeCompare(String(b.id)));
-export const awardGameLabel = g => `${g.type === 'ccg' ? 'Title game' : g.type === 'bowl' ? (g.note || 'Bowl') : 'Wk ' + g.week} · ${team(g.away).abbr || team(g.away).name} ${g.awayScore} @ ${team(g.home).abbr || team(g.home).name} ${g.homeScore}`;
+export const awardGameLabel = g => `${g.type === 'ccg' ? 'League Title' : g.type === 'bowl' ? (g.note || 'Bowl Season') : wkShort(g.week, g.season)} · ${team(g.away).abbr || team(g.away).name} ${g.awayScore} @ ${team(g.home).abbr || team(g.home).name} ${g.homeScore}`;
 export const awardCoaches = () => [...new Set(userTeams().map(t => t.coach.trim()))].sort((a, b) => a.localeCompare(b));
 // Player names: forgive case, punctuation, initials ("A. Carlisle" = "Aaron Carlisle") and small typos.
 const normName = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\b(jr|sr|ii|iii|iv)\b/g, '').replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -1719,7 +1732,7 @@ export function seasonStorylines(s) {
   const cName = (g, side) => { const c = coachOf(g, side); return c && c.toUpperCase() !== 'CPU' ? c : ''; };
   const who = (g, side) => { const c = cName(g, side), t = team(g[side]).name; return c ? `${poss(c)} ${t}` : t; };
   const userG = g => !!(cName(g, 'home') || cName(g, 'away'));
-  const R = records(s), wk = g => g.type === 'ccg' ? 'the title game' : g.type === 'bowl' ? (g.note || 'a bowl game') : `Week ${g.week}`;
+  const R = records(s), wk = g => g.type === 'ccg' ? 'the title game' : g.type === 'bowl' ? (g.note || 'Bowl Season') : wkName(g.week, g.season);
   const res = g => { const hw = +g.homeScore > +g.awayScore; return { w: hw ? 'home' : 'away', l: hw ? 'away' : 'home', ws: Math.max(+g.homeScore, +g.awayScore), ls: Math.min(+g.homeScore, +g.awayScore) }; };
   // 1. The champion
   const ccg = sg.find(g => g.type === 'ccg');

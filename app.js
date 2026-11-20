@@ -5,8 +5,8 @@ import {
   gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, wkName, gWeek, champOpen, titleSet, DIAG, storylines, seasonStorylines, RELIEF, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory, legLabel
 , playbookOf, pbSeason, pbText
 , AWARD_DEFS, awardGames, awardGameLabel, awardCoaches
-, curWeek
-} from './core.js?v=101';
+, curWeek, wkShort, wkOf, phaseName
+} from './core.js?v=104';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -96,8 +96,8 @@ function scoutCard(t, s = D.league.season) {
   const ps = teamPlayers(t.id, s).slice(0, 6), sc = teamScouting(t.id, s);
   if (!ps.length && !sc.length) return '';
   return `<div class="card"><h3 style="margin-top:0">Players to know</h3>
-    ${ps.length ? `<div class="tablewrap"><table><tr><th>Player</th><th class="num">Games</th><th class="num">Grade</th></tr>${ps.map(p => `<tr><td class="wrap"><b>${esc(shortName(p.name))}</b>${isCommish() ? ` <a href="javascript:void 0" class="pedit" data-pname="${esc(t.id)}|${esc(p.name)}" title="Fix this name">✎</a>` : ''}${p.pos ? ` <span class="muted small">${esc(p.pos)}</span>` : ''}${p.lines[0] ? `<div class="muted small">Wk ${p.lines[0].w}: ${esc(p.lines[0].l)}</div>` : ''}</td><td class="num">${p.games}</td><td class="num">${p.grade ? p.grade.toFixed(1) : '–'}</td></tr>`).join('')}</table></div>` : ''}
-    ${sc.length ? `<h4 style="margin:14px 0 6px">Scouting report</h4><ul class="clean small">${sc.map(x => `<li><span class="muted">Wk ${x.g.week}:</span> ${x.good ? `<span class="win">+</span> ${esc(x.good)}` : ''}${x.good && x.bad ? ' ' : ''}${x.bad ? `<span class="loss">−</span> ${esc(x.bad)}` : ''}</li>`).join('')}</ul>` : ''}
+    ${ps.length ? `<div class="tablewrap"><table><tr><th>Player</th><th class="num">Games</th><th class="num">Grade</th></tr>${ps.map(p => `<tr><td class="wrap"><b>${esc(shortName(p.name))}</b>${isCommish() ? ` <a href="javascript:void 0" class="pedit" data-pname="${esc(t.id)}|${esc(p.name)}" title="Fix this name">✎</a>` : ''}${p.pos ? ` <span class="muted small">${esc(p.pos)}</span>` : ''}${p.lines[0] ? `<div class="muted small">${wkShort(p.lines[0].w)}: ${esc(p.lines[0].l)}</div>` : ''}</td><td class="num">${p.games}</td><td class="num">${p.grade ? p.grade.toFixed(1) : '–'}</td></tr>`).join('')}</table></div>` : ''}
+    ${sc.length ? `<h4 style="margin:14px 0 6px">Scouting report</h4><ul class="clean small">${sc.map(x => `<li><span class="muted">${wkShort(x.g.week, x.g.season)}:</span> ${x.good ? `<span class="win">+</span> ${esc(x.good)}` : ''}${x.good && x.bad ? ' ' : ''}${x.bad ? `<span class="loss">−</span> ${esc(x.bad)}` : ''}</li>`).join('')}</ul>` : ''}
     <p class="muted small" style="margin:10px 0 0">From the AI's read of this season's broadcasts. Grades are 1-10 per game, averaged.</p></div>`;
 }
 // Broadcasts the commissioner filed as "User vs CPU" (games against teams outside the league), on the team's page.
@@ -177,7 +177,7 @@ function gameCard(g, opts = {}) {
   const tags = [];
   const gt = gameTags(g); if (gt) tags.push(gt);
   // (the title game is marked by its gold ribbon instead of a tag)
-  if (g.type === 'bowl') tags.push('<span class="tag">Postseason</span>');
+  if (g.type === 'bowl') tags.push('<span class="tag">Bowl Season</span>');
   const l = lineOf(g);
   let odds = '';
   if (done && g.forfeit) odds = 'Forfeit win';
@@ -224,7 +224,7 @@ function raceHtml(r, order) {
   if (r.skip) return `<div class="race"><h4>Race for ${prize}</h4><p class="muted small" style="margin:0">Clinching scenarios show up once the race gets down to the last few weeks.</p></div>`;
   const byId = Object.fromEntries(r.teams.map(t => [t.id, t])), rows = order.map(id => byId[id]).filter(Boolean);
   const nm = id => esc(team(id).name), list = ids => ids.length <= 1 ? ids.join('') : ids.slice(0, -1).join(', ') + ' and ' + ids[ids.length - 1];
-  const wk = r.now.length ? `Week ${Math.max(...r.now.map(g => g.week))}` : 'this week';
+  const wk = r.now.length ? wkName(Math.max(...r.now.map(g => g.week))) : 'this week';
   const clinched = rows.filter(t => t.status === 'clinched'), out = rows.filter(t => t.status === 'eliminated');
   const control = rows.filter(t => t.status === 'alive' && t.destiny), help = rows.filter(t => t.status === 'alive' && !t.destiny);
   // Summary sentence for the whole race.
@@ -267,7 +267,7 @@ function raceSection() {
 function raceCard(r) {
   const nm = id => esc(team(id).name), ab = id => esc(team(id).abbr || team(id).name);
   const prize = r.K === 1 && r.div ? `the ${esc(r.div)}` : 'the title game';
-  const vsTxt = (g, me) => `${g.home === me ? 'vs' : g.neutral ? 'vs' : 'at'} ${ab(g.home === me ? g.away : g.home)} <span class="muted">(${g.type === 'ccg' ? 'League Title' : 'Wk ' + g.week})</span>`;
+  const vsTxt = (g, me) => `${g.home === me ? 'vs' : g.neutral ? 'vs' : 'at'} ${ab(g.home === me ? g.away : g.home)} <span class="muted">(${g.type === 'ccg' ? 'League Title' : wkShort(g.week, g.season)})</span>`;
   const list = a => a.length <= 1 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
   const beat = x => `${ab(x.winner)} beats ${ab(x.loser)}`;
   const ordn = n => ordinal(n);
@@ -299,7 +299,7 @@ function raceCard(r) {
     } else out.push(`Still alive only through tiebreaks that need other results to break its way.`);
     if (t.needs.length) out.push(`<span class="rneed">Needs no matter what:</span> ${results(t.needs).join(', ')}.`);
     if (t.clinch1.length) out.push(`<span class="rgood">Clinches right away if</span> ${results(t.clinch1).slice(0, 3).join(' <span class="muted">or</span> ')}.`);
-    const left = mine.length ? `<p class="rleft">Left: ${mine.map(g => `${g.home === t.id || g.neutral ? 'vs' : 'at'} ${opp(g)} <span class="muted">Wk ${g.week}</span>`).join(' · ')}</p>` : '';
+    const left = mine.length ? `<p class="rleft">Left: ${mine.map(g => `${g.home === t.id || g.neutral ? 'vs' : 'at'} ${opp(g)} <span class="muted">${wkShort(g.week, g.season)}</span>`).join(' · ')}</p>` : '';
     return out.map(x => `<p>${x}</p>`).join('') + left;
   };
   const range = t => !t ? '' : t.best === t.worst ? `Finishes ${ordn(t.best)}` : `Can finish ${ordn(t.best)}–${ordn(t.worst)}`;
@@ -309,7 +309,7 @@ function raceCard(r) {
     <ol class="rproj">${r.projected.map((p, i) => `<li><span class="rpos">${i + 1}</span>${chip(p.id)}<span class="rrec">${p.cw}-${p.cl} conf · ${p.w}-${p.l}</span>${p.over ? `<span class="rwhy">ahead of ${ab(r.projected[i + 1].id)}: ${esc(p.over.t)}</span>` : ''}</li>`).join('')}</ol>`;
   const weeks = [...new Set(r.left.map(g => g.week))];
   const picker = `<div class="rsub">What if… <span class="muted">tap a winner to see how it changes</span>${nPicked ? ` <button class="ghost sm" data-rreset="${esc(r.div)}">Reset</button>` : ''}</div>
-    ${weeks.map(wk => `<div class="rwk">Week ${wk}</div>${r.left.filter(g => g.week === wk).map(g => {
+    ${weeks.map(wk => `<div class="rwk">${esc(wkName(wk))}</div>${r.left.filter(g => g.week === wk).map(g => {
       const lnx = lineOf(g), ph = lnx ? Math.round(lnx.pHome * 100) : null, cur = racePicks[g.id] || '';
       const btn = (side, id, pct) => `<button class="rpk ${cur === side ? 'on' : ''}" data-rpick="${esc(g.id)}|${side}"><i class="sw" style="background:${esc(teamColor(team(id)))}"></i>${ab(id)}${pct != null ? `<span>${pct}%</span>` : ''}</button>`;
       return `<div class="rgame">${btn('away', g.away, ph != null ? 100 - ph : null)}<span class="rat">${g.neutral ? 'vs' : '@'}</span>${btn('home', g.home, ph)}</div>`;
@@ -373,7 +373,7 @@ const PAGES = {
     if (gt.game) html += featureCard(gt.game, { ribbon: '★ Game of the Week' });
     else if (L.phase === PHASES.REG && games.length) html += `<div class="card gotw"><span class="ribbon">★ Game of the Week</span><div class="muted">No Game of the Week votes were cast for ${esc(weekLabel())}. <a href="#vote">Vote for next week's game →</a></div></div>`;
     const userWk = games.some(g => isUserTeam(team(g.home)) || isUserTeam(team(g.away)));
-    html += `<div class="${offseason ? '' : 'grid2'}"><div><h2>${recap ? `Season ${seasonNum(L.season)} in Review` : bowls ? 'Postseason Storylines' : "This Week's Storylines"}</h2><div class="card">${stories.length ? stories.map(st => `<${st.href ? `a href="${esc(st.href)}"` : 'div'} class="story${st.href ? ' link' : ''}"><span class="tag">${esc(st.tag)}</span><h3>${esc(st.title)}</h3><p>${esc((() => { const vs = {}; vary(st.title, vs); return vary(st.body, vs); })())}</p>${st.href ? '<span class="go" aria-hidden="true">›</span>' : ''}</${st.href ? 'a' : 'div'}>`).join('') : '<div class="empty">Storylines appear once games are played.</div>'}</div></div>
+    html += `<div class="${offseason ? '' : 'grid2'}"><div><h2>${recap ? `Season ${seasonNum(L.season)} in Review` : bowls ? 'Bowl Season Storylines' : "This Week's Storylines"}</h2><div class="card">${stories.length ? stories.map(st => `<${st.href ? `a href="${esc(st.href)}"` : 'div'} class="story${st.href ? ' link' : ''}"><span class="tag">${esc(st.tag)}</span><h3>${esc(st.title)}</h3><p>${esc((() => { const vs = {}; vary(st.title, vs); return vary(st.body, vs); })())}</p>${st.href ? '<span class="go" aria-hidden="true">›</span>' : ''}</${st.href ? 'a' : 'div'}>`).join('') : '<div class="empty">Storylines appear once games are played.</div>'}</div></div>
       ${offseason ? '' : `<div><h2>${esc(weekLabel())} Matchups</h2><div class="card matchbox">${bowls ? (games.length ? games.slice().sort((a, b) => played(a) - played(b) || a.week - b.week).map(g => gameCard(g)).join('') : '<div class="empty">No bowl or playoff games posted yet.</div>') : userWk ? weekOrder(games.filter(g => g.id !== gt.game?.id && g.id !== ccgNow?.id)).map(g => gameCard(g)).join('') || `<div class="empty">Only the ${ccgNow && !gt.game ? 'championship game' : 'Game of the Week'} is on the slate.</div>` : '<div class="empty">No user games this week.</div>'}</div></div>`}</div>
       <div class="grid home2"><div class="card"><h2>Power Rankings</h2><table>${pr.map(x => `<tr><td class="rank">${x.rank}</td><td>${chip(x.id)}</td><td class="num">${rec(x.rec)}</td><td class="num">${mvHtml(x.move)}</td></tr>`).join('')}</table><p><a href="#rankings">Full rankings →</a></p></div>
       <div class="card"><h2>Betting Leaders</h2>${leaders.length ? `<table>${leaders.map((x, i) => `<tr><td class="rank">${i + 1}</td><td>${esc(x.u.name)}</td><td class="num">${x.b.w}-${x.b.l}${x.b.p ? '-' + x.b.p : ''}</td><td class="num"><b class="${x.b.net >= 0 ? 'win' : 'loss'}">${x.b.net >= 0 ? '+' : ''}${x.b.net.toLocaleString()}</b></td></tr>`).join('')}</table>` : '<div class="muted">No coaches linked yet.</div>'}<p><a href="#betting">Place wagers →</a></p></div></div>`;
@@ -471,7 +471,7 @@ const PAGES = {
     let rows = currentPower().map(x => ({ ...x, name: team(x.id).name, coach: team(x.id).coach || 'CPU', wp: x.rec.w + x.rec.l ? x.rec.w / (x.rec.w + x.rec.l) : 0 }));
     rows = sortRows(rows, st, {});
     const lw = (() => { const w = seasonGames().filter(played).map(g => g.week); return w.length ? Math.max(...w) : null; })();
-    return `<h2>Power Rankings</h2><p class="muted small">${lw == null ? 'Preseason order from team ratings.' : `Through Week ${lw}.`} Generated from team strength (adjusted every game by how each team performed versus expectations), recent form (last 3 games versus the spread) and record — not record alone. "Move" is the change since the previous week.</p>
+    return `<h2>Power Rankings</h2><p class="muted small">${lw == null ? 'Preseason order from team ratings.' : `Through ${wkName(lw)}.`} Generated from team strength (adjusted every game by how each team performed versus expectations), recent form (last 3 games versus the spread) and record — not record alone. "Move" is the change since the previous week.</p>
       <div class="row" style="margin-bottom:10px"><div class="seg"><button data-prsort="rank" class="${st.key === 'rank' ? 'on' : ''}">Sort by rank</button><button data-prsort="move" class="${st.key === 'move' ? 'on' : ''}">Sort by movement</button></div></div>
       <div class="card"><div class="tablewrap"><table><tr>${sortTh(st, 'rank', '#')}${sortTh(st, 'name', 'Team')}${sortTh(st, 'coach', 'Coach', 'hide-sm')}${sortTh(st, 'wp', 'Rec', 'num')}${sortTh(st, 'hot', 'Form', 'num')}${sortTh(st, 'move', '+/−', 'num')}</tr>
       ${rows.map(r => `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td class="rank">${r.rank}</td><td>${chip(r.id)}${subSm(isUserTeam(team(r.id)) ? esc(r.coach) : 'CPU')}</td><td class="hide-sm">${isUserTeam(team(r.id)) ? esc(r.coach) : '<span class="muted">CPU</span>'}</td><td class="num">${rec(r.rec)}</td>
@@ -523,7 +523,7 @@ const PAGES = {
         const home = g.home === id, opp = home ? g.away : g.home, done = played(g), l = lineOf(g);
         const my = home ? +g.homeScore : +g.awayScore, th = home ? +g.awayScore : +g.homeScore;
         const myLine = l ? (home ? l.spread : -l.spread) : null;
-        return `<tr class="clickable" data-game="${esc(g.id)}"><td>${g.type === 'ccg' ? '<b title="League Championship">🏆</b>' : g.type === 'bowl' ? '<span title="Postseason">Bowl</span>' : g.week}</td><td>${g.neutral ? 'vs' : home ? 'vs' : '@'} ${chip(opp, { season: g.season, week: g.week })}</td><td class="muted wrap-sm">${l ? fmtLine(myLine) + `<span class="hide-sm"> · ${fmtOdds(home ? l.mlHome : l.mlAway)}</span>` + (winPct(g, l) && !g.forfeit ? ` · <span title="${done ? 'Pre-game win chance' : 'Win chance'}">${home ? winPct(g, l).h : winPct(g, l).a}%</span>` : '') : ''}</td><td class="num">${done ? `<span class="${my > th ? 'win' : 'loss'}">${my > th ? 'W' : 'L'} ${g.forfeit ? '(forfeit)' : my + '-' + th}</span>` : '<span class="muted">—</span>'}</td></tr>`;
+        return `<tr class="clickable" data-game="${esc(g.id)}"><td>${g.type === 'ccg' ? '<b title="League Championship">🏆</b>' : g.type === 'bowl' ? '<span title="Bowl Season">Bowl</span>' : g.week}</td><td>${g.neutral ? 'vs' : home ? 'vs' : '@'} ${chip(opp, { season: g.season, week: g.week })}</td><td class="muted wrap-sm">${l ? fmtLine(myLine) + `<span class="hide-sm"> · ${fmtOdds(home ? l.mlHome : l.mlAway)}</span>` + (winPct(g, l) && !g.forfeit ? ` · <span title="${done ? 'Pre-game win chance' : 'Win chance'}">${home ? winPct(g, l).h : winPct(g, l).a}%</span>` : '') : ''}</td><td class="num">${done ? `<span class="${my > th ? 'win' : 'loss'}">${my > th ? 'W' : 'L'} ${g.forfeit ? '(forfeit)' : my + '-' + th}</span>` : '<span class="muted">—</span>'}</td></tr>`;
       }).join('')}</table></div></div>`;
   },
 
@@ -559,7 +559,7 @@ const PAGES = {
     const h2hGames = o => coachMeetings(name, o).map(g => {
       const side = coachOf(g, 'home').toLowerCase() === String(name).toLowerCase() ? 'home' : 'away', op = side === 'home' ? 'away' : 'home';
       const my = +g[side + 'Score'], th = +g[op + 'Score'], won = my > th, ab = id => esc(team(id).abbr || team(id).name);
-      const when = g.type === 'ccg' ? 'Title game' : g.type === 'bowl' ? esc(g.note || 'Bowl') : 'Wk ' + g.week;
+      const when = g.type === 'ccg' ? 'Title game' : g.type === 'bowl' ? esc(g.note || 'Bowl Season') : wkShort(g.week, g.season);
       return `<a class="h2hg" href="#game/${esc(g.id)}"><span class="muted">S${seasonNum(g.season)} · ${when}</span><b class="${won ? 'win' : 'loss'}">${g.forfeit ? (won ? 'FW' : 'FL') : won ? 'W' : 'L'}</b><span>${ab(g[side])} ${g.forfeit ? '' : my}<span class="muted"> – </span>${ab(g[op])} ${g.forfeit ? '' : th}</span><span class="go" aria-hidden="true">›</span></a>`;
     }).join('');
     const h2hOpen = UI.h2h || (UI.h2h = {});
@@ -603,9 +603,9 @@ const PAGES = {
     const tally = gotwTally(s, nw);
     html += `<h2>Game of the Week · ${esc(wkName(nw, s))}</h2>`;
     if (L.phase === PHASES.REG && !next.length && L.week >= L.finalWeek) html += `<div class="card empty">That's the last regular-season week, so Game of the Week voting is done for the season.${D.games.some(g => g.season === s && g.type === 'ccg') ? ' Next week is all about the League Title game.' : ''}</div>`;
-    else if (L.phase === PHASES.REG && !next.length) html += `<div class="card empty">No league games are scheduled for Week ${nw}, so there's no Game of the Week vote this time.</div>`;
+    else if (L.phase === PHASES.REG && !next.length) html += `<div class="card empty">No league games are scheduled for ${wkName(nw)}, so there's no Game of the Week vote this time.</div>`;
     else if (L.phase !== PHASES.REG) html += `<div class="card empty">Game of the Week voting opens during the regular season for the following week's games.</div>`;
-    else html += `<div class="card"><p class="muted small" style="margin-top:0">Vote during ${esc(weekLabel())} for next week's featured game. The winner shows on the Home page once we advance to Week ${nw}.</p>
+    else html += `<div class="card"><p class="muted small" style="margin-top:0">Vote during ${esc(weekLabel())} for next week's featured game. The winner shows on the Home page once we advance to ${wkName(nw)}.</p>
       ${next.map(g => `<label class="vote-opt ${mine && mine.gameId === g.id ? 'on' : ''}"><input type="radio" name="gotw" value="${esc(g.id)}" ${mine && mine.gameId === g.id ? 'checked' : ''} ${canVote ? '' : 'disabled'}>
         <span style="flex:1">${chip(g.away)} @ ${chip(g.home)} ${gameTags(g)}</span><span class="muted small">${tally.counts[g.id] || 0} vote${tally.counts[g.id] === 1 ? '' : 's'}</span></label>`).join('')}
       ${canVote ? `<button data-act="gotw" style="margin-top:8px">${mine ? 'Change vote' : 'Submit vote'}</button>` : ''}</div>`;
@@ -706,7 +706,7 @@ function myWagersHtml(me, s, open) {
       const mine = cur === 'all' ? all : all.filter(w => grp(w) === cur);
       myW += all.length ? `<div class="bfilters">${FL.filter(([k]) => cnt(k)).map(([k, l]) => `<button class="bfilter${k === cur ? ' on' : ''}" data-bfilter="${k}">${l} <span>${cnt(k)}</span></button>`).join('')}</div>` : '';
       // One block per wager: the bet gets the full width; stake, time, result and buttons sit underneath.
-      const whenOf = (w, g) => w.market === 'future' ? 'Title' : w.market === 'wins' ? 'Win total' : w.market === 'parlay' ? 'Parlay' : g ? gWeek(g) : 'Week ' + w.week;
+      const whenOf = (w, g) => w.market === 'future' ? 'Title' : w.market === 'wins' ? 'Win total' : w.market === 'parlay' ? 'Parlay' : g ? gWeek(g) : wkName(w.week, w.season);
       const resOf = w => w.status === 'open' ? `Open · to win ${winProfit(w).toLocaleString()}` : w.status === 'cashed' ? `Cashed out +${(w.payout || 0).toLocaleString()}` : (w.status === 'void' ? 'Void · refunded' : w.status === 'won' ? 'Won' : w.status === 'lost' ? 'Lost' : 'Push') + (w.payout ? ' ' + (w.payout > 0 ? '+' : '') + w.payout.toLocaleString() : '');
       myW += `<div class="card">${mine.length ? `<div class="wlist">${mine.map(w => { const g = D.games.find(x => x.id === w.gameId); const canCancel = w.status === 'open' && w.market !== 'parlay' && (w.market === 'future' || w.market === 'wins' ? futuresOpen() && !(w.market === 'future' && titleOut(w.season).has(w.pick)) : open && g && !played(g));
           return `<div class="wager"><div class="wtop"><div class="wlbl">${esc(wagerLabel(w))}${w.boost ? ` <span class="boosttag">⚡ +${Math.round((w.boost - 1) * 100)}%</span>` : ''}</div><span class="pill ${w.status}">${resOf(w)}</span></div>${legsHtml(w)}
@@ -944,7 +944,7 @@ async function drawSlip(w) {
   const logo = await loadImg('logo.png');
   if (logo) { const lh = 220, lw = lh * logo.width / logo.height; ctx.drawImage(logo, P - 10, 40, lw, lh); }
   ctx.textAlign = 'right'; ctx.fillStyle = '#fff'; ctx.font = `900 54px ${F}`; ctx.fillText('OEC SPORTSBOOK', W - P, 130);
-  ctx.fillStyle = '#f5b82e'; ctx.font = `700 34px ${B}`; ctx.fillText(`Season ${seasonNum(w.season)} · Placed in Week ${w.week}`, W - P, 185);
+  ctx.fillStyle = '#f5b82e'; ctx.font = `700 34px ${B}`; ctx.fillText(`Season ${seasonNum(w.season)} · Placed in ${wkName(w.week, w.season)}`, W - P, 185);
   ctx.fillStyle = '#a69a9c'; ctx.font = `600 30px ${B}`; ctx.fillText(`Coach ${w.coach || ''}`, W - P, 235);
   let y = 319;
   if (band) {
@@ -1134,7 +1134,7 @@ async function drawCheat(C) {
   const logo = await loadImg('logo.png');
   if (logo) { const h = 76, w = logo.width * h / logo.height; x.drawImage(logo, P, 34, w, h); }
   font(22, B, '800'); x.save(); x.letterSpacing = '4px'; text('BROADCAST CHEAT SHEET', W - P, 64, GOLD, 'right'); x.restore();
-  font(24, B, '600'); text(`Season ${seasonNum(s)} · ${g.type === 'ccg' ? 'Championship' : g.type === 'bowl' ? 'Postseason' : 'Week ' + g.week}${C.isGotw ? ' · ★ GOTW' : ''}`, W - P, 98, MUT, 'right');
+  font(24, B, '600'); text(`Season ${seasonNum(s)} · ${g.type === 'ccg' ? 'Championship' : g.type === 'bowl' ? (g.note || 'Bowl Season') : wkName(g.week, g.season)}${C.isGotw ? ' · ★ GOTW' : ''}`, W - P, 98, MUT, 'right');
   y = 168; fit(C.title, 40, IW); text(C.title, P, y);
   // Teams
   const pbA = playbookOf(A, s, C.coachA), pbH = playbookOf(H, s, C.coachH), pbRow = pbA || pbH ? 36 : 0;
@@ -1207,7 +1207,7 @@ async function drawCheat(C) {
       const head = `${shortName(q.name)}${q.pos ? ' · ' + q.pos : ''}${q.grade ? ' · ' + q.grade.toFixed(1) : ''}`;
       let hd = head; font(Math.max(20, fit(hd, 27, half, B, '800')), B, '800'); while (hd.length > 4 && x.measureText(hd).width > half) hd = hd.slice(0, -2) + '…'; text(hd, X, Y, TXT, al);
       // Stat line: shrink a little, then cut it off with "…" so the two columns never run into each other
-      let ln = q.lines[0]?.l ? `Wk ${q.lines[0].w}: ${q.lines[0].l.replace(/\.$/, '')}` : '';
+      let ln = q.lines[0]?.l ? `${wkShort(q.lines[0].w)}: ${q.lines[0].l.replace(/\.$/, '')}` : '';
       if (ln) { font(Math.max(18, fit(ln, 21, half, B, '600')), B, '600'); if (x.measureText(ln).width > half) { while (ln.length > 4 && x.measureText(ln + '…').width > half) ln = ln.slice(0, -1); ln = ln.trimEnd() + '…'; } text(ln, X, Y + 30, MUT, al); }
     };
     for (let i = 0; i < n; i++) { const Y = top + 46 + i * rH; if (i) { x.fillStyle = LINE; x.fillRect(P, Y - 40, IW, 1); } cell(pa[i], P + 18, Y, 'left'); cell(ph[i], W - P - 18, Y, 'right'); }
@@ -1284,7 +1284,7 @@ function showFutureSlip(tid) {
 // team total). Picking another in the same group swaps it in. Different games never conflict.
 const legGroup = l => l.market === 'future' ? 'future' : l.market === 'wins' ? 'wins:' + l.team
   : `${l.market === 'ml' || l.market === 'spread' ? 'side' : 'pts'}:${l.gameId}`;
-const legWeek = l => { if (l.market === 'future') return 'Title'; if (l.market === 'wins') return 'Wins'; const g = D.games.find(x => x.id === l.gameId); return !g ? 'Wk ?' : g.type === 'ccg' ? 'League Title' : g.type === 'bowl' ? (g.note || 'Bowl') : 'Wk ' + g.week; };
+const legWeek = l => { if (l.market === 'future') return 'Title'; if (l.market === 'wins') return 'Wins'; const g = D.games.find(x => x.id === l.gameId); return !g ? 'Wk ?' : g.type === 'ccg' ? 'League Title' : g.type === 'bowl' ? (g.note || 'Bowl Season') : wkShort(g.week, g.season); };
 function legFor(gid, market, pick, tid) {
   if (ownLeg({ gameId: gid, market, pick, team: tid })) return null;
   if (market === 'wins') { const r = winsBoard().find(x => x.id === tid); return r && r.o ? { gameId: '', market, pick, team: tid, line: r.o.line, odds: pick === 'over' ? r.o.over : r.o.under } : null; }
@@ -1339,7 +1339,7 @@ function showSlip(gid, market, pick) {
   UI.slip = { g, market, pick, odds, line, boost };
   const bal = bankroll(me.id).balance;
   const label = wagerLabel({ gameId: gid, market, pick, odds, line });
-  $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card"><h2>Bet Slip</h2><p><b>${esc(label)}</b></p><p class="muted small">${esc(team(g.away).name)} @ ${esc(team(g.home).name)} · Week ${g.week}</p>${boost ? boostNote(boost) : ''}
+  $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card"><h2>Bet Slip</h2><p><b>${esc(label)}</b></p><p class="muted small">${esc(team(g.away).name)} @ ${esc(team(g.home).name)} · ${wkOf(g)}</p>${boost ? boostNote(boost) : ''}
     <label>Stake (balance ${bal.toLocaleString()})</label><div class="row"><input id="stake" type="number" min="1" max="${bal}" step="1" value="${Math.min(100, bal)}" inputmode="numeric" style="width:120px">
     ${[25, 50, 100, 250].map(v => `<button class="sm ghost" data-stake="${v}">${v}</button>`).join('')}</div>
     <p>To win: <b id="towin"></b></p><div class="row"><button data-act="place">Place wager</button><button class="ghost" data-close="1">Cancel</button><span id="smsg" class="err"></span></div></div></div>`;
@@ -1683,7 +1683,7 @@ const fmtOU = a => `${a[0]} O, ${a[1]} U${a[2] ? `, ${a[2]} P` : ''}`;
 // History: one Season Awards card with a centered season picker (newest first).
 function awardWinnerHtml(h, a) {
   const g = awardGame(h, a);
-  if (g) return `<a class="reclink" href="#game/${esc(g.id)}"><b>${esc(a.winner)}</b><div class="small goty">${esc(team(g.away).abbr || team(g.away).name)} ${g.awayScore} @ ${esc(team(g.home).abbr || team(g.home).name)} ${g.homeScore} · ${g.type === 'ccg' ? 'Title game' : g.type === 'bowl' ? esc(g.note || 'Bowl') : 'Week ' + g.week}</div></a>`;
+  if (g) return `<a class="reclink" href="#game/${esc(g.id)}"><b>${esc(a.winner)}</b><div class="small goty">${esc(team(g.away).abbr || team(g.away).name)} ${g.awayScore} @ ${esc(team(g.home).abbr || team(g.home).name)} ${g.homeScore} · ${g.type === 'ccg' ? 'Title game' : g.type === 'bowl' ? esc(g.note || 'Bowl Season') : wkName(g.week, g.season)}</div></a>`;
   // Coach of the Year links to the coach, with the team they won it with.
   if (/coach of the year/i.test(a.award || '')) { const c = coachName(a.winner); return `${c ? `<a href="#coach/${slug(c)}">${esc(c)}</a>` : `<b>${esc(a.winner)}</b>`}${a.team ? `<div class="small">${chip(a.team, { season: h.season, rank: false })}</div>` : ''}`; }
   // Team awards (winner is the team itself): just the team chip, no repeated name.
@@ -2091,7 +2091,7 @@ PAGES.game = function (id) {
   if (done && g.forfeit) {
     const w = +g.homeScore > +g.awayScore ? H : A, lo = w === H ? A : H;
     title = `${w.name} Takes a Forfeit Win Over ${lo.name}`;
-    paras.push(`${who(w)} was awarded a forfeit win over ${lo.name} in Week ${g.week}. All bets on this game were refunded.`);
+    paras.push(`${who(w)} was awarded a forfeit win over ${lo.name} in ${wkOf(g)}. All bets on this game were refunded.`);
   } else if (done) {
     const w = +g.homeScore > +g.awayScore ? H : A, lo = w === H ? A : H, ws = Math.max(+g.homeScore, +g.awayScore), ls = Math.min(+g.homeScore, +g.awayScore);
     const mar = ws - ls, tot = ws + ls, pw = p ? (w === H ? p.h : p.a) : 50, upset = pw < 42;
@@ -2100,7 +2100,7 @@ PAGES.game = function (id) {
     const T = [];
     if (g.type === 'ccg') T.push([100, [`${w.name} Wins the League Championship`, `${rn(w)} Are Your Champions`, `Crowned: ${w.name} Takes the Title, ${ws}-${ls}`]]);
     if (ls === 0) T.push([90, [`${w.name} Pitches a Shutout`, `Zero: ${w.name} Blanks ${lo.name}`, `${w.name} Doesn't Allow a Point`]]);
-    if (upset) T.push([88, [`Shock in Week ${g.week}: ${rn(w)} Stuns ${rn(lo)}`, `Nobody Saw It Coming: ${w.name} Topples ${lo.name}`, `Upset! ${w.name} Takes Down ${rn(lo)}`]]);
+    if (upset) T.push([88, [`Shock in ${wkOf(g)}: ${rn(w)} Stuns ${rn(lo)}`, `Nobody Saw It Coming: ${w.name} Topples ${lo.name}`, `Upset! ${w.name} Takes Down ${rn(lo)}`]]);
     if (mar <= 3) T.push([80, [`${w.name} Survives ${lo.name} in a Thriller`, `Down to the Wire: ${w.name} Edges ${lo.name}`, `By a Hair: ${w.name} ${ws}, ${lo.name} ${ls}`]]);
     if (mar >= 28) T.push([70, [`${w.name} Rolls Past ${lo.name}`, `${w.name} Runs ${lo.name} Off the Field`, `No Contest: ${w.name} ${ws}, ${lo.name} ${ls}`]]);
     if (tot >= 80) T.push([65, [`Shootout: ${w.name} Outlasts ${lo.name}, ${ws}-${ls}`, `Points Galore as ${w.name} Beats ${lo.name}`]]);
@@ -2109,10 +2109,10 @@ PAGES.game = function (id) {
     title = pick(T.sort((x, y) => y[0] - x[0])[0][1]);
     // Lead paragraph.
     const lead = [];
-    if (ls === 0) lead.push(`${Cap(who(w))} didn't give up a single point. ${pick([`The final read ${ws}-0`, `${ws}-0, and it was never in doubt`, `${lo.name} left Week ${g.week} without a point on the board`])}.`);
-    else if (mar <= 3) lead.push(pick([`This one came down to the last possession. ${Cap(who(w))} held on to beat ${who(lo)} ${ws}-${ls} in Week ${g.week}.`, `${Cap(who(w))} and ${who(lo)} traded punches all night, and when it was over ${w.name} had it, ${ws}-${ls}.`, `Three points or fewer decided it: ${who(w)} ${ws}, ${who(lo)} ${ls}.`]));
-    else if (mar >= 28) lead.push(pick([`It got out of hand quickly. ${Cap(who(w))} beat ${who(lo)} ${ws}-${ls}.`, `${Cap(who(w))} put up ${ws} and won by ${mar}, leaving ${who(lo)} with nothing to show for Week ${g.week}.`, `${ws}-${ls}. ${Cap(who(w))} made a statement against ${who(lo)}.`]));
-    else lead.push(pick([`${Cap(who(w))} beat ${who(lo)} ${ws}-${ls} in Week ${g.week}.`, `Week ${g.week} went to ${who(w)}, ${ws}-${ls} over ${who(lo)}.`, `${Cap(who(w))} took care of ${who(lo)}, ${ws}-${ls}.`]));
+    if (ls === 0) lead.push(`${Cap(who(w))} didn't give up a single point. ${pick([`The final read ${ws}-0`, `${ws}-0, and it was never in doubt`, `${lo.name} left ${wkOf(g)} without a point on the board`])}.`);
+    else if (mar <= 3) lead.push(pick([`This one came down to the last possession. ${Cap(who(w))} held on to beat ${who(lo)} ${ws}-${ls} in ${wkOf(g)}.`, `${Cap(who(w))} and ${who(lo)} traded punches all night, and when it was over ${w.name} had it, ${ws}-${ls}.`, `Three points or fewer decided it: ${who(w)} ${ws}, ${who(lo)} ${ls}.`]));
+    else if (mar >= 28) lead.push(pick([`It got out of hand quickly. ${Cap(who(w))} beat ${who(lo)} ${ws}-${ls}.`, `${Cap(who(w))} put up ${ws} and won by ${mar}, leaving ${who(lo)} with nothing to show for ${wkOf(g)}.`, `${ws}-${ls}. ${Cap(who(w))} made a statement against ${who(lo)}.`]));
+    else lead.push(pick([`${Cap(who(w))} beat ${who(lo)} ${ws}-${ls} in ${wkOf(g)}.`, `${wkOf(g)} went to ${who(w)}, ${ws}-${ls} over ${who(lo)}.`, `${Cap(who(w))} took care of ${who(lo)}, ${ws}-${ls}.`]));
     if (g.type === 'ccg') lead.push(`That makes ${w.name} the Season ${seasonNum(s)} league champion${cw !== 'CPU' ? ` and puts ${cw} in the record books` : ''}.`);
     if (upset) lead.push(pick([`The model gave ${w.name} just a ${pw}% chance before kickoff.`, `Going in, ${w.name} had a ${pw}% shot according to the model. So much for that.`, `Only ${pw}% of simulations had ${w.name} winning this one.`]));
     paras.push(lead.join(' '));
@@ -2147,7 +2147,7 @@ PAGES.game = function (id) {
     if (PLp.gp) F.push([22 + rng() * 25, ls <= PLp.pf / PLp.gp ? pick([`${lo.name} was held to ${ls}, ${(PLp.pf / PLp.gp - ls).toFixed(1)} below its average.`, `The ${w.name} defense kept ${lo.name} to ${ls} points, well under its ${(PLp.pf / PLp.gp).toFixed(1)} average.`]) : `${lo.name} put up ${ls}, actually above its ${(PLp.pf / PLp.gp).toFixed(1)}-point average. It just wasn't enough.`]);
     const nextOf = t => D.games.filter(x => x.season === s && x.week > g.week && (x.home === t.id || x.away === t.id)).sort((a, b) => a.week - b.week)[0];
     const nw = nextOf(w), nl = nextOf(lo), vsT = (x, t) => `${x.home === t.id ? 'hosts' : 'visits'} ${team(x.home === t.id ? x.away : x.home).name}`;
-    if (nw || nl) F.push([18 + rng() * 20, `Up next: ${[nw ? `${w.name} ${vsT(nw, w)}${nw.type === 'ccg' ? ' in the title game' : ` in Week ${nw.week}`}` : '', nl ? `${lo.name} ${vsT(nl, lo)}${nl.type === 'ccg' ? ' in the title game' : ` in Week ${nl.week}`}` : ''].filter(Boolean).join('; ')}.`]);
+    if (nw || nl) F.push([18 + rng() * 20, `Up next: ${[nw ? `${w.name} ${vsT(nw, w)}${nw.type === 'ccg' ? ' in the title game' : ` in ${wkOf(nw)}`}` : '', nl ? `${lo.name} ${vsT(nl, lo)}${nl.type === 'ccg' ? ' in the title game' : ` in ${wkOf(nl)}`}` : ''].filter(Boolean).join('; ')}.`]);
     const picked = shuffle(F.map(f => [f[0] + rng() * 25, f[1]])).sort((x, y) => y[0] - x[0]).slice(0, 5 + Math.floor(rng() * 2)).map(f => f[1]);
     const half = Math.ceil(picked.length / 2);
     if (picked.length) { paras.push(picked.slice(0, half).join(' ')); if (picked.length > half) paras.push(picked.slice(half).join(' ')); }
@@ -2155,23 +2155,23 @@ PAGES.game = function (id) {
     // ----- preview -----
     const T = [];
     if (g.type === 'ccg') T.push([100, [`For All the Marbles: ${rn(A)} vs. ${rn(H)}`, `Title on the Line: ${A.name} vs. ${H.name}`, `One Game for the Crown`]]);
-    if (rk(A) && rk(H)) T.push([90, [`Top-25 Clash: ${rn(A)} at ${rn(H)}`, `Ranked vs. Ranked in Week ${g.week}`]]);
+    if (rk(A) && rk(H)) T.push([90, [`Top-25 Clash: ${rn(A)} at ${rn(H)}`, `Ranked vs. Ranked in ${wkOf(g)}`]]);
     if (same && divOrder.indexOf(A.id) < 2 && divOrder.indexOf(H.id) < 2) T.push([86, [`Showdown for the ${dA} Crown`, `The ${dA} Runs Through This Game`, `${A.name}, ${H.name} and the ${dA} Title`]]);
     const lead0 = Object.entries(mw).sort((x, y) => y[1] - x[1])[0];
     if (lead0 && meets.length >= 3 && lead0[1] === meets.length) { const loser = lead0[0] === coachA ? coachH : coachA; T.push([80, [`Can ${loser} Finally Solve ${lead0[0]}?`, `${lead0[0]} Is ${meets.length}-0 Against ${loser}. Again?`]]); }
     if (meets.length) { const lm = meetingWinner(meets[0]), fresh = meets[0].season >= s - 1 && lm.ws - lm.ls >= 14; T.push([(fresh ? 62 : 40) + rng() * 15, [`Revenge Game: ${lm.lcoach} Gets Another Shot at ${lm.coach}`, `${lm.lcoach} Hasn't Forgotten Last Time`, `Round ${meets.length + 1}: ${coachA} vs. ${coachH}`, `${lm.lcoach} Wants This One Back`, `The Rematch: ${coachA} and ${coachH} Meet Again`]]); }
-    if (l && Math.abs(l.spread) <= 2.5) T.push([60 + rng() * 15, [`Coin Flip: ${A.name} and ${H.name} Are Dead Even`, `Pick Your Side: Nothing Separates ${A.name} and ${H.name}`, `Too Close to Call in Week ${g.week}`]]);
+    if (l && Math.abs(l.spread) <= 2.5) T.push([60 + rng() * 15, [`Coin Flip: ${A.name} and ${H.name} Are Dead Even`, `Pick Your Side: Nothing Separates ${A.name} and ${H.name}`, `Too Close to Call in ${wkOf(g)}`]]);
     if (l && Math.abs(l.spread) >= 17) T.push([58, [`Upset Alert? ${dog.name} Tries to Shock ${rn(fav)}`, `${Math.abs(l.spread)} Points: Can ${dog.name} Hang With ${fav.name}?`]]);
     const sa = streak(ra), sh = streak(rh);
-    [[A, sa], [H, sh]].forEach(([t, st]) => { if (/^W\d+$/.test(st) && +st.slice(1) >= 3) T.push([55 + rng() * 10, [`Can Anyone Stop ${t.name}?`, `${t.name} Goes for ${+st.slice(1) + 1} Straight`, `Red-Hot ${t.name} Rolls Into Week ${g.week}`]]); if (/^L\d+$/.test(st) && +st.slice(1) >= 3) T.push([50, [`Desperation Time for ${t.name}`, `${t.name} Needs to Stop the Bleeding`]]); });
-    T.push([0, [`${A.name} at ${H.name}: What to Watch`, `Week ${g.week}: ${A.name} at ${H.name}`, `${A.name} Heads to ${H.name}`]]);
+    [[A, sa], [H, sh]].forEach(([t, st]) => { if (/^W\d+$/.test(st) && +st.slice(1) >= 3) T.push([55 + rng() * 10, [`Can Anyone Stop ${t.name}?`, `${t.name} Goes for ${+st.slice(1) + 1} Straight`, `Red-Hot ${t.name} Rolls Into ${wkOf(g)}`]]); if (/^L\d+$/.test(st) && +st.slice(1) >= 3) T.push([50, [`Desperation Time for ${t.name}`, `${t.name} Needs to Stop the Bleeding`]]); });
+    T.push([0, [`${A.name} at ${H.name}: What to Watch`, `${wkOf(g)}: ${A.name} at ${H.name}`, `${A.name} Heads to ${H.name}`]]);
     title = pick(T.sort((x, y) => y[0] - x[0])[0][1]);
     // Lead.
     const ko = kickoffOf(g), v = venueOf(g);
     const opener = pick([
-      `${Cap(who(A))} (${recTxt(A)}) ${g.neutral ? 'meets' : 'travels to face'} ${who(H)} (${recTxt(H)}) ${g.type === 'ccg' ? ' in the league title game' : ` in Week ${g.week}`}${v && !g.neutral ? ` at ${v.name}` : g.neutral ? ' at a neutral site' : ''}.`,
-      `${g.type === 'ccg' ? 'The league title game' : `Week ${g.week}`} brings ${who(A)} (${recTxt(A)}) ${g.neutral ? 'and' : 'to'} ${who(H)} (${recTxt(H)})${v && !g.neutral ? ` at ${v.name}` : ''}.`,
-      `${Cap(who(H))} (${recTxt(H)}) ${g.neutral ? 'meets' : 'welcomes'} ${who(A)} (${recTxt(A)})${g.type === 'ccg' ? ' in the league title game' : ` in Week ${g.week}`}.`]);
+      `${Cap(who(A))} (${recTxt(A)}) ${g.neutral ? 'meets' : 'travels to face'} ${who(H)} (${recTxt(H)}) ${g.type === 'ccg' ? ' in the league title game' : ` in ${wkOf(g)}`}${v && !g.neutral ? ` at ${v.name}` : g.neutral ? ' at a neutral site' : ''}.`,
+      `${g.type === 'ccg' ? 'The league title game' : `${wkOf(g)}`} brings ${who(A)} (${recTxt(A)}) ${g.neutral ? 'and' : 'to'} ${who(H)} (${recTxt(H)})${v && !g.neutral ? ` at ${v.name}` : ''}.`,
+      `${Cap(who(H))} (${recTxt(H)}) ${g.neutral ? 'meets' : 'welcomes'} ${who(A)} (${recTxt(A)})${g.type === 'ccg' ? ' in the league title game' : ` in ${wkOf(g)}`}.`]);
     let line = '';
     const an = n => (/^(8|11|18)/.test(String(n)) ? 'an' : 'a');
     if (l && p) line = !fav || l.spread === 0 ? `The books can't separate them: it's a pick'em with a total of ${l.total}.` : pick([`${fav.name} is laying ${Math.abs(l.spread)} with ${an(Math.max(p.a, p.h))} ${Math.max(p.a, p.h)}% chance to win, and the total sits at ${l.total}.`, `The line has ${fav.name} by ${Math.abs(l.spread)} (${Math.max(p.a, p.h)}% to win), total ${l.total}.`, `${dog.name} is getting ${Math.abs(l.spread)} points. The model gives it ${an(Math.min(p.a, p.h))} ${Math.min(p.a, p.h)}% shot at the outright win, and the total is ${l.total}.`]);
@@ -2224,7 +2224,7 @@ PAGES.game = function (id) {
       const lm = meetingWinner(meets[0]), wa = mw[coachA] || 0, wh = mw[coachH] || 0;
       const lead = wa === wh ? pick([`The series is tied ${wa}-${wh}`, `${wa}-${wh}, dead even`]) : `${wa > wh ? coachA : coachH} ${pick(['leads the all-time series', 'owns the series', 'has the edge in the series'])} ${Math.max(wa, wh)}-${Math.min(wa, wh)}`;
       const tg = meets.filter(m => m.type === 'ccg').map(m => { const w = meetingWinner(m); return `the Season ${seasonNum(m.season)} title game, won by ${w.coach} ${w.ws}-${w.ls}`; });
-      const last = `Season ${seasonNum(meets[0].season)}${meets[0].type === 'ccg' ? ' title game' : `, Week ${meets[0].week}`}`;
+      const last = `Season ${seasonNum(meets[0].season)}${meets[0].type === 'ccg' ? ' title game' : `, ${wkOf(meets[0])}`}`;
       paras.push(pick([
         `${lead}${done ? ' going into this one' : ''}${tg.length ? `, including ${tg.join(' and ')}` : ''}. Last time (${last}), ${possN(lm.coach)} ${team(lm.team).name} won ${lm.ws}-${lm.ls}.`,
         `${coachA} vs. ${coachH}, meeting No. ${meets.length + 1}. ${lead}${tg.length ? `, and they've already met in ${tg.join(' and ')}` : ''}. ${lm.coach} won the last one, ${lm.ws}-${lm.ls} (${last}).`,
@@ -2268,10 +2268,10 @@ PAGES.game = function (id) {
   UI.cheat = { g, A, H, coachA, coachH, done, l, p, fav, isGotw, title, tape, stake, clinch: !done ? clinchNote(g) : '', rk: { a: rk(A), h: rk(H) },
     rec: { a: recTxt(A), h: recTxt(H) }, paras: (() => { const vs = {}; return paras.map(t => vary(t, vs)); })(),
     trends: trends.slice(0, 6).map(t => t.replace(/<[^>]+>/g, '')),
-    series: coachA !== 'CPU' && coachH !== 'CPU' && meets.length ? `${coachA} vs. ${coachH}: ${mw[coachA] || 0}-${mw[coachH] || 0} all-time` + (() => { const w = meetingWinner(meets[0]); return `. Last: S${seasonNum(meets[0].season)} ${meets[0].type === 'ccg' ? 'title game' : 'Wk ' + meets[0].week}, ${w.coach} won ${w.ws}-${w.ls}.`; })() : (coachA !== 'CPU' && coachH !== 'CPU' ? `First-ever meeting between ${coachA} and ${coachH}.` : '') };
+    series: coachA !== 'CPU' && coachH !== 'CPU' && meets.length ? `${coachA} vs. ${coachH}: ${mw[coachA] || 0}-${mw[coachH] || 0} all-time` + (() => { const w = meetingWinner(meets[0]); return `. Last: S${seasonNum(meets[0].season)} ${meets[0].type === 'ccg' ? 'title game' : wkShort(meets[0].week, meets[0].season)}, ${w.coach} won ${w.ws}-${w.ls}.`; })() : (coachA !== 'CPU' && coachH !== 'CPU' ? `First-ever meeting between ${coachA} and ${coachH}.` : '') };
   return `<p><a href="#schedule/${g.week}">← ${esc(gWeek(g))} schedule</a></p>
     <div class="card gp-head${isGotw || g.type === 'ccg' ? ' gotw' : ''}">${g.type === 'ccg' ? `<span class="ribbon">${champRibbon()}</span>` : isGotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}
-      <div class="muted small" style="text-transform:uppercase;letter-spacing:.8px;font-weight:800">Season ${seasonNum(s)} · ${g.type === 'ccg' ? 'League Championship' : g.type === 'bowl' ? esc(g.note || 'Bowl Season') : 'Week ' + g.week}${done ? ' · Final' : ''}${gameTags(g) ? ' · ' + gameTags(g) : ''}</div>
+      <div class="muted small" style="text-transform:uppercase;letter-spacing:.8px;font-weight:800">Season ${seasonNum(s)} · ${g.type === 'ccg' ? 'League Championship' : g.type === 'bowl' ? esc(g.note || 'Bowl Season') : wkName(g.week, g.season)}${done ? ' · Final' : ''}${gameTags(g) ? ' · ' + gameTags(g) : ''}</div>
       <div class="gp-vs">${side(A, coachA, g.awayScore, !hw)}<div class="gp-at">${g.neutral ? 'vs' : '@'}</div>${side(H, coachH, g.homeScore, hw)}</div>
       ${ko.meta}
       ${l && !g.forfeit ? (done ? probBar(g, l, done) + finalLines(g, l, A, H) : `<div class="gp-odds"><div><span>Spread</span><b>${l.spread === 0 ? 'PK' : esc(fav.abbr || fav.name) + ' ' + fmtLine(-Math.abs(l.spread))}</b></div><div><span>Total</span><b>O/U ${l.total}</b></div>
@@ -2295,7 +2295,7 @@ PAGES.game = function (id) {
       ${!done && sim && sim[A.id] && sim[H.id] ? row('Title odds', pctStr(sim[A.id].titlePct), pctStr(sim[H.id].titlePct), sim[A.id].titlePct, sim[H.id].titlePct, 1) : ''}
     </table></div></div>
     ${coachA !== 'CPU' && coachH !== 'CPU' ? `<div class="card"><h3 style="margin-top:0">Past meetings: ${esc(coachA)} vs. ${esc(coachH)}</h3>${meets.length ? `<p class="muted small" style="margin-top:0">${mw[coachA] || 0}-${mw[coachH] || 0} all-time${done ? ' before this game' : ''}. Coaches' records follow them from team to team.</p><div class="tablewrap"><table>
-      <tr><th>When</th><th>Result</th></tr>${meets.map(m => { const w = meetingWinner(m); return `<tr class="clickable" data-game="${esc(m.id)}"><td class="muted">S${seasonNum(m.season)} · ${m.type === 'ccg' ? '<b class="win">Title game</b>' : 'Wk ' + m.week}</td><td class="wrap"><b>${esc(w.coach)}</b> (${esc(team(w.team).name)}) ${m.forfeit ? 'by forfeit over' : `${w.ws}-${w.ls} over`} ${esc(w.lcoach)} (${esc(team(w.lteam).name)})</td></tr>`; }).join('')}</table></div>` : `<p class="muted">${done ? 'This was the first meeting between these two coaches.' : 'First meeting ever between these two coaches.'}</p>`}</div>` : ''}
+      <tr><th>When</th><th>Result</th></tr>${meets.map(m => { const w = meetingWinner(m); return `<tr class="clickable" data-game="${esc(m.id)}"><td class="muted">S${seasonNum(m.season)} · ${m.type === 'ccg' ? '<b class="win">Title game</b>' : wkShort(m.week, m.season)}</td><td class="wrap"><b>${esc(w.coach)}</b> (${esc(team(w.team).name)}) ${m.forfeit ? 'by forfeit over' : `${w.ws}-${w.ls} over`} ${esc(w.lcoach)} (${esc(team(w.lteam).name)})</td></tr>`; }).join('')}</table></div>` : `<p class="muted">${done ? 'This was the first meeting between these two coaches.' : 'First meeting ever between these two coaches.'}</p>`}</div>` : ''}
     ${gameBets(g)}
     ${done ? '' : `<p class="cheatlink"><a href="javascript:void 0" data-act="cheat">📺 Broadcast cheat sheet ›</a></p>`}`;
 };
@@ -2310,11 +2310,11 @@ function header() {
   const reg = L.phase === PHASES.REG;
   $('#bWeek').textContent = reg ? L.week : wl;
   $('#bWeek').classList.toggle('word', !reg);
-  $('#bWeekLbl').textContent = reg ? 'Current Week' : L.phase === PHASES.PRE ? 'Phase' : 'Week ' + curWeek();
+  $('#bWeekLbl').textContent = reg ? 'Current Week' : 'Phase';
   const adv = projectedAdvance();
   $('#bAdv').hidden = !adv;
   if (adv) { $('#bAdvT').textContent = new Date(adv).setHours(23, 59, 59, 999) < Date.now() ? 'Any day now' : fmtAdvance(adv); $('#bAdv').title = `Projected: about 3 days after the last advance${L.advExt ? ` (+${L.advExt}h extension this week)` : ''}. Can change if a coach needs more time.`; }
-  $('#sub').textContent = `College Football 27 Online Dynasty · ${L.conference} · ${L.phase}${DEMO ? ' · DEMO DATA' : ''}`;
+  $('#sub').textContent = `College Football 27 Online Dynasty · ${L.conference} · ${phaseName()}${DEMO ? ' · DEMO DATA' : ''}`;
   const p = auth.profile;
   $('#acct').innerHTML = auth.user ? acctHtml(p) : '<a class="btn" href="#account">Log In</a>';
   $('#footAdmin').innerHTML = isCommish() ? ' · <a href="admin.html">Commissioner Tools</a>' : '';
@@ -2333,7 +2333,7 @@ function acctHtml(p) {
   const g = T && nextGameOf(T.id);
   if (g) {
     const home = g.home === T.id, opp = team(home ? g.away : g.home);
-    const wk = g.type === 'ccg' ? 'Title game' : g.type === 'bowl' ? 'Bowl' : `Week ${g.week}`;
+    const wk = g.type === 'ccg' ? 'Title game' : g.type === 'bowl' ? (g.note || 'Bowl Season') : wkOf(g);
     const ko = kickoffOf(g);
     bits.push(`<a class="nextg" href="#game/${esc(g.id)}">Next: ${wk} ${g.neutral ? 'vs' : home ? 'vs' : '@'} ${esc(opp.abbr || opp.name)}${ko ? ` · 🕗 ${esc(fmtKick(ko, true))}` : ''} ›</a>`);
   }
