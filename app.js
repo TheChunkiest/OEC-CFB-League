@@ -1704,6 +1704,20 @@ function offseasonAwardsCard() {
   const champ = h.champTeam ? `<div class="awchamp">🏆 <b>League Champion:</b> ${chip(h.champTeam, { season: h.season, rank: false })}${h.champCoach && h.champCoach !== 'CPU' ? ` · <a href="#coach/${slug(h.champCoach)}">${esc(h.champCoach)}</a>` : ''}</div>` : '';
   return `<div class="card gotw awhome"><span class="ribbon">🏆 Season ${seasonNum(h.season)} Awards · ${h.season}</span>${champ}${awardsTable(h)}<p class="small" style="margin:8px 0 0;text-align:center"><a href="#history">Every season's winners →</a></p></div>`;
 }
+// Once the season is finalized and the awards are in, everyone sees them in a pop-up the first time they open the site
+// (once per season per device).
+function awardsPopup() {
+  const L = D.league; if (!L || L.phase !== PHASES.PRE || $('#modal').innerHTML.trim()) return;
+  const h = D.history.find(x => x.season === L.season); if (!h || !(h.awards || []).length) return;
+  let seen = ''; try { seen = localStorage.getItem('oecAwardsSeen') || ''; } catch (e) {}
+  if (seen === String(h.season)) return;
+  try { localStorage.setItem('oecAwardsSeen', String(h.season)); } catch (e) {}
+  const champ = h.champTeam ? `<div class="awchamp">🏆 <b>League Champion:</b> ${chip(h.champTeam, { season: h.season, rank: false })}${h.champCoach && h.champCoach !== 'CPU' ? ` · ${esc(h.champCoach)}` : ''}</div>` : '';
+  $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card awpop" style="max-width:480px;max-height:90vh;overflow:auto">
+    <h2 style="margin-top:0;text-align:center">🏆 Season ${seasonNum(h.season)} Awards</h2><p class="muted small" style="text-align:center;margin-top:0">The ${h.season} league awards are in.</p>
+    ${champ}${awardsTable(h)}
+    <div class="row" style="margin-top:12px;justify-content:center"><button class="gold" data-close="1">Nice</button><a class="btn ghost" href="#history" data-close="1">See History →</a></div></div></div>`;
+}
 // Match a typed name to a league coach (case-insensitive).
 const coachName = n => { const k = String(n || '').trim().toLowerCase(); return Object.values(coachStats()).map(c => c.name).find(c => c.toLowerCase() === k) || ''; };
 function teamProfile(tid, s, upto = Infinity) {
@@ -2370,6 +2384,7 @@ function route() {
   header();
   try { $('#view').innerHTML = (PAGES[page] || PAGES.home)(decodeURIComponent(arg || '')); parlayBar(); nameFields($('#view')); }
   catch (e) { console.error(e); $('#view').innerHTML = `<div class="card err">Something went wrong rendering this page: ${esc(e.message)}</div>`; }
+  awardsPopup();
   // New page: start at the top, or at the row a storyline pointed to.
   if (route.last !== location.hash) {
     const first = route.last == null; route.last = location.hash;

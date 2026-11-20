@@ -265,7 +265,7 @@ jobs:
 
               try:   # whatever happens, remember what was already sent so nothing goes out twice
                 if fresh:   # first run: remember where things stand, so old events aren't announced...
-                    st = {'adv': advkey, 'ann': ann.get('id'), 'inv': int(now), 'resp': int(now), 'kick': {}, 'settle': int(now), 'final': int(now)}
+                    st = {'adv': advkey, 'ann': ann.get('id'), 'inv': int(now), 'resp': int(now), 'kick': {}, 'settle': int(now), 'final': int(now), 'awards': (lg.get('awards') or {}).get('season') if (lg.get('awards') or {}).get('results') else None}
                     if now - int(lg.get('advancedAt') or 0) < 3600e3:   # ...except an advance from the last hour
                         st['adv'] = ''; fresh = False
                 if not fresh:
@@ -278,6 +278,14 @@ jobs:
                         body = (note[:170] + '…' if len(note) > 170 else note) if note else {'Offseason': 'A new season is on the way. Get your team ready.' if lg.get('pre') else 'The season is in the books. Offseason work is underway.', 'Postseason': 'Bowl games are set. Lines are up when betting opens.'}.get(ph, 'The league advanced. Results are in and new lines are up.')
                         to('advance', t, body, link + '#home', tag='advance')
                         st['adv'] = advkey
+                    # League awards announced (the commissioner finalized the season with winners)
+                    aw = lg.get('awards') or {}
+                    if lg.get('phase') == 'Offseason' and aw.get('results') and aw.get('season') and aw.get('season') != st.get('awards'):
+                        n = int(aw['season']) - int(lg.get('firstSeason') or 2026) + 1
+                        top = [r for r in aw['results'] if isinstance(r, dict) and re.search(r'mvp|coach of the year', str(r.get('award', '')), re.I)]
+                        bits = ' · '.join(f"{r.get('award')}: {r.get('winner')}" for r in top[:2])
+                        to('advance', f"🏆 Season {n} Awards are in", (bits + '. ' if bits else '') + 'Tap to see every winner.', link + '#home', tag='awards', default=True)
+                        st['awards'] = aw['season']
                     # Commissioner announcement
                     if ann.get('id') and ann.get('id') != st.get('ann'):
                         to('advance', '📣 From the Commissioner', ann.get('text', ''), link + '#home', tag='news')
