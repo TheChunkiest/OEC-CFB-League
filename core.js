@@ -357,7 +357,9 @@ export const seasonNum = (y = D.league.season) => y - (D.league.firstSeason || 2
 // Name of a week: the title-game week is "League Title", an all-bowl week is "Bowls", anything else "Week N".
 export function wkName(w, season = D.league.season) {
   const gs = D.games.filter(g => g.season === season && g.week === w);
-  return gs.some(g => g.type === 'ccg') ? 'League Title' : gs.length && gs.every(g => g.type === 'bowl') ? 'Bowls' : 'Week ' + w;
+  if (gs.some(g => g.type === 'ccg')) return 'League Title';
+  if (gs.length && gs.every(g => g.type === 'bowl')) { const n = [...new Set(gs.map(g => (g.note || '').trim()).filter(Boolean))]; return n.length === 1 ? n[0] : 'Postseason'; }
+  return 'Week ' + w;
 }
 export const gWeek = g => g.type === 'ccg' ? 'League Title' : g.type === 'bowl' ? (g.note || 'Bowl') : 'Week ' + g.week;
 export const weekLabel = (L = D.league) => L.phase === PHASES.CCG ? 'League Title' : L.phase === PHASES.POST ? 'Postseason' : L.phase === PHASES.PRE ? 'Preseason' : 'Week ' + L.week;

@@ -5,7 +5,7 @@ import {
   gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, wkName, gWeek, champOpen, titleSet, DIAG, storylines, seasonStorylines, RELIEF, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory, legLabel
 , playbookOf, pbSeason, pbText
 , AWARD_DEFS, awardGames, awardGameLabel, awardCoaches
-} from './core.js?v=96';
+} from './core.js?v=98';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -430,7 +430,7 @@ const PAGES = {
     const bwks = [...new Set(D.games.filter(g => g.season === s && g.week >= L.week && !played(g) && !g.locked).map(g => g.week))].sort((a, b) => a - b);
     const bw = bwks.includes(UI.betWeek) ? UI.betWeek : bwks[0];
     const games = D.games.filter(g => g.season === s && g.week === bw && !played(g) && !g.locked);
-    const open = L.bettingOpen && L.phase !== PHASES.PRE && L.phase !== PHASES.POST;
+    const open = L.bettingOpen && L.phase !== PHASES.PRE && (L.phase !== PHASES.POST || D.games.some(g => g.season === L.season && g.type === 'bowl' && !played(g) && g.lines));
     const bk = me ? bankroll(me.id) : null;
     let html = `<div class="sbhead"><h2>Sportsbook · ${esc(weekLabel())}</h2>${bk ? `<div class="bkmini"><div><span>Balance</span><b>${bk.balance.toLocaleString()}</b></div><div class="hide-sm"><span>In play</span><b>${bk.open}</b></div><div><span>Record</span><b>${bk.w}-${bk.l}${bk.p ? '-' + bk.p : ''}</b></div><div><span>Net</span><b class="${bk.net >= 0 ? 'win' : 'loss'}">${bk.net >= 0 ? '+' : ''}${bk.net}</b></div></div>` : ''}</div>`;
     if (me) { const nOpen = D.wagers.filter(w => w.uid === me.id && w.season === s && w.status === 'open' && !w.deleted).length;
@@ -581,7 +581,7 @@ const PAGES = {
 
   mybets() {
     const L = D.league, s = S(), me = auth.profile;
-    const open = L.bettingOpen && L.phase !== PHASES.PRE && L.phase !== PHASES.POST;
+    const open = L.bettingOpen && L.phase !== PHASES.PRE && (L.phase !== PHASES.POST || D.games.some(g => g.season === L.season && g.type === 'bowl' && !played(g) && g.lines));
     let html = `<p><a href="#betting">← Sportsbook</a></p>`;
     if (!me) return html + `<div class="card empty"><a href="#account">Log in</a> to see your bets.</div>`;
     const bk = bankroll(me.id);

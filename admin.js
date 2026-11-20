@@ -4,7 +4,7 @@ import {
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum, divOf, oneConference, playbookOf, pbSeason, pbOpen, pbLocked
 , loadAI, kickoffOf, fmtKick
 , reliefPatch, winTotalsSnapshot, winsLockedTeam, postEarlyCcg, earlyCcg, raceSim, AWARD_DEFS, tallyAwards, awardGames, awardGameLabel, awardCoaches, sameName
-} from './core.js?v=96';
+} from './core.js?v=98';
 // Broadcast scouting nudges the ratings a little, so load it before any lines get posted from here.
 loadAI();
 import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
@@ -315,9 +315,14 @@ const views = {
     return `<div class="card"><h2>End of Season</h2><p class="muted">Add any bowl / playoff results (optional), check the award winners, then finalize. Finalizing closes awards voting, writes the champion and award winners to History and moves the league to the offseason.</p>
       ${votingLine()}</div>
       ${awardsReview(true)}
-      <div class="card"><h3 style="margin-top:0">Postseason games</h3>${post.length ? scoreRows(post) : '<p class="muted">None added.</p>'}
-        <div class="row"><input id="pW" type="number" value="${lg.week + 1}" style="width:70px" title="Week"><select id="pA">${teamOpts('', 'Away/Team 1')}</select> vs <select id="pH">${teamOpts('', 'Home/Team 2')}</select><input id="pNote" placeholder="Bowl name (optional)"><button class="ghost" data-act="addBowl">Add</button></div>
-        <p class="muted small">Opponent missing? Add it as a Non-Conf team on the New Season tab first.</p></div>
+      <div class="card"><h3 style="margin-top:0">Postseason games</h3>
+        <p class="muted small" style="margin-top:0">Add a playoff or bowl game (name it, e.g. "CFP First Round"), then <b>Post lines & open betting</b>. Enter scores as games finish and tap <b>Save scores & settle bets</b>. Add the next round once it's set.</p>
+        ${post.length ? scoreRows(post) : '<p class="muted">None added.</p>'}
+        <div class="row"><input id="pW" type="number" value="${Math.max(lg.week + 1, ...post.map(g => g.week))}" style="width:70px" title="Week (use a later number for each round)"><select id="pA">${teamOpts('', 'Away/Team 1')}</select> vs <select id="pH">${teamOpts('', 'Home/Team 2')}</select><input id="pNote" placeholder="Game name, e.g. CFP First Round"><button class="ghost" data-act="addBowl">Add</button></div>
+        <p class="muted small">Opponent missing? Add it as a Non-Conf team (with ratings, so it gets fair lines) on the New Season tab first.</p>
+        ${post.length ? `<div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap"><button class="gold" data-act="postBowlLines">Post lines & open betting</button><button class="ghost" data-act="toggleBet">${lg.bettingOpen ? 'Lock betting' : 'Unlock betting'}</button><button data-act="saveBowls">Save scores & settle bets</button></div>
+          <p class="muted small" style="margin:6px 0 0">Betting is <b>${lg.bettingOpen ? 'OPEN' : 'LOCKED'}</b>. Lock a single game once it kicks off with the button on its card.</p>` : ''}</div>
+      <div class="card"><h3 style="margin-top:0">Top 25</h3><p class="muted small" style="margin-top:0">Update the rankings for the postseason (shows as #N everywhere).</p>${pollEditor(lg.week)}<div class="row" style="margin-top:12px"><button data-act="savePoll">Save Top 25</button></div></div>
       <div class="card"><label>Season notes for History (optional, e.g. national champion, records)</label><textarea id="sNotes" rows="2"></textarea></div>
       ${deskBlock()}<div class="card"><button data-act="finalize">Finalize ${s} season & update History</button></div>`;
   },
@@ -678,6 +683,21 @@ const ACT = {
     const h = $('#pH').value, a = $('#pA').value; if (!h || !a || h === a) return alert('Pick two teams.');
     await put('games', newId(), { season: L().season, week: +$('#pW').value, type: 'bowl', home: h, away: a, neutral: true, note: $('#pNote').value, homeScore: null, awayScore: null }, false);
     render();
+  },
+  // Postseason betting: price every unplayed postseason game and open the book.
+  async postBowlLines() {
+    const lg = L(), post = D.games.filter(g => g.season === lg.season && g.type === 'bowl' && !played(g));
+    if (!post.length) return flash('Add a postseason game first.');
+    const wk = Math.min(...post.map(g => g.week));
+    await batch(boardOps(wk));
+    await put('meta', 'league', { bettingOpen: true });
+    flash(`Lines posted for ${post.length} postseason game${post.length === 1 ? '' : 's'}. Betting is open.`);
+  },
+  async saveBowls() {
+    const lg = L(), post = D.games.filter(g => g.season === lg.season && g.type === 'bowl');
+    await saveScoresAndSettle(post);
+    await batch(parlayOps());
+    flash('Postseason scores saved and bets settled.');
   },
   async finalize() {
     const lg = L(), s = lg.season;
