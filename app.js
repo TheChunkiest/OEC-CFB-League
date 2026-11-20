@@ -5,7 +5,7 @@ import {
   gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, wkName, gWeek, champOpen, titleSet, DIAG, storylines, seasonStorylines, RELIEF, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory, legLabel
 , playbookOf, pbSeason, pbText
 , AWARD_DEFS, awardGames, awardGameLabel, awardCoaches
-} from './core.js?v=98';
+} from './core.js?v=100';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -2015,10 +2015,24 @@ function gameBets(g) {
     return `${w.legs.length}-leg parlay (${fmtOdds(w.odds)})${w.boost ? ` <span class="boosttag">⚡ +${Math.round((w.boost - 1) * 100)}%</span>` : ''}<div class="muted small">${here.map(l => esc(wagerLabel(l).replace(/ — .*$/, '')) + mark(l.result)).join('<br>')}${rest ? `<br>+ ${rest} leg${rest === 1 ? '' : 's'} on other games` : ''}</div>`;
   };
   ws.sort((a, b) => (STO[a.status] ?? 9) - (STO[b.status] ?? 9) || b.stake - a.stake || (b.ts || 0) - (a.ts || 0));
-  const total = ws.reduce((t, w) => t + (+w.stake || 0), 0);
-  return `<div class="card"><h3 style="margin-top:0">Bets on this game</h3><p class="muted small" style="margin-top:0">${ws.length} bet${ws.length === 1 ? '' : 's'} · ${total.toLocaleString()} Crackers wagered</p>
-    <div class="tablewrap"><table class="bets"><tr><th>Coach</th><th>Bet</th><th class="num">Stake</th><th class="num">Payout</th><th class="num hide-xs">Status</th></tr>
-    ${ws.map(w => `<tr><td>${coachCell(w)}</td><td class="wrap">${bet(w)}</td><td class="num">${w.stake}</td><td class="num">${pay(w)}</td><td class="num hide-xs">${statusPill(w)}</td></tr>`).join('')}</table></div></div>`;
+  // Filters: which team a bet backs (spread/ML side, or team total) and what kind of bet it is. A parlay goes by its leg(s) on this game.
+  const legsHere = w => w.market === 'parlay' ? (w.legs || []).filter(l => l.gameId === g.id) : [w];
+  const sideOf = l => l.market === 'ml' || l.market === 'spread' ? l.pick : l.market === 'tth' ? 'home' : l.market === 'tta' ? 'away' : '';
+  const typeOf = l => l.market === 'tth' || l.market === 'tta' ? 'tt' : l.market === 'total' ? 'total' : l.market;
+  const TYPES = [['spread', 'Spread'], ['ml', 'ML'], ['total', 'O/U'], ['tt', 'Team Total'], ['parlay', 'Parlays']];
+  const F = (UI.gbf || {})[g.id] || {}, fTeam = F.team || '', fType = F.type || '';
+  const teamOk = (w, t) => !t || legsHere(w).some(l => sideOf(l) === t);
+  const typeOk = (w, k) => !k || (k === 'parlay' ? w.market === 'parlay' : w.market !== 'parlay' && typeOf(w) === k);
+  const shown = ws.filter(w => teamOk(w, fTeam) && typeOk(w, fType));
+  const chip = (kind, val, label, on, sw) => `<button type="button" class="chipbtn${on ? ' on' : ''}" data-gbf="${kind}" data-gbv="${val}" data-gbg="${esc(g.id)}">${sw ? `<i class="sw" style="background:${esc(sw)}"></i>` : ''}${label}</button>`;
+  const teamChips = ['away', 'home'].filter(sd => ws.some(w => teamOk(w, sd))).map(sd => { const t = team(g[sd]); return chip('team', sd, esc(t.abbr || t.name), fTeam === sd, teamColor(t)); });
+  const typeChips = TYPES.filter(([k]) => ws.some(w => typeOk(w, k) && teamOk(w, fTeam))).map(([k, n]) => chip('type', k, n, fType === k));
+  const filters = ws.length < 2 ? '' : `<div class="betfilt">${teamChips.length > 1 ? `<div>${chip('team', '', 'Both teams', !fTeam)}${teamChips.join('')}</div>` : ''}${typeChips.length > 1 || fType ? `<div>${chip('type', '', 'All bets', !fType)}${typeChips.join('')}</div>` : ''}</div>`;
+  const total = shown.reduce((t, w) => t + (+w.stake || 0), 0), filtered = shown.length !== ws.length;
+  return `<div class="card"><h3 style="margin-top:0">Bets on this game</h3><p class="muted small" style="margin-top:0">${filtered ? `${shown.length} of ${ws.length}` : ws.length} bet${ws.length === 1 ? '' : 's'} · ${total.toLocaleString()} Crackers wagered</p>
+    ${filters}${shown.length ? '' : '<p class="muted small">No bets match these filters.</p>'}
+    <div class="tablewrap"${shown.length ? '' : ' hidden'}><table class="bets"><tr><th>Coach</th><th>Bet</th><th class="num">Stake</th><th class="num">Payout</th><th class="num hide-xs">Status</th></tr>
+    ${shown.map(w => `<tr><td>${coachCell(w)}</td><td class="wrap">${bet(w)}</td><td class="num">${w.stake}</td><td class="num">${pay(w)}</td><td class="num hide-xs">${statusPill(w)}</td></tr>`).join('')}</table></div></div>`;
 }
 PAGES.game = function (id) {
   const g = D.games.find(x => x.id === id); if (!g) return '<div class="card empty">Game not found.</div>';
@@ -2383,6 +2397,7 @@ document.addEventListener('click', async e => {
   const lx = e.target.closest('[data-livex]');
   if (lx) { try { localStorage.setItem('oecLiveDismissed', lx.dataset.livex); } catch (err) { /* ignore */ } showLive(); return; }
   const tf = e.target.closest('[data-tsflip]'); if (tf) { UI.tsFlip = !UI.tsFlip; route(); return; }
+  const gb = e.target.closest('[data-gbf]'); if (gb) { const id = gb.dataset.gbg, f = { ...((UI.gbf || {})[id] || {}), [gb.dataset.gbf]: gb.dataset.gbv }; if (gb.dataset.gbf === 'team' && f.type === 'total') f.type = ''; UI.gbf = { ...(UI.gbf || {}), [id]: f }; const y = scrollY; route(); scrollTo(0, y); return; }
   const hh = e.target.closest('[data-h2h]'); if (hh && !e.target.closest('a')) { const k = hh.dataset.h2h; UI.h2h = { ...(UI.h2h || {}), [k]: !(UI.h2h || {})[k] }; const y = scrollY; route(); scrollTo(0, y); return; }
   const ct = e.target.closest('[data-cbtrend]'); if (ct) { const v = ct.dataset.cbtrend; UI.cbTrend = UI.cbTrend === v && v !== 'all' ? 'all' : v; const y = scrollY; route(); scrollTo(0, y); return; }
   const cf = e.target.closest('[data-cbflip]'); if (cf) { UI.cbFlip = !UI.cbFlip; route(); return; }

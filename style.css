@@ -1119,3 +1119,5 @@ table.h2h .h2hrow.on td{border-bottom-color:transparent}
 .cbtrendbox>summary::-webkit-details-marker{display:none}
 .cbtrendbox>summary::after{content:'▾';margin-left:auto;color:var(--muted);transition:transform .15s}
 .cbtrendbox[open]>summary::after{transform:rotate(180deg)}
+
+.betfilt{display:flex;flex-direction:column;gap:6px;margin:0 0 10px}.betfilt>div{display:flex;flex-wrap:wrap;gap:6px}
