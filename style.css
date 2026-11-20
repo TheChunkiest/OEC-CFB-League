@@ -1121,3 +1121,7 @@ table.h2h .h2hrow.on td{border-bottom-color:transparent}
 .cbtrendbox[open]>summary::after{transform:rotate(180deg)}
 
 .betfilt{display:flex;flex-direction:column;gap:6px;margin:0 0 10px}.betfilt>div{display:flex;flex-wrap:wrap;gap:6px}
+.champ:first-child{padding-top:0}
+.card>.champ:first-child{margin-top:-2px}
+.badge b.word{font-family:var(--body);font-weight:800;font-size:16px;letter-spacing:.2px;line-height:1.2;white-space:nowrap}
+@media(max-width:640px){.badge b.word{font-size:14px}}

@@ -3,8 +3,8 @@ import {
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum, divOf, oneConference, playbookOf, pbSeason, pbOpen, pbLocked
 , loadAI, kickoffOf, fmtKick
-, reliefPatch, winTotalsSnapshot, winsLockedTeam, postEarlyCcg, earlyCcg, raceSim, AWARD_DEFS, tallyAwards, awardGames, awardGameLabel, awardCoaches, sameName
-} from './core.js?v=98';
+, reliefPatch, winTotalsSnapshot, winsLockedTeam, postEarlyCcg, earlyCcg, raceSim, AWARD_DEFS, tallyAwards, awardGames, awardGameLabel, awardCoaches, sameName, curWeek, wkName
+} from './core.js?v=101';
 // Broadcast scouting nudges the ratings a little, so load it before any lines get posted from here.
 loadAI();
 import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
@@ -81,6 +81,13 @@ function readPoll() {
   return arr.sort((x, y) => x.r - y.r);
 }
 const pollKey = (week, season = L().season) => `${season}_${week}`;
+// Which week's Top 25 the editor is showing: this week unless the commissioner picked an earlier one to fix.
+const pollWk = () => { const c = curWeek(L()); return ST.pollWk != null && ST.pollWk <= c ? ST.pollWk : c; };
+function pollWeekPick() {
+  const c = curWeek(L()), wks = [];
+  for (let w = c; w >= Math.max(1, c - 3); w--) wks.push(w);
+  return `<label class="row" style="margin:0 0 8px;gap:8px"><span class="muted small">Rankings entering</span><select id="pollWkSel" style="width:auto">${wks.map(w => `<option value="${w}"${w === pollWk() ? ' selected' : ''}>${esc(wkName(w))}${/^Week /.test(wkName(w)) ? '' : ` (Week ${w})`}</option>`).join('')}</select></label>`;
+}
 const pollChanged = (arr, week) => { const cur = pollFor(L().season, week); return arr.length !== Object.keys(cur).length || arr.some(x => cur[x.id] !== x.r); };
 
 /* ---------- shared pieces ---------- */
@@ -318,11 +325,11 @@ const views = {
       <div class="card"><h3 style="margin-top:0">Postseason games</h3>
         <p class="muted small" style="margin-top:0">Add a playoff or bowl game (name it, e.g. "CFP First Round"), then <b>Post lines & open betting</b>. Enter scores as games finish and tap <b>Save scores & settle bets</b>. Add the next round once it's set.</p>
         ${post.length ? scoreRows(post) : '<p class="muted">None added.</p>'}
-        <div class="row"><input id="pW" type="number" value="${Math.max(lg.week + 1, ...post.map(g => g.week))}" style="width:70px" title="Week (use a later number for each round)"><select id="pA">${teamOpts('', 'Away/Team 1')}</select> vs <select id="pH">${teamOpts('', 'Home/Team 2')}</select><input id="pNote" placeholder="Game name, e.g. CFP First Round"><button class="ghost" data-act="addBowl">Add</button></div>
+        <div class="row"><input id="pW" type="number" value="${Math.max(curWeek(lg), ...post.map(g => g.week))}" style="width:70px" title="Week (use a later number for each round)"><select id="pA">${teamOpts('', 'Away/Team 1')}</select> vs <select id="pH">${teamOpts('', 'Home/Team 2')}</select><input id="pNote" placeholder="Game name, e.g. CFP First Round"><button class="ghost" data-act="addBowl">Add</button></div>
         <p class="muted small">Opponent missing? Add it as a Non-Conf team (with ratings, so it gets fair lines) on the New Season tab first.</p>
         ${post.length ? `<div class="row" style="margin-top:10px;gap:8px;flex-wrap:wrap"><button class="gold" data-act="postBowlLines">Post lines & open betting</button><button class="ghost" data-act="toggleBet">${lg.bettingOpen ? 'Lock betting' : 'Unlock betting'}</button><button data-act="saveBowls">Save scores & settle bets</button></div>
           <p class="muted small" style="margin:6px 0 0">Betting is <b>${lg.bettingOpen ? 'OPEN' : 'LOCKED'}</b>. Lock a single game once it kicks off with the button on its card.</p>` : ''}</div>
-      <div class="card"><h3 style="margin-top:0">Top 25</h3><p class="muted small" style="margin-top:0">Update the rankings for the postseason (shows as #N everywhere).</p>${pollEditor(lg.week)}<div class="row" style="margin-top:12px"><button data-act="savePoll">Save Top 25</button></div></div>
+      <div class="card"><h3 style="margin-top:0">Top 25</h3><p class="muted small" style="margin-top:0">Bowl Season rankings show on bowl and playoff games. Pick League Title to fix the rankings shown on the title game.</p>${pollWeekPick()}${pollEditor(pollWk())}<div class="row" style="margin-top:12px"><button data-act="savePoll">Save Top 25</button></div></div>
       <div class="card"><label>Season notes for History (optional, e.g. national champion, records)</label><textarea id="sNotes" rows="2"></textarea></div>
       ${deskBlock()}<div class="card"><button data-act="finalize">Finalize ${s} season & update History</button></div>`;
   },
@@ -387,8 +394,8 @@ const views = {
   },
 
   top25() {
-    const lg = L(), wk = lg.week;
-    return `<div style="margin-top:12px"><h3 style="margin-top:0">Top 25 · entering ${esc(weekLabel())}</h3><p class="muted small">The ranking shows as <b style="color:var(--gold)">#4</b> before the team name everywhere on the site: schedules, the betting board, odds, standings and bet slips. Each week's poll is saved, so past games keep that week's rankings. </p>
+    const wk = pollWk();
+    return `<div style="margin-top:12px"><h3 style="margin-top:0">Top 25 · entering ${esc(wkName(wk))}</h3>${pollWeekPick()}<p class="muted small">The ranking shows as <b style="color:var(--gold)">#4</b> before the team name everywhere on the site: schedules, the betting board, odds, standings and bet slips. Each week's poll is saved, so past games keep that week's rankings. </p>
       ${pollEditor(wk)}<div class="row" style="margin-top:12px"><button data-act="savePoll">Save Top 25</button><button class="ghost" data-act="clearPoll">Clear all</button></div></div>`;
   },
 
@@ -577,8 +584,8 @@ const ACT = {
     const games = D.games.filter(g => g.season === L().season && g.week === L().week);
     const r = await saveScoresAndSettle(games); flash(`Saved ${r.saved} score${r.saved === 1 ? '' : 's'}; those games are locked and their wagers graded.`);
   },
-  async savePoll() { const arr = readPoll(); await put('meta', 'league', { polls: { [pollKey(L().week)]: arr } }); flash(`Top 25 saved (${arr.length} ranked teams).`); },
-  async clearPoll() { if (!confirm('Clear every ranking for this week?')) return; await put('meta', 'league', { polls: { [pollKey(L().week)]: [] } }); flash('Top 25 cleared for this week.'); },
+  async savePoll() { const arr = readPoll(); await put('meta', 'league', { polls: { [pollKey(pollWk())]: arr } }); flash(`Top 25 saved for ${wkName(pollWk())} (${arr.length} ranked teams).`); },
+  async clearPoll() { if (!confirm('Clear every ranking for this week?')) return; await put('meta', 'league', { polls: { [pollKey(pollWk())]: [] } }); flash(`Top 25 cleared for ${wkName(pollWk())}.`); },
   async wizSave() {
     collectScores(); const ops = draftScoreOps(); await batch(ops); await batch(settleOps(ops.map(o => o.id)));
     await refreshBooks();
@@ -675,7 +682,7 @@ const ACT = {
     await saveScoresAndSettle(games);
     const fin = D.games.find(g => g.id === ccg.id);
     await batch(settleFuturesOps(lg.season, +fin.homeScore > +fin.awayScore ? fin.home : fin.away));
-    await put('meta', 'league', { phase: PHASES.POST, bettingOpen: false, desk: deskValue() });
+    await put('meta', 'league', { phase: PHASES.POST, week: ccg.week + 1, bettingOpen: false, desk: deskValue() });
     try { await loadBallots(true); } catch (e) { }
     ST.desk = 'no'; flash('Champion crowned. Awards voting stays open through bowl season; finalize the season when you\'re ready.');
   },
@@ -1023,6 +1030,7 @@ document.addEventListener('click', async e => {
 });
 document.addEventListener('change', e => {
   if (e.target.id === 'gwSel') { ST.gamesWeek = +e.target.value; render(); }
+  if (e.target.id === 'pollWkSel') { ST.pollWk = +e.target.value; render(); }
   if (e.target.id === 'gwNew' && e.target.value !== '') { ST.gamesWeek = +e.target.value; render(); }
   if (e.target.dataset.k === 'name' && e.target.closest('[data-team]')) {
     const sel = e.target, tr = sel.closest('tr');

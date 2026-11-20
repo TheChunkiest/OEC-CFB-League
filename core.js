@@ -358,18 +358,27 @@ export const seasonNum = (y = D.league.season) => y - (D.league.firstSeason || 2
 export function wkName(w, season = D.league.season) {
   const gs = D.games.filter(g => g.season === season && g.week === w);
   if (gs.some(g => g.type === 'ccg')) return 'League Title';
-  if (gs.length && gs.every(g => g.type === 'bowl')) { const n = [...new Set(gs.map(g => (g.note || '').trim()).filter(Boolean))]; return n.length === 1 ? n[0] : 'Postseason'; }
+  if (gs.length && gs.every(g => g.type === 'bowl')) return 'Bowl Season';
+  const c = D.games.find(g => g.season === season && g.type === 'ccg');
+  if (c && w > c.week && !gs.length) return 'Bowl Season';
   return 'Week ' + w;
 }
+// The week the league is in. In the postseason that's bowl season, the week after the title game, even before the
+// commissioner's next load has moved league.week on.
+export function curWeek(L = D.league) {
+  if (L.phase !== PHASES.POST) return L.week;
+  const c = D.games.find(g => g.season === L.season && g.type === 'ccg');
+  return c ? Math.max(L.week, c.week + 1) : L.week;
+}
 export const gWeek = g => g.type === 'ccg' ? 'League Title' : g.type === 'bowl' ? (g.note || 'Bowl') : 'Week ' + g.week;
-export const weekLabel = (L = D.league) => L.phase === PHASES.CCG ? 'League Title' : L.phase === PHASES.POST ? 'Postseason' : L.phase === PHASES.PRE ? 'Preseason' : 'Week ' + L.week;
+export const weekLabel = (L = D.league) => L.phase === PHASES.CCG ? 'League Title' : L.phase === PHASES.POST ? 'Bowl Season' : L.phase === PHASES.PRE ? 'Preseason' : 'Week ' + L.week;
 /* ---- Top 25: league.polls = { "2028_10": [{ id, r }, ...] } — the poll in effect entering that week ---- */
-export function pollFor(season = D.league.season, week = D.league.week) {
+export function pollFor(season = D.league.season, week = curWeek()) {
   const P = D.league.polls || {}; let best = null, bw = -Infinity;
-  for (const k in P) { const [s, w] = k.split('_').map(Number); if (s === season && w <= week && w > bw) { bw = w; best = P[k]; } }
+  for (const k in P) { const [s, w] = k.split('_').map(Number); if (s === season && w <= week && w > bw && P[k]) { bw = w; best = P[k]; } }
   const out = {}; (best || []).forEach(x => { if (x && x.id && x.r) out[x.id] = x.r; }); return out;
 }
-export const rankOf = (id, season, week) => pollFor(season ?? D.league.season, week ?? D.league.week)[id] || null;
+export const rankOf = (id, season, week) => pollFor(season ?? D.league.season, week ?? curWeek())[id] || null;
 export const rankName = (id, season, week) => { const r = rankOf(id, season, week); return (r ? '#' + r + ' ' : '') + team(id).name; };
 export function chip(id, opts = {}) {
   const t = team(id), r = opts.rank === false ? null : rankOf(id, opts.season, opts.week);
@@ -1037,8 +1046,18 @@ export function winHistory(g) {
 const fmtShort = ts => new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric' });
 
 // Commissioner's browser fills in anything missing from the board (lines for upcoming games, futures odds).
+// Bowl season is the week after the title game. Leagues that moved to the postseason before this existed stayed on the
+// title-game week, so the commissioner's next load moves them on (and carries the postseason Top 25 with it).
+export async function fixPostWeek() {
+  const L = D.league; if (!isCommish() || L.phase !== PHASES.POST) return false;
+  const c = D.games.find(g => g.season === L.season && g.type === 'ccg'); if (!c || L.week > c.week) return false;
+  const P = L.polls || {}, from = `${L.season}_${c.week}`, to = `${L.season}_${c.week + 1}`;
+  await put('meta', 'league', { week: c.week + 1, ...(P[from] && !P[to] ? { polls: { [to]: P[from] } } : {}) });
+  return true;
+}
 export async function ensureFutures() {
   const L = D.league;
+  try { await fixPostWeek(); } catch (e) { console.warn('postseason week', e); }
   if (DEMO || !isCommish() || (L.phase !== PHASES.REG && L.phase !== PHASES.CCG)) return false;
   if (L.phase === PHASES.REG && !(L.gotw && L.gotw.season === L.season && L.gotw.week === L.week)) await put('meta', 'league', { gotw: { season: L.season, week: L.week, gameId: gotwTally(L.season, L.week).game?.id || '' } });
   // Title game first, on its own, so nothing below can hold it up.
@@ -1553,6 +1572,27 @@ export function storylines() {
     pool.push({ href: '#game/' + g.id, tag: 'User Game', title, body: `${name(w)} beat ${name(l)} ${ws}-${ls} in Week ${lw}. ${extra.join(' ')}` });
   });
   const r = rng(s * 97 + L.week * 13 + 7);
+  // Once the league title is decided, title-odds and "needs a win" stories no longer make sense: the champion and
+  // the postseason games lead instead.
+  const L0 = D.league, ccgDone = D.games.find(g => g.season === L0.season && g.type === 'ccg' && played(g));
+  if (ccgDone) {
+    const drop = new Set(['Odds Movers', 'Cold Streak', 'Hot Streak', 'Underdog to Watch']);
+    const gone = x => drop.has(x.tag) || (x.tag === 'User Game' && x.href === '#game/' + ccgDone.id);   // the Champion story covers the title game
+    for (let i = pool.length - 1; i >= 0; i--) if (gone(pool[i])) pool.splice(i, 1);
+    for (let i = out.length - 1; i >= 0; i--) if (gone(out[i])) out.splice(i, 1);
+    const lead = [];
+    const champ = seasonStorylines(L0.season).find(x => x.tag === 'Champion'); if (champ) lead.push(champ);
+    D.games.filter(g => g.season === L0.season && g.type === 'bowl' && !played(g)).filter(g => [g.home, g.away].some(id => { const c = coachOf(g, g.home === id ? 'home' : 'away'); return c && c !== 'CPU'; }))
+      .slice(0, 2).forEach(g => {
+        const side = coachOf(g, 'home') !== 'CPU' ? 'home' : 'away', op = side === 'home' ? 'away' : 'home', c = coachOf(g, side), l = lineOf(g);
+        const fav = l && l.spread != null ? (l.spread < 0 ? g.home : g.away) : null;
+        lead.push({ href: '#game/' + g.id, tag: 'Postseason', title: `${poss(c)} ${team(g[side]).name} ${pk(['heads to the', 'is in the', 'plays in the'])} ${g.note || 'postseason'}`,
+          body: `${team(g[side]).name} faces ${rankName(g[op])}${l && l.spread ? `, ${fav === g[side] ? 'favored' : 'an underdog'} by ${Math.abs(l.spread)}` : ''}. ${coachOf(g, op) !== 'CPU' ? `It's a coach-vs-coach game against ${coachOf(g, op)}.` : pk(['Represent the league.', 'One game at a time.', 'Survive and advance.'])}` });
+      });
+    shuffle(pool, r);
+    const rest = out.concat(pool).filter(x => !lead.some(y => y.href === x.href && y.tag === x.tag));
+    return lead.concat(rest).slice(0, 5);
+  }
   shuffle(pool, r);
   while (out.length < (u ? 4 : 5) && pool.length) out.push(pool.shift());
   if (u) out.push(u);
