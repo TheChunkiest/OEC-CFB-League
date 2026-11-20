@@ -222,7 +222,7 @@ jobs:
               except Exception: st = {}
               fresh = not st
               lg = LG
-              advkey = f"{lg.get('season')}|{lg.get('week')}|{lg.get('phase')}"
+              advkey = f"{lg.get('season')}|{lg.get('week')}|{lg.get('phase')}" + ('|pre' if lg.get('pre') else '')
               ann = (lg.get('announce') or {})
               link = site or './index.html'
               def ab(tid): t = teams.get(tid) or one(f'teams/{tid}'); teams[tid] = t; return (t or {}).get('abbr') or tname(tid)
@@ -272,10 +272,10 @@ jobs:
                     # League advanced
                     if advkey != st.get('adv'):
                         ph = lg.get('phase') or ''
-                        t = f"🏈 Week {lg.get('week')} is here" if ph == 'Regular Season' else f'🏈 {ph}'
+                        t = f"🏈 Week {lg.get('week')} is here" if ph == 'Regular Season' else '🏈 ' + {'Conference Championship': 'League Title week is here', 'Postseason': 'Bowl Season is here', 'Offseason': 'Preseason is here' if lg.get('pre') else 'Postseason is here'}.get(ph, ph)
                         dk = lg.get('desk') or {}
                         note = (dk.get('text') or '').strip() if dk.get('show') else ''
-                        body = (note[:170] + '…' if len(note) > 170 else note) if note else 'The league advanced. Results are in and new lines are up.'
+                        body = (note[:170] + '…' if len(note) > 170 else note) if note else {'Offseason': 'A new season is on the way. Get your team ready.' if lg.get('pre') else 'The season is in the books. Offseason work is underway.', 'Postseason': 'Bowl games are set. Lines are up when betting opens.'}.get(ph, 'The league advanced. Results are in and new lines are up.')
                         to('advance', t, body, link + '#home', tag='advance')
                         st['adv'] = advkey
                     # Commissioner announcement
