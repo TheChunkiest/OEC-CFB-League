@@ -1,15 +1,5 @@
 {
- "live": true,
- "videoId": "RHj5SJJ92Kg",
- "url": "https://www.youtube.com/watch?v=RHj5SJJ92Kg",
- "title": "S3 League Title: #24 FIU vs. #4 PUR",
- "streams": [
-  {
-   "videoId": "RHj5SJJ92Kg",
-   "url": "https://www.youtube.com/watch?v=RHj5SJJ92Kg",
-   "title": "S3 League Title: #24 FIU vs. #4 PUR"
-  }
- ],
+ "live": false,
  "notified": "RHj5SJJ92Kg",
  "notifiedIds": [
   "qwkTlJND-FM",
@@ -21,6 +11,5 @@
   "KpqUcx8Jmv4",
   "ZIiNV2zaP1I",
   "RHj5SJJ92Kg"
- ],
- "checkedAt": 1795149869236
+ ]
 }
