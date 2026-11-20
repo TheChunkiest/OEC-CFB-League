@@ -641,7 +641,8 @@ const PAGES = {
         ${rows.map(({ c, by }) => `<tr><td><a href="#coach/${slug(c.name)}">${esc(c.name)}</a></td>${seas.map(s => { const x = by[s]; return `<td class="num">${x ? `${x.teams.map(id => `<a class="ctm" href="#team/${esc(id)}${s === D.league.season ? '' : '/' + s}"><i class="sw" style="background:${esc(teamColor(team(id)))}"></i>${esc(team(id).abbr || team(id).name)}</a>`).join(' ')}<div class="small"><b>${x.w}-${x.l}</b>${x.finish === 'champ' ? ' 🏆' : (() => { const P = seasonPlaces(s), p = P.places[c.name.toLowerCase()]; return p ? ` <span class="muted">· ${ordinal(p)}</span>` : ''; })()}</div>` : '<span class="muted">–</span>'}</td>`; }).join('')}</tr>`).join('')}
       </table></div><p class="muted small" style="margin-bottom:0">Team, record and finish each season (🏆 = league champion; the current season shows the order so far). Finish after the title game is by regular-season record, then head-to-head, then point differential.</p></div>`;
     };
-    const H = D.history.slice().sort((a, b) => b.season - a.season), C = Object.values(coachStats()).sort((a, b) => b.titles - a.titles || (b.w / Math.max(1, b.w + b.l)) - (a.w / Math.max(1, a.w + a.l)));
+    // The title game counts as soon as it's final: this season's champion shows here before the season is finalized.
+    const H = withLiveChamp().sort((a, b) => b.season - a.season), C = Object.values(coachStats()).sort((a, b) => b.titles - a.titles || (b.w / Math.max(1, b.w + b.l)) - (a.w / Math.max(1, a.w + a.l)));
     const champLine = h => h.champCoach ? `${esc(h.champCoach)} over ${esc(h.runnerCoach || 'CPU')} — ${esc(team(h.champTeam).name)} ${h.champScore ?? ''}, ${esc(team(h.runnerTeam).name)} ${h.runnerScore ?? ''}` : esc(h.summary || '');
     return `<h2>League Champions</h2><div class="card">${H.length ? H.map(h => `<div class="champ"><div class="yr">S${seasonNum(h.season)}<div class="muted small" style="font-family:system-ui">${h.season}</div></div><div>${(() => { const g = D.games.find(x => x.season === h.season && x.type === 'ccg' && played(x)); return g ? `<a class="reclink" href="#game/${esc(g.id)}"><b>${champLine(h)}</b></a>` : `<b>${champLine(h)}</b>`; })()}${h.notes ? `<div class="muted small">${esc(h.notes)}</div>` : ''}</div></div>`).join('') : '<div class="muted">No completed seasons yet.</div>'}</div>
       ${seasonAwardsCard(H)}
@@ -1866,7 +1867,7 @@ function coachBoard() {
     const latest = l.cs[l.cs.length - 1], col = latest.teams[0] ? teamColor(team(latest.teams[0])) : "#888";
     const seen = new Set(), chips = l.cs.slice().reverse().flatMap(c => c.teams.map(id => [id, c.season])).filter(([id]) => !seen.has(id) && seen.add(id));
     const w = l.x.v == null ? 0 : Math.max(4, Math.abs(l.x.v) / (top || 1) * 100);
-    return `<tr class="${l.n.toLowerCase() === me ? 'me' : ''}"><td class="rank">${r ? (tie ? 'T-' : '') + r : '–'}</td><td><a href="#coach/${slug(l.n)}"><b>${esc(l.n)}</b></a>${(() => { const t = D.history.filter(h => (se == null || h.season === se) && String(h.champCoach || '').toLowerCase() === l.n.toLowerCase()).length; return t ? ` <span title="League titles">${'🏆'.repeat(Math.min(t, 5))}</span>` : ''; })()}<div class="small cbteams">${chips.map(([id, ss]) => chip(id, { abbr: true, rank: false, season: ss })).join(' ')}</div></td>
+    return `<tr class="${l.n.toLowerCase() === me ? 'me' : ''}"><td class="rank">${r ? (tie ? 'T-' : '') + r : '–'}</td><td><a href="#coach/${slug(l.n)}"><b>${esc(l.n)}</b></a>${(() => { const t = withLiveChamp().filter(h => (se == null || h.season === se) && String(h.champCoach || '').toLowerCase() === l.n.toLowerCase()).length; return t ? ` <span title="League titles">${'🏆'.repeat(Math.min(t, 5))}</span>` : ''; })()}<div class="small cbteams">${chips.map(([id, ss]) => chip(id, { abbr: true, rank: false, season: ss })).join(' ')}</div></td>
       <td class="num tsv"><b>${l.x.f}</b>${w ? `<i style="width:${w.toFixed(0)}%;background:${esc(liftColor(col))}"></i>` : ''}</td></tr>`; }).join('');
   return `<h2>Coach Stats</h2><div class="card"><div class="row" style="gap:8px;flex-direction:column;align-items:center;text-align:center">
       <div class="seg segscroll" role="group" aria-label="Stats span"><button data-cbspan="all" class="${se == null ? 'on' : ''}">All-time</button>${seas.map(x => `<button data-cbspan="${x}" class="${se === x ? 'on' : ''}" aria-label="Season ${seasonNum(x)}, ${x}">S${seasonNum(x)}</button>`).join('')}</div>
@@ -1875,6 +1876,16 @@ function coachBoard() {
     <div class="tablewrap" style="margin-top:8px"><table class="tsboard"><tr><th>#</th><th>Coach</th><th class="num sortable" data-cbflip="1">${esc(label)} ${UI.cbFlip ? '▲' : '▼'}</th></tr>${rows}</table></div>
     <p class="muted small" style="margin:8px 0 0">Tap a coach for their profile, or the stat header to flip the order. 🏆 = league titles. Records include forfeits like the standings; other stats skip them.</p>
     ${coachTrend(se, key, label, dir0 || 1, lines.map(l => ({ n: l.n, col: (() => { const c = l.cs[l.cs.length - 1]; return c.teams[0] ? teamColor(team(c.teams[0])) : '#888'; })() })))}</div>`;
+}
+// History plus this season's champion once the title game is final (finalizing later writes the same thing).
+function withLiveChamp() {
+  const L = D.league, s = L.season, H = D.history.slice();
+  if (H.some(h => h.season === s && h.champTeam)) return H;
+  const g = D.games.find(x => x.season === s && x.type === 'ccg' && played(x)); if (!g) return H;
+  const hw = +g.homeScore > +g.awayScore, w = hw ? 'home' : 'away', l = hw ? 'away' : 'home';
+  const live = { season: s, champTeam: g[w], champCoach: coachOf(g, w), champScore: +g[w + 'Score'], runnerTeam: g[l], runnerCoach: coachOf(g, l), runnerScore: +g[l + 'Score'], awards: [] };
+  const i = H.findIndex(h => h.season === s); if (i >= 0) H[i] = { ...H[i], ...live, awards: H[i].awards || [] }; else H.push(live);
+  return H;
 }
 // Coach Stats chart: the picked stat after every advance (each week with games), for the span picked above.
 // Same look and touch behaviour as the Coach Odds Trend chart on the Odds page.
