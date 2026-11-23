@@ -62,8 +62,8 @@ function pollTeams() {
   D.games.filter(g => g.season === s).forEach(g => { ids.add(g.home); ids.add(g.away); });
   return [...ids].map(team);
 }
-function pollEditor(week, override) {
-  const cur = override ? Object.fromEntries(override.map(x => [x.id, x.r])) : pollFor(L().season, week);
+function pollEditor(week, override, season = L().season) {
+  const cur = override ? Object.fromEntries(override.map(x => [x.id, x.r])) : pollFor(season, week);
   const ts = pollTeams().sort((a, b) => (cur[a.id] || 99) - (cur[b.id] || 99) || a.name.localeCompare(b.name));
   return `<div class="poll">${ts.map(t => `<label class="pollrow"><span><i class="sw" style="background:${esc(teamColor(t))}"></i> ${esc(t.name)} <span class="muted small">${esc(isUserTeam(t) ? t.coach : '')}</span></span>
     <span class="row" style="flex-wrap:nowrap"><b class="muted">#</b><input type="number" inputmode="numeric" min="1" max="25" data-poll="${esc(t.id)}" value="${cur[t.id] || ''}" placeholder="—" style="width:70px"></span></label>`).join('')}</div>
@@ -356,6 +356,11 @@ const views = {
         <div class="row"><input id="sgW" type="number" value="0" style="width:70px" title="Week"><select id="sgA">${teamOpts('', 'Away')}</select> @ <select id="sgH">${teamOpts('', 'Home')}</select><label class="row" style="margin:0"><input type="checkbox" id="sgN" style="width:auto"> Neutral</label><button class="ghost" data-act="addSched">Add game</button></div>
         <label>Bulk add — one game per line: <code>week, away team, home team</code> (add <code>, neutral</code> if needed). Team name or abbreviation.</label><textarea id="bulk" rows="4" placeholder="0, Liberty, Kennesaw State&#10;1, KENN, Ohio"></textarea><button class="ghost sm" data-act="bulkSched" style="margin-top:6px">Add these games</button> <span id="bulkMsg" class="muted"></span>
         <div class="tablewrap" style="margin-top:10px"><table>${sg.map(g => `<tr><td>${wkShort(g.week, g.season)}</td><td class="wrap">${esc(team(g.away).name)} ${g.neutral ? 'vs' : '@'} ${esc(team(g.home).name)}${!isUserTeam(team(g.home)) || !isUserTeam(team(g.away)) ? ' <span class="h2h cputag">CPU GAME</span>' : ''}</td><td class="num">${played(g) ? g.awayScore + '-' + g.homeScore : ''}</td><td class="num"><button class="sm danger" data-delgame="${esc(g.id)}">✕</button></td></tr>`).join('')}</table></div></div>
+      ${views.playbooks()}
+      <details class="card" data-keepopen="prepoll" ${ST.open?.prepoll ? 'open' : ''}><summary><b>Preseason Top 25</b> <span class="muted small">(${next}, entering ${esc(sg.length ? wkName(Math.min(...sg.map(g => g.week)), next) : 'Week 0')})</span></summary>
+        <p class="muted small">The rankings going into the first week of ${next}. They show as #N on the opening games and team pages.</p>
+        ${pollEditor(sg.length ? Math.min(...sg.map(g => g.week)) : 0, null, next)}
+        <div class="row"><button data-act="savePrePoll">Save preseason Top 25</button></div></details>
       ${deskBlock()}
       <div class="card"><button class="gold" data-act="publish">Publish ${next} season → open Week ${sg.length ? Math.min(...sg.map(g => g.week)) : 0}</button>
         <p class="muted small">Publishing sets the current season and week, posts preseason odds and Week ${sg.length ? Math.min(...sg.map(g => g.week)) : 0} lines, opens betting (every coach starts with 1,000 Crackers) and starts a fresh odds chart. Save teams first.</p></div>`;
@@ -587,6 +592,10 @@ const ACT = {
   async saveScores() {
     const games = D.games.filter(g => g.season === L().season && g.week === L().week);
     const r = await saveScoresAndSettle(games); flash(`Saved ${r.saved} score${r.saved === 1 ? '' : 's'}; those games are locked and their wagers graded.`);
+  },
+  async savePrePoll() {
+    const s = +$('#psSeason').value, sg = D.games.filter(g => g.season === s), first = sg.length ? Math.min(...sg.map(g => g.week)) : 0, arr = readPoll();
+    await put('meta', 'league', { polls: { [pollKey(first, s)]: arr } }); flash(`Preseason Top 25 saved for ${s} (${arr.length} ranked teams).`);
   },
   async savePoll() { const arr = readPoll(); await put('meta', 'league', { polls: { [pollKey(pollWk())]: arr } }); flash(`Top 25 saved for ${wkName(pollWk())} (${arr.length} ranked teams).`); },
   async clearPoll() { if (!confirm('Clear every ranking for this week?')) return; await put('meta', 'league', { polls: { [pollKey(pollWk())]: [] } }); flash(`Top 25 cleared for ${wkName(pollWk())}.`); },
