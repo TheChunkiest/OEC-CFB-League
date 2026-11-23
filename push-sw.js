@@ -11,7 +11,7 @@ self.addEventListener('push', e => {
   e.waitUntil(self.registration.showNotification(title, {
     body: d.body || n.body || '',
     icon: 'icon-192.png',
-    badge: 'icon-192.png',
+    badge: 'badge-96.png',   // Android shows this in the status bar using only its see-through shape, so it's a white logo on clear
     tag: d.tag || undefined,
     data: { link: d.link || (p.fcmOptions && p.fcmOptions.link) || './index.html#home' }
   }));
