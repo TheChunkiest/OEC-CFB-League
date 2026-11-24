@@ -134,7 +134,9 @@ function deskBlock() {
     <div ${ST.desk === 'yes' ? '' : 'hidden'}><label>Note to the league (shows at the top of the Home page)</label><textarea id="deskText" rows="4" placeholder="Advance times, reminders, trash talk…">${esc(ST.draft?.desk?.text || '')}</textarea></div>
     <p class="muted small">${L().pushKey ? 'Coaches with notifications on get this note in the advance notification. ' : ''}Choosing No clears last week's note from the Home page.</p></div>`;
 }
-const deskValue = () => ST.desk === 'yes' && $('#deskText')?.value.trim() ? { show: true, text: $('#deskText').value.trim() } : { show: false, text: '' };
+// The note is signed with the commissioner who posted it and when, for the Home page card.
+const deskSig = () => ({ by: auth.profile?.name || '', at: Date.now() });
+const deskValue = () => ST.desk === 'yes' && $('#deskText')?.value.trim() ? { show: true, text: $('#deskText').value.trim(), ...deskSig() } : { show: false, text: '' };
 function scoreRows(games, dr) {
   return games.map(g => {
     const l = lineOf(g), d = dr && dr.scores[g.id];
@@ -695,7 +697,7 @@ const ACT = {
   async wizConfirm() {
     const lg = L(), W = lg.week, last = W >= lg.finalWeek, dr = draft();
     const ops = draftScoreOps(); await batch(ops); await batch(settleOps(ops.map(o => o.id)));
-    const desk = dr.desk.on && dr.desk.text ? { show: true, text: dr.desk.text } : { show: false, text: '' };
+    const desk = dr.desk.on && dr.desk.text ? { show: true, text: dr.desk.text, ...deskSig() } : { show: false, text: '' };
     if (dr.poll && pollChanged(dr.poll, W)) await put('meta', 'league', { polls: { [pollKey(W + 1)]: dr.poll } });
     const early = last && D.games.find(g => g.season === lg.season && g.type === 'ccg');
     if (last) {

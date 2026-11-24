@@ -15,7 +15,7 @@ const HUBS = [
   ['home', 'Home', 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', []],
   ['schedule', 'Schedule', 'M4 6h16M4 12h16M4 18h10', [['schedule', 'Schedule & scores']]],
   ['betting', 'Betting', 'M4 7h16v10H4zM12 10v4M9 12h6', [['betting', 'Sportsbook'], ['mybets', 'My bets'], ['odds', 'Odds & trends']]],
-  ['league', 'League', 'M7 4h10v4a5 5 0 0 1-10 0zM12 13v4M8 20h8', [['standings', 'Standings'], ['rankings', 'Power rankings'], ['teams', 'Teams'], ['vote', 'Vote'], ['history', 'History'], ['rules', 'Rules']]],
+  ['league', 'League', 'M7 4h10v4a5 5 0 0 1-10 0zM12 13v4M8 20h8', [['standings', 'Standings'], ['vote', 'Vote'], ['rankings', 'Power rankings'], ['teams', 'Teams'], ['history', 'History'], ['rules', 'Rules']]],
   ['account', 'Account', 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0', []]];
 const HUB_OF = { game: 'schedule', mybets: 'betting', odds: 'betting', standings: 'league', rankings: 'league', teams: 'league', team: 'league', coach: 'league', vote: 'league', history: 'league', rules: 'league' };
 // Page title and one-line description under the header (Home has its own layout and skips this).
@@ -149,8 +149,12 @@ function cpuBroadcasts(tid, s = D.league.season) {
   const vs = list.filter(x => (x.t || []).includes(tid)).map(x => { const v = vidInfo(x.v); return { ...v, se: cpuVidSeason(x, v) }; }).filter(v => keep(v.se)).sort((a, b) => b.d - a.d);
   if (!vs.length) return '';
   const short = t => String(t || 'OEC on YouTube').replace(/^OEC\s+CFB\s+League\s*/i, '').trim();   // the channel name is on every title
-  const label = v => { const t = short(v.t); return v.se && s === cur && !/\bS(?:eason)?\s*\d/i.test(t) ? `S${seasonNum(v.se)} · ${t}` : t; };
-  return `<div class="card"><h3 style="margin-top:0">Broadcasts vs CPU teams</h3><div class="cpulinks">${vs.slice(0, 20).map(v => `<a href="https://youtu.be/${esc(v.id)}" target="_blank" rel="noopener">▶ ${esc(label(v))}</a>`).join('')}</div></div>`;
+  // The season heading carries "S3", so drop it from the front of the title ("S3, W3 - FIU @ FAU" → "W3 - FIU @ FAU").
+  const label = v => short(v.t).replace(/^S(?:eason)?\s*\d{1,2}\s*[,:·-]?\s*/i, '') || short(v.t);
+  const by = {}; vs.slice(0, 30).forEach(v => (by[v.se || 0] = by[v.se || 0] || []).push(v));
+  const groups = Object.keys(by).map(Number).sort((a, b) => b - a);
+  return `<details class="card cpubox"><summary><span class="cpu-ic" aria-hidden="true">▶</span><span class="cpu-t"><b>Broadcasts vs CPU teams</b><small>${vs.length} video${vs.length === 1 ? '' : 's'}${groups.length > 1 || groups[0] ? ` · ${groups.filter(Boolean).map(x => 'S' + seasonNum(x)).join(', ')}` : ''}</small></span><span class="go" aria-hidden="true">›</span></summary>
+    ${groups.map(se => `<div class="cpu-se"><h4>${se ? `Season ${seasonNum(se)} <span>${se}</span>` : 'Other'}</h4>${by[se].map(v => `<a class="cpu-v" href="https://youtu.be/${esc(v.id)}" target="_blank" rel="noopener"><i aria-hidden="true">▶</i><span>${esc(label(v))}</span></a>`).join('')}</div>`).join('')}</details>`;
 }
 // YouTube-style red play button (used instead of video thumbnails, which vary too much in look)
 const YT_BTN = '<svg class="ytbtn" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="#fff"/></svg>';
@@ -391,7 +395,7 @@ const PAGES = {
     const pr = currentPower().slice(0, 5);
     const leaders = bettors().map(u => ({ u, b: bankroll(u.id) })).sort((a, b) => b.b.net - a.b.net || b.b.balance - a.b.balance).slice(0, 5);
     let html = installTip();
-    if (L.desk && L.desk.show && L.desk.text) html += `<div class="card banner"><h2>Commissioner's Desk</h2><div style="white-space:pre-wrap">${esc(L.desk.text)}</div></div>`;
+    if (L.desk && L.desk.show && L.desk.text) html += deskCard(L.desk);
     // Signed-in coach: My Team (with a scouting report on the next opponent) and a to-do list come first.
     const me = auth.profile, myT = me && me.teamId ? team(me.teamId) : null, coachHome = !!(myT && isUserTeam(myT));
     html += offseasonAwardsCard();
@@ -569,14 +573,14 @@ const PAGES = {
           ${place ? `<div><span>Finish</span><b>${ordinal(place)}</b></div>` : ''}${past ? '' : `<div><span>OVR / OFF / DEF</span><b>${t.ovr || '–'} / ${t.off || '–'} / ${t.def || '–'}</b></div>`}${pb ? `<div><span>Offense playbook</span><b>${esc(pb.off || '–')}</b></div><div><span>Defense playbook</span><b>${esc(pb.def || '–')}</b></div>` : ''}${sim ? `<div><span>Likely record</span><b>${sim.likely}</b></div><div><span>Title odds</span><b>${pctStr(sim.titlePct)}</b></div>` : ''}</div></div>
       ${teamStatsCard(id, s)}
       ${past ? '' : scoutCard(t, s)}
-      ${cpuBroadcasts(id, s)}
       <div class="card"><h3 style="margin-top:0">${s} Schedule</h3><div class="tablewrap"><table><tr><th>Wk</th><th>Opponent</th><th>Line</th><th class="num">Result</th></tr>
       ${games.map(g => {
         const home = g.home === id, opp = home ? g.away : g.home, done = played(g), l = lineOf(g);
         const my = home ? +g.homeScore : +g.awayScore, th = home ? +g.awayScore : +g.homeScore;
         const myLine = l ? (home ? l.spread : -l.spread) : null;
         return `<tr class="clickable" data-game="${esc(g.id)}"><td>${g.type === 'ccg' ? '<b title="League Championship">🏆</b>' : g.type === 'bowl' ? '<span title="Bowl Season">Bowl</span>' : g.week}</td><td>${g.neutral ? 'vs' : home ? 'vs' : '@'} ${chip(opp, { season: g.season, week: g.week })}</td><td class="muted wrap-sm">${l ? fmtLine(myLine) + `<span class="hide-sm"> · ${fmtOdds(home ? l.mlHome : l.mlAway)}</span>` + (winPct(g, l) && !g.forfeit ? ` · <span title="${done ? 'Pre-game win chance' : 'Win chance'}">${home ? winPct(g, l).h : winPct(g, l).a}%</span>` : '') : ''}</td><td class="num">${done ? `<span class="${my > th ? 'win' : 'loss'}">${my > th ? 'W' : 'L'} ${g.forfeit ? '(forfeit)' : my + '-' + th}</span>` : '<span class="muted">—</span>'}</td></tr>`;
-      }).join('')}</table></div></div>`;
+      }).join('')}</table></div></div>
+      ${cpuBroadcasts(id, s)}`;
   },
 
   coach(arg) {
@@ -1894,6 +1898,24 @@ function scoutingReport(g, T, opp, myCoach, oppCoach) {
   return `<details class="scout" open><summary>Scouting report: ${esc(opp.name)}</summary><ul>${pts.map(t => `<li>${t}</li>`).join('')}</ul><a href="#game/${esc(g.id)}">Full game preview →</a></details>`;
 }
 // To-do list: what's waiting on this coach right now, each a tap away. Empty = all caught up.
+// Commissioner's Desk: a signed note from the league office at the top of Home.
+function deskCard(dk) {
+  const at = dk.at || D.league.advancedAt;
+  return `<section class="card desk" aria-labelledby="deskH"><div class="desk-tag"><span id="deskH"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM6 11a6 6 0 0 0 12 0M12 17v4M8 21h8"/></svg>Commissioner's Desk</span><small>From the league office</small></div>
+    <div class="desk-body">${esc(dk.text)}</div>
+    <div class="desk-foot"><img src="logo.png" alt=""><span><span><b>${dk.by ? `Coach ${esc(dk.by)}` : 'The Commissioner'}</b>${dk.by ? ' · Commissioner' : ''}</span>${at ? `<small>Posted ${esc(fmtAdvance(at))}</small>` : ''}</span></div></section>`;
+}
+// Ballots still waiting on the signed-in coach: the next Game of the Week, season awards, preseason picks.
+// Drives the dot on the League tab and Vote tab, the header pill and the to-do list.
+function openBallots() {
+  const me = auth.profile, L = D.league, s = S(); if (!me || !me.teamId) return [];
+  const out = [], nw = L.week + 1;
+  if (picksOpen() && !D.picks.some(p => p.season === s && p.uid === me.id)) out.push({ k: 'picks', href: '#vote/picks', label: 'Preseason picks' });
+  if (L.awards?.open && !D.ballots.some(b => b.season === s && b.uid === me.id)) out.push({ k: 'awards', href: '#vote/awards', label: 'Season awards' });
+  const nextG = L.phase === PHASES.REG ? D.games.filter(x => x.season === s && x.week === nw && (x.type || 'reg') === 'reg') : [];
+  if (nextG.length > 1 && !D.gotw.some(v => v.season === s && v.week === nw && v.uid === me.id)) out.push({ k: 'gotw', href: '#vote', label: `${wkName(nw)} Game of the Week`, n: nextG.length });
+  return out;
+}
 function todoCard(me, T) {
   const L = D.league, s = S(), items = [], I = {
     star: 'M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.5 6.7 19.4l1.2-6L3.4 9.3l6-.7z', bet: 'M4 7h16v10H4zM12 10v4M9 12h6', vote: 'M5 12l4 4L19 6', clock: 'M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', trophy: 'M7 4h10v4a5 5 0 0 1-10 0zM12 13v4M8 20h8' };
@@ -1904,8 +1926,8 @@ function todoCard(me, T) {
   if (g && canSchedule(g) && !kickoffOf(g) && !inv.length) { const opp = team(g.home === T.id ? g.away : g.home); add(`#game/${g.id}`, I.clock, '#6fa8ff', `Set a kickoff time with Coach ${opp.coach}`, `Your ${wkOf(g)} game ${g.home === T.id ? 'vs' : 'at'} ${opp.name}`); }
   if (picksOpen() && !D.picks.some(p => p.season === s && p.uid === me.id)) add('#vote/picks', I.star, '#f5b82e', 'Make your preseason picks', 'Open until the first game of the season is in');
   if (L.awards?.open && !D.ballots.some(b => b.season === s && b.uid === me.id)) add('#vote/awards', I.trophy, '#f5b82e', 'Vote for the season awards', 'Voting closes after bowl season');
-  const nw = L.week + 1, nextG = L.phase === PHASES.REG ? D.games.filter(x => x.season === s && x.week === nw && (x.type || 'reg') === 'reg' && isUserTeam(team(x.home)) && isUserTeam(team(x.away))) : [];
-  if (nextG.length > 1 && !D.gotw.some(v => v.season === s && v.week === nw && v.uid === me.id)) add('#vote', I.vote, '#43c97e', `Vote for ${wkName(nw)}'s Game of the Week`, `${nextG.length} games to choose from`);
+  const gv = openBallots().find(b => b.k === 'gotw');
+  if (gv) add('#vote', I.vote, '#43c97e', `Vote for ${wkName(L.week + 1)}'s Game of the Week`, `${gv.n} games to choose from`);
   if (L.bettingOpen && !D.wagers.some(w => !w.deleted && w.uid === me.id && w.season === s && w.week === L.week)) {
     const board = D.games.filter(x => x.season === s && x.week === L.week && !played(x) && lineOf(x) && !x.locked && x.home !== T.id && x.away !== T.id), op = board.find(isOpener);
     if (board.length) add('#betting', I.bet, '#ff4f57', `Place your ${weekLabel()} bets`, op ? `${board.length} game${board.length > 1 ? 's' : ''} · the opener has a +${Math.round((OPENER_BOOST - 1) * 100)}% moneyline boost` : `${board.length} game${board.length > 1 ? 's' : ''} on the board`);
@@ -2558,6 +2580,8 @@ function acctHtml(p) {
     const ko = kickoffOf(g);
     bits.push(`<a class="nextg" href="#game/${esc(g.id)}">Next: ${wk} ${g.neutral ? 'vs' : home ? 'vs' : '@'} ${esc(opp.abbr || opp.name)}${ko ? ` · 🕗 ${esc(fmtKick(ko, true))}` : ''} ›</a>`);
   }
+  const bal = openBallots();
+  if (bal.length) bits.unshift(`<a class="nextg votepill" href="${esc(bal[0].href)}">🗳️ ${bal.length === 1 ? 'Vote: ' + esc(bal[0].label) : bal.length + ' votes open'} ›</a>`);
   const inv = p ? invitesFor(p.id) : [];
   if (inv.length) bits.unshift(`<a class="nextg kinvpill" href="#game/${esc(inv[0].gameId)}">📅 ${inv.length === 1 ? 'Kickoff invite' : inv.length + ' kickoff invites'} ›</a>`);
   return `<div class="greet"><div class="hello">${hello}</div>${bits.length ? `<div class="gsub">${bits.join('')}</div>` : ''}</div>
@@ -2586,14 +2610,15 @@ function route() {
   let [page, arg] = (location.hash.slice(1) || 'home').split('/');
   if (page === 'league') page = 'standings';   // the League tab opens on Standings
   const hub = HUB_OF[page] || (HUBS.some(h => h[0] === page) ? page : 'home');
-  $('#nav').innerHTML = HUBS.map(([k, label, icon]) => `<a href="#${k}" class="${k === hub ? 'on' : ''}"${k === hub ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${icon}"/></svg><span>${label}</span></a>`).join('');
+  const nBal = openBallots().length, dot = k => k === 'league' && nBal ? `<i class="tdot" aria-label="${nBal} vote${nBal > 1 ? 's' : ''} waiting on you">${nBal}</i>` : '';
+  $('#nav').innerHTML = HUBS.map(([k, label, icon]) => `<a href="#${k}" class="${k === hub ? 'on' : ''}"${k === hub ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${icon}"/></svg><span>${label}</span>${dot(k)}</a>`).join('');
   // Page title, description and the hub's sub-tabs (gold underline). Home skips this: it has its own top section.
   const meta = PAGE_META[page], subs = (HUBS.find(h => h[0] === hub) || [])[3] || [];
   $('#pagehead').hidden = !meta;
   if (meta) {
     $('#pageTitle').textContent = meta[0]; $('#pageSub').textContent = meta[1];
     const subOn = page === 'team' ? 'teams' : page === 'coach' ? 'history' : page === 'game' ? 'schedule' : page;
-    $('#subnav').innerHTML = subs.length > 1 ? subs.map(([k, l]) => `<a role="tab" href="#${k}" class="${k === subOn ? 'on' : ''}" aria-selected="${k === subOn}">${l}</a>`).join('') : '';
+    $('#subnav').innerHTML = subs.length > 1 ? subs.map(([k, l]) => `<a role="tab" href="#${k}" class="${k === subOn ? 'on' : ''}" aria-selected="${k === subOn}">${l}${k === 'vote' && nBal ? '<i class="sdot" aria-hidden="true"></i>' : ''}</a>`).join('') : '';
     $('#subnav').hidden = subs.length <= 1;
   }
   // Keep the selected tab in view when the tab bar scrolls sideways (phones).
