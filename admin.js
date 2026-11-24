@@ -76,9 +76,11 @@ function renamedCard() {
 }
 // Preseason picks status for the commissioner: open from publishing until the first score, with manual control.
 function picksAdminCard() {
-  const lg = L(), pp = lg.prePicks; if (lg.phase !== PHASES.REG || !pp || pp.season !== lg.season) return '';
+  const lg = L(), pp = lg.prePicks; if (lg.phase !== PHASES.REG) return '';
   const open = picksOpen(lg), started = D.games.some(g => g.season === lg.season && played(g));
   if (!open && started) return '';
+  // A season published before picks existed (or without them): offer to open them until the first score.
+  if (!pp || pp.season !== lg.season) return `<div class="card"><b>🔮 Preseason picks</b><p class="muted small" style="margin:6px 0">Not open for ${lg.season} yet. Open them now and coaches can pick until the first score of the season is saved.</p><button class="sm gold" data-act="togglePicks">Open preseason picks</button></div>`;
   return `<div class="card"><b>🔮 Preseason picks are ${open ? 'open' : 'closed'}</b><p class="muted small" style="margin:6px 0">${open ? 'Coaches can make their picks on the Vote page until the first score of the season is saved; then they lock and go public.' : 'Closed early. Reopen until the first score is saved?'}</p>
     <button class="sm ${open ? 'ghost' : ''}" data-act="togglePicks">${open ? 'Close picks now' : 'Reopen picks'}</button></div>`;
 }
