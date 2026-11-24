@@ -470,12 +470,12 @@ const PAGES = {
     const hist = oddsHistory();
     const divLbl = divisions().length > 1 ? 'Division' : 'Reg. Season Title';
     return `<h2>${pre ? 'Preseason Odds' : 'Season Odds'}</h2>
-      <p class="muted small">${pre ? 'Built from team overall, offense and defense ratings and the full schedule, before any Week 0 games.' : 'Re-simulated 1,500 times after every advance using results so far.'}</p>
+      <p class="h2sub">${pre ? 'Built from team overall, offense and defense ratings and the full schedule, before any Week 0 games.' : 'Re-simulated 1,500 times after every advance using results so far.'}</p>
       <div class="card"><div class="tablewrap"><table>
         <tr>${sortTh(st, 'name', 'Team')}${sortTh(st, 'coach', 'Coach', 'hide-sm')}${sortTh(st, 'likely', 'Likely', 'num')}${sortTh(st, 'expW', 'Proj. W', 'num hide-xs')}${sortTh(st, 'divPct', divLbl.replace('Reg. Season Title', '1st').replace('Division', 'Div'), 'num')}${sortTh(st, 'ccgPct', 'Make Title Game', 'num hide-sm')}${sortTh(st, 'titlePct', 'Title', 'num')}</tr>
         ${rows.map(r => `<tr id="odds-${esc(r.id)}" class="${myTeam()?.id === r.id ? 'me' : ''}${focus === r.id ? ' focus' : ''}"><td>${chip(r.id)}${subSm(isUserTeam(team(r.id)) ? esc(r.coach) : 'CPU')}</td><td class="hide-sm">${isUserTeam(team(r.id)) ? esc(r.coach) : '<span class="muted">CPU</span>'}</td><td class="num">${r.likely}</td><td class="num hide-xs">${r.expW.toFixed(1)}</td><td class="num">${pctStr(r.divPct)}</td><td class="num hide-sm">${pctStr(r.ccgPct)}</td><td class="num"><b>${pctStr(r.titlePct)}</b></td></tr>`).join('')}
       </table></div></div>
-      <h2>Coach Odds Trend</h2><div class="card chart"><div class="row spread"><div class="seg">
+      <h2>Coach Odds Trend</h2><p class="h2sub">How each coach's chances have moved, week by week.</p><div class="card chart"><div class="row spread"><div class="seg">
         ${[['titlePct', 'League Title %', 'Title %'], ['divPct', divisions().length > 1 ? 'Division %' : 'Odds to finish 1st', divisions().length > 1 ? 'Div %' : '1st %'], ['expW', 'Projected Wins', 'Proj. W']].map(([k, l, sm]) => `<button data-metric="${k}" class="${UI.metric === k ? 'on' : ''}"><span class="hide-sm">${l}</span><span class="show-sm">${sm}</span></button>`).join('')}
       </div></div>${trendChart(hist)}</div>`;
   },
@@ -487,26 +487,23 @@ const PAGES = {
     const games = D.games.filter(g => g.season === s && g.week === bw && !played(g) && !g.locked);
     const open = L.bettingOpen && L.phase !== PHASES.PRE && (L.phase !== PHASES.POST || D.games.some(g => g.season === L.season && g.type === 'bowl' && !played(g) && g.lines));
     const bk = me ? bankroll(me.id) : null;
-    let html = `<div class="sbhead"><h2>Sportsbook · ${esc(weekLabel())}</h2>${bk ? `<div class="bkmini"><div><span>Balance</span><b>${bk.balance.toLocaleString()}</b></div><div class="hide-sm"><span>In play</span><b>${bk.open}</b></div><div><span>Record</span><b>${bk.w}-${bk.l}${bk.p ? '-' + bk.p : ''}</b></div><div><span>Net</span><b class="${bk.net >= 0 ? 'win' : 'loss'}">${bk.net >= 0 ? '+' : ''}${bk.net}</b></div></div>` : ''}</div>`;
-    if (me) { const nOpen = D.wagers.filter(w => w.uid === me.id && w.season === s && w.status === 'open' && !w.deleted).length;
-      UI.mb = `<a class="btn mybetsbtn" href="#mybets">🎟️ My Bets${nOpen ? ` <span class="mbcount">${nOpen} open</span>` : ''}</a>`; } else UI.mb = '';
-    const segRow = open && games.length;
-    if (UI.mb && !segRow) html += `<div class="mybetsrow">${UI.mb}</div>`;
+    let html = bk ? bankStrip(me, s, bk) : '';
+    UI.mb = '';
     if (!me) html += `<div class="notice">Everyone with an account gets <b>${START_CREDITS.toLocaleString()} Crackers</b> per season. <a href="#account">Log in or sign up</a> to place wagers.</div>`;
     else if (!me.teamId) html += `<div class="notice">You're a spectator: you can bet with your ${START_CREDITS.toLocaleString()} Crackers like everyone else. If you join the league, the commissioner will link you to your team.</div>`;
     html += !open ? `<div class="card empty">Betting is ${L.phase === PHASES.PRE ? 'closed until the season is published' : 'locked right now'}.</div>` :
-      games.length ? `<div class="row" style="margin-bottom:10px"><div class="seg"><button data-mode="single" class="${UI.mode === 'single' ? 'on' : ''}">Single bets</button><button data-mode="parlay" class="${UI.mode === 'parlay' ? 'on' : ''}">Parlay</button></div>${UI.mb}
-        ${UI.mode === 'parlay' ? `<span class="muted small">Tap 2–${MAX_LEGS} picks from any upcoming week, plus League Champion and Win Total picks below. Per game: one side (spread or moneyline) and one points pick (game total or a team total). Tapping another in the same group swaps it in. All must hit; payouts multiply. Once more than half the legs have won, you can cash out early for your stake plus ${Math.round(CASHOUT_SHARE * 100)}% of what the winning legs would pay.</span>` : ''}</div>
-        <div class="row" style="margin-bottom:14px"><select data-betweek="1" aria-label="Week to bet on">${bwks.map(w => `<option value="${w}" ${w === bw ? 'selected' : ''}>${esc(wkName(w, s))}${w === L.week ? ' (this week)' : ''}</option>`).join('')}</select>
-        <span class="muted small">${bw === L.week ? '' : 'Early lines: they move after every advance, but your bet keeps the line you took.'}</span></div><div class="card"><div class="betgrid"><div class="hdr">Spread</div><div class="hdr">Moneyline</div><div class="hdr">Total</div>
-        ${games.slice().sort((x, y) => (y.id === gotwGameId()) - (x.id === gotwGameId())).map(g => betRows(g)).join('')}</div></div>${bw === L.week ? `<div id="popular">${popularCard()}</div>` : ''}<div id="value">${valueCard(games)}</div>` : '<div class="card empty">No open games this week.</div>';
+      games.length ? `${bwks.length > 1 ? `<div class="weekpick"><span class="wp-lbl">BET ON</span><div class="wp-row">${bwks.map(w => `<button class="wp${w === bw ? ' on' : ''}${w === L.week ? ' now' : ''}" data-betwk="${w}" aria-label="${esc(wkName(w, s))}"${w === bw ? ' aria-current="true"' : ''}>${esc(((n) => n === 'League Title' ? 'Title' : n === 'Bowl Season' ? 'Bowls' : String(w))(wkName(w, s)))}</button>`).join('')}</div></div>` : ''}
+        <h2>${esc(wkName(bw, s))} Board</h2><p class="h2sub">${games.length} game${games.length === 1 ? '' : 's'} · ${bw === L.week ? 'tap a price to bet it' : 'early lines: they move after every advance, but your bet keeps the line you took'}</p>
+        <div class="betmode"><div class="fchips" role="group" aria-label="Bet type"><button data-mode="single" class="fchip${UI.mode === 'single' ? ' on' : ''}">Single bets</button><button data-mode="parlay" class="fchip${UI.mode === 'parlay' ? ' on' : ''}">Parlay</button></div>
+        ${UI.mode === 'parlay' ? `<details class="parlayhelp"><summary>How parlays work</summary><p class="muted small">Tap 2–${MAX_LEGS} picks from any upcoming week, plus League Champion and Win Total picks below. Per game: one side (spread or moneyline) and one points pick (game total or a team total). Tapping another in the same group swaps it in. All must hit; payouts multiply. Once more than half the legs have won, you can cash out early for your stake plus ${Math.round(CASHOUT_SHARE * 100)}% of what the winning legs would pay.</p></details>` : ''}</div>
+        <div class="bboard">${games.slice().sort((x, y) => (y.id === gotwGameId()) - (x.id === gotwGameId()) || (kickoffOf(x) || 9e15) - (kickoffOf(y) || 9e15)).map(g => betRows(g)).join('')}</div>${bw === L.week ? `<div id="popular">${popularCard()}</div>` : ''}<div id="value">${valueCard(games)}</div>` : '<div class="card empty">No open games this week.</div>';
     html += futuresSection();
     html += winsSection();
     const lb = UI.lbSort, ws = UI.wkSort;
     const board0 = bettors().map(u => ({ u, b: bankroll(u.id) })).sort((a, b) => b.b.net - a.b.net || b.b.balance - a.b.balance)   // same order as Betting Leaders on Home
       .map((x, i) => ({ ...x, place: i + 1, name: x.u.name, rec: x.b.w + x.b.l ? x.b.w / (x.b.w + x.b.l) : 0, net: x.b.net, roi: x.b.risked ? x.b.net / x.b.risked : -Infinity, balance: x.b.balance }));
     const board = sortRows(board0, lb, { rec: r => r.rec * 1000 + r.b.w });
-    html += `<h2>Season ${seasonNum()} Leaderboard</h2><div class="card"><div class="tablewrap"><table><tr>${sortTh(lb, 'place', '#', '', 'lbSort')}${sortTh(lb, 'name', 'Coach', '', 'lbSort')}${sortTh(lb, 'rec', 'W-L-P', 'num', 'lbSort')}${sortTh(lb, 'net', 'Net', 'num hide-xs', 'lbSort')}${sortTh(lb, 'roi', 'ROI', 'num hide-sm', 'lbSort')}${sortTh(lb, 'balance', 'Balance', 'num', 'lbSort')}</tr>
+    html += `<h2>Season ${seasonNum()} Leaderboard</h2><p class="h2sub">Ranked by net profit. Tap a column to sort.</p><div class="card"><div class="tablewrap"><table><tr>${sortTh(lb, 'place', '#', '', 'lbSort')}${sortTh(lb, 'name', 'Coach', '', 'lbSort')}${sortTh(lb, 'rec', 'W-L-P', 'num', 'lbSort')}${sortTh(lb, 'net', 'Net', 'num hide-xs', 'lbSort')}${sortTh(lb, 'roi', 'ROI', 'num hide-sm', 'lbSort')}${sortTh(lb, 'balance', 'Balance', 'num', 'lbSort')}</tr>
       ${board.map(x => `<tr class="${me && me.id === x.u.id ? 'me' : ''}"><td class="rank">${x.place}</td><td>${x.u.teamId ? `<a href="#coach/${slug(x.u.name)}">${esc(x.u.name)}</a>` : esc(x.u.name)} <span class="muted small hide-sm">${x.u.teamId ? esc(team(x.u.teamId).name) : 'Spectator'}</span>${subSm(x.u.teamId ? esc(team(x.u.teamId).name) : 'Spectator')}</td><td class="num">${x.b.w}-${x.b.l}-${x.b.p}</td><td class="num hide-xs ${x.b.net >= 0 ? 'win' : 'loss'}">${x.b.net >= 0 ? '+' : ''}${x.b.net}</td><td class="num hide-sm">${x.b.risked ? Math.round(x.b.net / x.b.risked * 100) + '%' : '–'}</td><td class="num"><b>${x.b.balance.toLocaleString()}</b></td></tr>`).join('')}
     </table></div></div>`;
     // Potential payout = stake back + profit (boost included). Pushes and voids just return the stake.
@@ -515,7 +512,7 @@ const PAGES = {
     const STO = { open: 0, won: 1, cashed: 1.5, push: 2, void: 3, lost: 4 };
     const wk = sortRows(D.wagers.filter(w => w.season === s && w.week === L.week), ws,
       { coach: w => (w.coach || '').toLowerCase(), bet: w => wagerLabel(w).toLowerCase(), ts: w => w.ts || 0, stake: w => w.stake, payout: payOf, status: w => STO[w.status] ?? 9 });
-    if (wk.length) html += `<h2>Bets Placed This Week</h2><div class="card"><div class="tablewrap"><table class="bets"><tr>${sortTh(ws, 'coach', 'Coach', '', 'wkSort')}${sortTh(ws, 'bet', 'Bet', '', 'wkSort')}${sortTh(ws, 'ts', 'Placed', 'hide-sm', 'wkSort')}${sortTh(ws, 'stake', 'Stake', 'num', 'wkSort')}${sortTh(ws, 'payout', 'Payout', 'num', 'wkSort')}${sortTh(ws, 'status', 'Status', 'num hide-xs', 'wkSort')}</tr>${wk.map(w => `<tr><td>${coachCell(w)}</td><td class="wrap">${esc(wagerLabel(w))}${legsHtml(w)}${subSm(fmtTime(w.ts))}</td><td class="muted small hide-sm">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num">${payCell(w)}</td><td class="num hide-xs">${statusPill(w)}</td></tr>`).join('')}</table></div></div>`;
+    if (wk.length) html += `<h2>Bets Placed This Week</h2><p class="h2sub">Every bet the league has placed for ${esc(weekLabel())}.</p><div class="card"><div class="tablewrap"><table class="bets"><tr>${sortTh(ws, 'coach', 'Coach', '', 'wkSort')}${sortTh(ws, 'bet', 'Bet', '', 'wkSort')}${sortTh(ws, 'ts', 'Placed', 'hide-sm', 'wkSort')}${sortTh(ws, 'stake', 'Stake', 'num', 'wkSort')}${sortTh(ws, 'payout', 'Payout', 'num', 'wkSort')}${sortTh(ws, 'status', 'Status', 'num hide-xs', 'wkSort')}</tr>${wk.map(w => `<tr><td>${coachCell(w)}</td><td class="wrap">${esc(wagerLabel(w))}${legsHtml(w)}${subSm(fmtTime(w.ts))}</td><td class="muted small hide-sm">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num">${payCell(w)}</td><td class="num hide-xs">${statusPill(w)}</td></tr>`).join('')}</table></div></div>`;
     return html;
   },
 
@@ -637,10 +634,10 @@ const PAGES = {
   mybets() {
     const L = D.league, s = S(), me = auth.profile;
     const open = L.bettingOpen && L.phase !== PHASES.PRE && (L.phase !== PHASES.POST || D.games.some(g => g.season === L.season && g.type === 'bowl' && !played(g) && g.lines));
-    let html = `<p><a href="#betting">← Sportsbook</a></p>`;
+    let html = '';
     if (!me) return html + `<div class="card empty"><a href="#account">Log in</a> to see your bets.</div>`;
     const bk = bankroll(me.id);
-    html += `<div class="sbhead"><h2>My Bets · Season ${seasonNum()}</h2><div class="bkmini"><div><span>Balance</span><b>${bk.balance.toLocaleString()}</b></div><div><span>In play</span><b>${bk.open}</b></div><div><span>Record</span><b>${bk.w}-${bk.l}${bk.p ? '-' + bk.p : ''}</b></div><div><span>Net</span><b class="${bk.net >= 0 ? 'win' : 'loss'}">${bk.net >= 0 ? '+' : ''}${bk.net}</b></div></div></div>`;
+    html += bankStrip(me, s, bk) + `<h2>Season ${seasonNum()} Bets</h2><p class="h2sub">${open ? 'Open bets can be cashed out early from here when the cash-out shows.' : 'Every bet you made this season.'}</p>`;
     if (bk.relief) html += `<p class="muted small" style="margin:-4px 0 10px">🪙 Your balance includes ${bk.relief} relief Crackers (${bk.reliefN} advance${bk.reliefN === 1 ? '' : 's'}). Relief isn't winnings, so it's not in your Net.</p>`;
     return html + myWagersHtml(me, s, open);
   },
@@ -738,17 +735,46 @@ const PAGES = {
 };
 
 /* ---------- betting rows + slip ---------- */
+// Bankroll strip at the top of the Sportsbook and My Bets: what you can bet, what's riding, how the season is going.
+function bankStrip(me, s, bk = bankroll(me.id)) {
+  const nOpen = D.wagers.filter(w => w.uid === me.id && w.season === s && w.status === 'open' && !w.deleted).length;
+  const onMine = (location.hash.slice(1) || '').split('/')[0] === 'mybets';
+  return `<div class="bankstrip card">
+    <div class="bk"><span>Crackers to bet</span><b>${bk.balance.toLocaleString()}</b><small>${(START_CREDITS + (bk.relief || 0)).toLocaleString()} to start</small></div>
+    <${onMine ? 'div' : 'a href="#mybets"'} class="bk"><span>Open bets</span><b>${nOpen}</b><small>${bk.open ? bk.open.toLocaleString() + ' riding' : 'nothing riding'}${onMine ? '' : ' ›'}</small></${onMine ? 'div' : 'a'}>
+    <div class="bk"><span>Season profit</span><b class="${bk.net > 0 ? 'win' : bk.net < 0 ? 'loss' : ''}">${bk.net > 0 ? '+' : ''}${bk.net.toLocaleString()}</b><small>${bk.w}-${bk.l}${bk.p ? '-' + bk.p : ''} record</small></div></div>`;
+}
 function betRows(g) {
   const l = lineOf(g); if (!l) return '';
-  const a = team(g.away), h = team(g.home);
+  const a = team(g.away), h = team(g.home), p = winPct(g, l);
   const own = ownGame(g);
-  const b = (market, pick, top, odds) => own ? `<span class="pick off">${top} <b>${fmtOdds(odds)}</b></span>` : `<button class="pick${UI.mode === 'parlay' && UI.legs.some(x => x.gameId === g.id && x.market === market && x.pick === pick) ? ' sel' : ''}" data-bet="${esc(g.id)}|${market}|${pick}">${top} <b>${fmtOdds(odds)}</b></button>`;
   const isG = gotwGameId() === g.id, champ = g.type === 'ccg', op = isOpener(g);
-  return `<div class="betgame${isG || champ || op ? ' gotw' : ''}${own ? ' own' : ''}">${op && !isG ? `<span class="ribbon">🏈 Season Opener · +${Math.round((OPENER_BOOST - 1) * 100)}% ML boost</span>` : isG ? `<span class="ribbon">★ Game of the Week · +${Math.round((GOTW_BOOST - 1) * 100)}% profit boost</span>` : champ ? `<span class="ribbon">${champRibbon()}${played(g) ? '' : ` · +${Math.round((CCG_BOOST - 1) * 100)}% profit boost`}</span>` : ''}<div class="tm matchup">${chip(a.id, { season: g.season, week: g.week, href: '#game/' + g.id })}<span class="at">${g.neutral ? 'vs' : '@'}</span>${chip(h.id, { season: g.season, week: g.week, href: '#game/' + g.id })}${gameTags(g)}</div>${own ? '<span class="ownnote">Your game · no betting</span>' : ''}${probBar(g, l, false, 'tm')}
-    <div style="display:grid;gap:4px">${b('spread', 'away', esc(a.abbr) + ' ' + fmtLine(-l.spread), juiceOf(l, 'spread', 'away'))}${b('spread', 'home', esc(h.abbr) + ' ' + fmtLine(l.spread), juiceOf(l, 'spread', 'home'))}</div>
-    <div style="display:grid;gap:4px">${b('ml', 'away', esc(a.abbr), l.mlAway)}${b('ml', 'home', esc(h.abbr), l.mlHome)}</div>
-    <div style="display:grid;gap:4px">${b('total', 'over', 'O ' + l.total, juiceOf(l, 'total', 'over'))}${b('total', 'under', 'U ' + l.total, juiceOf(l, 'total', 'under'))}</div>
-    ${l.ttHome != null ? `<div class="ttrow">${[['tta', a, l.ttAway], ['tth', h, l.ttHome]].map(([m, t, v]) => `<span class="ttname">${esc(t.abbr)} team total</span>${b(m, 'over', 'O ' + v, juiceOf(l, m, 'over'))}${b(m, 'under', 'U ' + v, juiceOf(l, m, 'under'))}`).join('')}</div>` : ''}</div>`;
+  // A price tile: the label on top (team + line, or O/U number) and the price under it. Your own game shows the
+  // prices but they can't be tapped.
+  const b = (market, pick, top, odds, extra = '') => own ? `<span class="pick tile off${extra}"><span>${top}</span><b>${fmtOdds(odds)}</b></span>`
+    : `<button class="pick tile${extra}${UI.mode === 'parlay' && UI.legs.some(x => x.gameId === g.id && x.market === market && x.pick === pick) ? ' sel' : ''}" data-bet="${esc(g.id)}|${market}|${pick}"><span>${top}</span><b>${fmtOdds(odds)}</b></button>`;
+  const mlx = op ? ' boost' : '';
+  const strip = [];
+  if (own) strip.push('<span class="bugtag mine">YOUR GAME · NO BETTING</span>');
+  if (op && !isG) strip.push(`<span class="bugtag gold">🏈 SEASON OPENER · +${Math.round((OPENER_BOOST - 1) * 100)}% ML BOOST</span>`);
+  else if (isG) strip.push(`<span class="bugtag gold">★ GAME OF THE WEEK · +${Math.round((GOTW_BOOST - 1) * 100)}% PROFIT BOOST</span>`);
+  else if (champ) strip.push(`<span class="bugtag gold">${esc(champRibbon().toUpperCase())}${played(g) ? '' : ` · +${Math.round((CCG_BOOST - 1) * 100)}% PROFIT BOOST`}</span>`);
+  if (g.type === 'bowl') strip.push(`<span class="bugtag">${esc((g.note || 'Bowl Season').toUpperCase())}</span>`);
+  const tags = gameTags(g);
+  const row = (t, side) => { const rk = rankOf(t.id, g.season, g.week), c = isUserTeam(t) ? t.coach : 'CPU';
+    return `<div class="bgrow">${teamPlate(t)}<span class="bugteam"><b>${rk ? `<span class="rk">#${rk}</span> ` : ''}${esc(t.name)}${side === 'home' && !g.neutral ? ' <em>home</em>' : ''}</b><span>${c && c !== 'CPU' ? 'Coach ' + esc(c) : 'CPU'}</span></span>${p ? `<span class="bgpct"><b>${side === 'home' ? p.h : p.a}%</b><small>to win</small></span>` : ''}</div>`; };
+  const ko = kickoffOf(g);
+  return `<div class="bgame card${isG || champ || op ? ' feat' : ''}${own ? ' own' : ''}">
+    ${strip.length || tags ? `<div class="bugstrip">${strip.join('')}${tags}</div>` : ''}
+    <a class="bghead" href="#game/${esc(g.id)}">${row(a, 'away')}${row(h, 'home')}</a>
+    ${p ? `<div class="bugbar" style="background:${esc(teamColor(h))}"><i style="width:${p.a}%;background:${esc(teamColor(a))}"></i></div>` : ''}
+    <div class="bgmk">
+      <div class="bgcol"><span class="bgh">Spread</span>${b('spread', 'away', esc(a.abbr) + ' ' + fmtLine(-l.spread), juiceOf(l, 'spread', 'away'))}${b('spread', 'home', esc(h.abbr) + ' ' + fmtLine(l.spread), juiceOf(l, 'spread', 'home'))}</div>
+      <div class="bgcol"><span class="bgh">Moneyline${op ? ' <i class="bgboost">+' + Math.round((OPENER_BOOST - 1) * 100) + '%</i>' : ''}</span>${b('ml', 'away', esc(a.abbr), l.mlAway, mlx)}${b('ml', 'home', esc(h.abbr), l.mlHome, mlx)}</div>
+      <div class="bgcol"><span class="bgh">Total</span>${b('total', 'over', 'Over ' + l.total, juiceOf(l, 'total', 'over'))}${b('total', 'under', 'Under ' + l.total, juiceOf(l, 'total', 'under'))}</div>
+    </div>
+    ${l.ttHome != null ? `<div class="bgtt">${[['tta', a, l.ttAway], ['tth', h, l.ttHome]].map(([m, t, v]) => `<div class="bgttrow"><span class="bgh">${esc(t.abbr)} team total</span>${b(m, 'over', 'O ' + v, juiceOf(l, m, 'over'))}${b(m, 'under', 'U ' + v, juiceOf(l, m, 'under'))}</div>`).join('')}</div>` : ''}
+    <div class="bugfoot"><span>${esc(gWeek(g))} · ${ko ? '🕗 ' + esc(fmtKick(ko, true)) : 'Kickoff not set'}${g.lines ? '' : ' · projected'}</span><a class="bugopen" href="#game/${esc(g.id)}">Preview ›</a></div></div>`;
 }
 function myWagersHtml(me, s, open) {
     let myW = '';
@@ -779,7 +805,7 @@ function futuresSection() {
   const open = champOpen() && futuresPosted(), set = titleSet() || (L.futures && L.futures.season === L.season && L.futures.open === false && L.phase === PHASES.REG);
   const live = board.filter(r => r.odds != null), dead = board.filter(r => r.odds == null);
   const deadLine = (list, label) => list.length ? `<div class="offboard"><span>${label}</span>${list.map(r => chip(r.id, { abbr: true, rank: false })).join('')}</div>` : '';
-  h += `<div class="card"><p class="muted small" style="margin-top:0">Pick the ${esc(L.conference)} champion${board[0].posted ? '' : ' (odds projected until this week\'s lines post)'}. Your odds lock when you bet, it pays when the title game is final, and a team that's eliminated loses right away.</p>
+  h += `<p class="h2sub">Pick the ${esc(L.conference)} champion${board[0].posted ? '' : ' (odds projected until this week\'s lines post)'}. Your odds lock when you bet, it pays when the title game is final, and a team that's eliminated loses right away.</p><div class="card">
     <div class="tablewrap"><table class="compact"><tr><th>Team</th><th class="num">Chance</th><th class="num">Odds</th></tr>
     ${live.map(r => { const t = team(r.id); return `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td>${chip(r.id)} <span class="muted small">${isUserTeam(t) ? esc(t.coach) : 'CPU'}</span></td><td class="num">${pctStr(r.p)}</td>
       <td class="num">${open && r.id !== myTeam()?.id ? `<button class="pick${UI.mode === 'parlay' && UI.legs.some(x => x.market === 'future' && x.pick === r.id) ? ' sel' : ''}" data-fut="${esc(r.id)}"><b>${fmtOdds(r.odds)}</b></button>` : `<b>${fmtOdds(r.odds)}</b>`}</td></tr>`; }).join('')}
@@ -788,7 +814,7 @@ function futuresSection() {
 }
 function winsSection() {
   const L = D.league, rows = winsBoard();
-  let h = `<h2>Season ${seasonNum()} Win Totals</h2>`;
+  let h = `<h2>Season ${seasonNum()} Win Totals</h2><p class="h2sub">Over or under each team's regular-season win total. It settles as soon as the result is locked in.</p>`;
   if (!rows.length) return h + `<div class="card empty">Win totals are open during the regular season.</div>`;
   const open = futuresOpen() && winsPosted();
   const btn = (r, pick) => { const o = r.o; if (!o) return ''; const odds = pick === 'over' ? o.over : o.under;
@@ -2613,7 +2639,7 @@ document.addEventListener('click', async e => {
   const cf = e.target.closest('[data-cbflip]'); if (cf) { UI.cbFlip = !UI.cbFlip; route(); return; }
   const cb = e.target.closest('[data-cbspan]'); if (cb) { UI.cbSpan = cb.dataset.cbspan; route(); return; }
   const tr = e.target.closest('tr[data-team]'); if (tr && !e.target.closest('a')) { location.hash = '#team/' + tr.dataset.team; return; }
-  const t = e.target.closest('[data-finteam],[data-pname],[data-momhide],[data-sort],[data-metric],[data-trend],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-slip],[data-popular],[data-res],[data-act],[data-close],[data-stake],[data-acct],[data-cancel],[data-cashout],[data-value],[data-kinv],[data-kacc],[data-kdec],[data-kcan]');
+  const t = e.target.closest('[data-finteam],[data-pname],[data-momhide],[data-sort],[data-metric],[data-trend],[data-pr],[data-prsort],[data-bet],[data-fut],[data-wins],[data-mode],[data-betwk],[data-slip],[data-popular],[data-res],[data-act],[data-close],[data-stake],[data-acct],[data-cancel],[data-cashout],[data-value],[data-kinv],[data-kacc],[data-kdec],[data-kcan]');
   if (!t) return;
   const page = (location.hash.slice(1) || 'home').split('/')[0];
   if (t.dataset.sort) {
@@ -2631,6 +2657,7 @@ document.addEventListener('click', async e => {
   else if (t.dataset.popular) betPopular();
   else if (t.dataset.res) { UI.results.i = Math.max(0, Math.min(UI.results.wins.length - 1, UI.results.i + +t.dataset.res)); renderResult(); }
   else if (t.dataset.mode) { UI.mode = t.dataset.mode; route(); }
+  else if (t.dataset.betwk) { UI.betWeek = +t.dataset.betwk; route(); }
   else if (t.dataset.stake) { $('#stake').value = t.dataset.stake; updToWin(); }
   else if (t.dataset.close && e.target === t) $('#modal').innerHTML = '';
   else if (t.dataset.cashout) {
