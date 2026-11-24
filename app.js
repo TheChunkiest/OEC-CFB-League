@@ -459,8 +459,9 @@ const PAGES = {
       const mc = canonCoach(me.coach || ''), C = coachStats(), mine = C[Object.keys(C).find(k => k.toLowerCase() === mc.toLowerCase())];
       const rows = userTeams().filter(t => t.id !== me.id).map(t => { const v = mine && mine.vs[Object.keys(mine.vs).find(k => k.toLowerCase() === canonCoach(t.coach).toLowerCase())]; return { t, w: v ? v.w : 0, l: v ? v.l : 0 }; })
         .sort((a, b) => (b.w + b.l) - (a.w + a.l) || b.w - a.w);
-      return html + `<h2>Head-to-Head</h2><p class="h2sub">Your all-time record against every coach in the league. Tap a coach for every game.</p>
-        <div class="card"><table class="compact"><tr><th>Coach</th><th>Team now</th><th class="num">Record</th></tr>${rows.map(r => `<tr class="clickable" onclick="location.hash='#coach/${esc(slug(r.t.coach))}'"><td><a href="#coach/${esc(slug(r.t.coach))}">${esc(r.t.coach)}</a></td><td>${chip(r.t.id, { abbr: true, rank: false })}</td><td class="num"><b class="${r.w > r.l ? 'win' : r.w < r.l ? 'loss' : ''}">${r.w}-${r.l}</b></td></tr>`).join('')}</table></div>`;
+      const myName = mine ? mine.name : mc;
+      return html + `<h2>Head-to-Head</h2><p class="h2sub">Your all-time record against every coach in the league. Tap a coach to see every game.</p>
+        <div class="card">${h2hList(myName, rows.map(r => ({ o: canonCoach(r.t.coach), w: r.w, l: r.l })))}</div>`;
     }
     const wk = arg != null && arg !== '' && !isNaN(+arg) ? +arg : (weeks.includes(curWeek()) ? curWeek() : weeks[weeks.length - 1]);
     const games = D.games.filter(g => g.season === s && g.week === wk);
@@ -618,16 +619,7 @@ const PAGES = {
     if (teamAwards.length) { const bySe = {}; teamAwards.forEach(x => (bySe[x.h.season] = bySe[x.h.season] || { h: x.h, list: [] }).list.push(x.a));
       html += `<div class="card"><h3 style="margin-top:0">Team awards</h3>${Object.values(bySe).sort((x, y) => y.h.season - x.h.season).map(({ h, list }) => `<div class="aw-se"><div class="aw-yr"><b>S${seasonNum(h.season)}</b><span>${h.season}</span></div><div class="aw-list">${list.map(a => awardRow(h, a)).join('')}</div></div>`).join('')}</div>`; }
     // Head-to-head: tap a row to see every game against that coach (newest first), each linking to its game page.
-    const h2hGames = o => coachMeetings(name, o).map(g => {
-      const side = coachOf(g, 'home').toLowerCase() === String(name).toLowerCase() ? 'home' : 'away', op = side === 'home' ? 'away' : 'home';
-      const my = +g[side + 'Score'], th = +g[op + 'Score'], won = my > th, ab = id => esc(team(id).abbr || team(id).name);
-      const when = g.type === 'ccg' ? 'Title game' : g.type === 'bowl' ? esc(g.note || 'Bowl Season') : wkShort(g.week, g.season);
-      return `<a class="h2hg" href="#game/${esc(g.id)}"><span class="muted">S${seasonNum(g.season)} · ${when}</span><b class="${won ? 'win' : 'loss'}">${g.forfeit ? (won ? 'FW' : 'FL') : won ? 'W' : 'L'}</b><span>${ab(g[side])} ${g.forfeit ? '' : my}<span class="muted"> – </span>${ab(g[op])} ${g.forfeit ? '' : th}</span><span class="go" aria-hidden="true">›</span></a>`;
-    }).join('');
-    const h2hOpen = UI.h2h || (UI.h2h = {});
-    html += `<div class="card"><h3 style="margin-top:0">Head-to-head vs coaches</h3>${vs.length ? `<table class="h2h"><tr><th>Opponent</th><th class="num">W-L</th><th class="num">Win %</th><th aria-hidden="true"></th></tr>${vs.map(([o, r]) => { const k = name + '|' + o, on = !!h2hOpen[k];
-      return `<tr class="clickable h2hrow${on ? ' on' : ''}" data-h2h="${esc(k)}" aria-expanded="${on}"><td><a href="#coach/${slug(o)}">${esc(o)}</a></td><td class="num">${r.w}-${r.l}</td><td class="num">${pct(r.w, r.l)}</td><td class="num muted h2hcar">${on ? '▴' : '▾'}</td></tr>${on ? `<tr class="h2hx"><td colspan="4">${h2hGames(o) || '<span class="muted small">No games found.</span>'}</td></tr>` : ''}`; }).join('')}</table>
-      <p class="muted small" style="margin:6px 0 0">Tap a row to see every game against that coach.</p>` : '<div class="muted">No coach-vs-coach games yet.</div>'}</div>`;
+    html += `<div class="card"><h3 style="margin-top:0">Head-to-head vs coaches</h3>${vs.length ? h2hList(name, vs.map(([o, r]) => ({ o, w: r.w, l: r.l })), true) + '<p class="muted small" style="margin:8px 0 0">Tap a coach to see every game against them.</p>' : '<div class="muted">No coach-vs-coach games yet.</div>'}</div>`;
     // Sportsbook: its own section, by season.
     if (u) {
       const bs = [...new Set(D.wagers.filter(w => w.uid === u.id).map(w => w.season))].sort((a, b) => b - a).map(se => {
@@ -1769,6 +1761,7 @@ function trReset(card) {
   card.querySelector('.trx').style.display = 'none'; card.querySelector('.trread').innerHTML = D0.kind === 'cb' ? cbReadout(D0, D0.n - 1) : trendReadout(D0, D0.n - 1);
 }
 document.addEventListener('pointermove', e => { if (e.target.closest && e.target.closest('.trchart svg')) trHover(e); });
+document.addEventListener('keydown', e => { const r = e.target.closest && e.target.closest('.h2hr'); if (r && (e.key === 'Enter' || e.key === ' ') && !e.target.closest('a')) { e.preventDefault(); r.click(); } });
 document.addEventListener('toggle', e => { if (e.target.matches && e.target.matches('.cbtrendbox')) UI.cbTrendOpen = e.target.open; }, true);
 document.addEventListener('pointerdown', e => { if (e.target.closest && e.target.closest('.trchart svg')) trHover(e); });
 document.addEventListener('pointerout', e => { const c = e.target.closest && e.target.closest('.trchart svg'); if (c && !c.contains(e.relatedTarget)) trReset(c.closest('.trchart')); });
@@ -2283,6 +2276,25 @@ function cbReadout(D0, i) {
       <div class="trstats"><span>${r ? `<b>#${r}</b> <em>of ${live.length} coaches</em>` : '<em>Not in the league yet</em>'}</span><span><em>${esc(D0.stat)}</em></span></div></div>`;
   }
   return `<div class="muted small" style="margin-bottom:6px">${esc(when)} · ${esc(D0.stat)}</div><ol class="trlist" style="grid-template-rows:repeat(${Math.ceil(live.length / 2)},auto)">${live.map(t => `<li data-cbtrend="${esc(t.id)}"><i class="sw" style="background:${t.c}"></i><span class="ab">${esc(t.ab)}</span><b>${esc(t.f[i])}</b></li>`).join('')}</ol>`;
+}
+// Head-to-head list (Schedule → Head-to-Head and coach pages): one row per opposing coach with their current team and
+// your record; tap a row to drop down every game between you, newest first, each opening its game page.
+function h2hGames(name, o) {
+  return coachMeetings(name, o).map(g => {
+    const side = coachOf(g, 'home').toLowerCase() === String(name).toLowerCase() ? 'home' : 'away', op = side === 'home' ? 'away' : 'home';
+    const my = +g[side + 'Score'], th = +g[op + 'Score'], won = my > th, ab = id => esc(team(id).abbr || team(id).name);
+    const when = g.type === 'ccg' ? 'Title game' : g.type === 'bowl' ? esc(g.note || 'Bowl Season') : 'Wk ' + g.week;
+    return `<a class="h2hg" href="#game/${esc(g.id)}"><span class="h2hg-w">S${seasonNum(g.season)} · ${when}</span><b class="h2hg-r ${won ? 'win' : 'loss'}">${g.forfeit ? (won ? 'FW' : 'FL') : won ? 'W' : 'L'}</b><span class="h2hg-s">${ab(g[side])} ${g.forfeit ? '' : my}<span class="muted"> – </span>${ab(g[op])} ${g.forfeit ? '' : th}</span><span class="go" aria-hidden="true">›</span></a>`;
+  }).join('');
+}
+function h2hList(name, rows, compact = false) {
+  const open = UI.h2h || (UI.h2h = {}), teams = userTeams();
+  const teamOfCoach = o => teams.find(t => canonCoach(t.coach || '').toLowerCase() === String(o).toLowerCase());
+  return `<div class="h2hlist${compact ? ' compact' : ''}">${rows.map(r => { const k = name + '|' + r.o, on = !!open[k], t = teamOfCoach(r.o), n = r.w + r.l;
+    return `<div class="h2hr${on ? ' on' : ''}${n ? '' : ' none'}" data-h2h="${esc(k)}" role="button" tabindex="0" aria-expanded="${on}">
+      <span class="h2h-nm"><a href="#coach/${esc(slug(r.o))}">${esc(r.o)}</a></span><span class="h2h-tm">${t ? chip(t.id, { abbr: true, rank: false }) : ''}</span>
+      <span class="h2h-rec"><b class="${r.w > r.l ? 'win' : r.w < r.l ? 'loss' : ''}">${r.w}-${r.l}</b><small>${n ? Math.round(r.w / n * 100) + '%' : 'never played'}</small></span><span class="h2h-car" aria-hidden="true">›</span></div>
+      ${on ? `<div class="h2h-games">${n ? h2hGames(name, r.o) || '<span class="muted small">No games found.</span>' : '<span class="muted small">You haven\'t played each other yet.</span>'}</div>` : ''}`; }).join('')}</div>`;
 }
 function coachMeetings(c1, c2, exceptId) {
   if (!c1 || !c2 || c1 === 'CPU' || c2 === 'CPU') return [];

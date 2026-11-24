@@ -1762,3 +1762,37 @@ details.todolist[open]>summary .go{transform:rotate(90deg)}
 }
 /* a pop-up window takes the screen: the live banner waits behind it */
 body:has(#modal .modal) .livepop{display:none}
+
+/* ===== Head-to-head list (Schedule and coach pages): tap a coach for every game ===== */
+.h2hlist{display:grid}
+.h2hr{display:grid;grid-template-columns:minmax(0,1fr) auto 78px 18px;align-items:center;gap:10px;padding:11px 4px;border-top:1px solid rgba(255,255,255,.07);cursor:pointer}
+.h2hlist>.h2hr:first-child{border-top:0}
+.h2hr:hover{background:rgba(255,255,255,.03)}
+.h2h-nm{min-width:0;font-size:16px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.h2h-nm a{color:var(--text)}
+.h2h-rec{display:flex;flex-direction:column;align-items:flex-end;line-height:1.05}
+.h2h-rec b{font:800 22px var(--cond);font-variant-numeric:tabular-nums}
+.h2h-rec small{font-size:11px;color:#a79a9c;margin-top:2px;white-space:nowrap}
+.h2h-car{color:#8d8183;font-size:20px;transition:transform .2s;text-align:center}
+.h2hr.on .h2h-car{transform:rotate(90deg)}
+.h2hr.none .h2h-rec b{color:#8d8183}
+.h2h-games{display:grid;gap:6px;padding:2px 0 12px}
+.h2h-games .h2hg{display:grid;grid-template-columns:minmax(0,1fr) 30px auto 14px;align-items:center;gap:10px;margin:0;padding:10px 12px;border-radius:12px;border:1px solid var(--tint-white-line);background:var(--tint-white);color:var(--text)}
+.h2h-games .h2hg:hover{text-decoration:none;border-color:rgba(255,255,255,.3)}
+.h2hg-w{font-size:13px;color:#a79a9c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.h2hg-r{font:800 18px var(--cond);text-align:center}
+.h2hg-s{font:800 18px var(--cond);letter-spacing:.3px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.h2h-games .go{color:#8d8183;font-size:18px}
+/* Coach pages: the compact head-to-head (one slim line per coach, win % beside the record) */
+.h2hlist.compact .h2hr{grid-template-columns:minmax(0,1fr) auto 92px 14px;padding:6px 2px;gap:8px}
+.h2hlist.compact .h2h-nm{font-size:14.5px}
+.h2hlist.compact .h2h-tm .plate{min-width:30px;height:19px;font-size:11px;padding:0 4px}
+.h2hlist.compact .h2h-rec{flex-direction:row;align-items:baseline;justify-content:flex-end;gap:6px}
+.h2hlist.compact .h2h-rec b{font-size:17px}
+.h2hlist.compact .h2h-rec small{margin:0;font-size:11px}
+.h2hlist.compact .h2h-car{font-size:16px}
+.h2hlist.compact .h2h-games{gap:4px;padding:0 0 8px}
+.h2hlist.compact .h2hg{padding:7px 10px;border-radius:10px}
+.h2hlist.compact .h2hg-w{font-size:12px}
+.h2hlist.compact .h2hg-r,.h2hlist.compact .h2hg-s{font-size:15px}
+@media(min-width:760px){.h2hlist.compact{grid-template-columns:1fr 1fr;column-gap:24px}.h2hlist.compact .h2h-games{grid-column:1/-1}.h2hlist.compact>.h2hr:nth-child(2){border-top:0}}
