@@ -415,8 +415,8 @@ const PAGES = {
     // This week's games first (matchups), then storylines; side by side on wide screens.
     html += `<div class="${offseason ? '' : 'grid2'}">${offseason ? '' : `<div><h2>${bowls ? 'Bowl Season Games' : `${esc(weekLabel())} Games`}</h2><div class="card matchbox">${bowls ? (games.length ? games.slice().sort((a, b) => played(a) - played(b) || a.week - b.week).map(g => gameCard(g)).join('') : '<div class="empty">No bowl or playoff games posted yet.</div>') : userWk ? weekOrder(games.filter(g => g.id !== gt.game?.id && g.id !== ccgNow?.id)).map(g => gameCard(g)).join('') || `<div class="empty">Only the ${ccgNow && !gt.game ? 'championship game' : 'Game of the Week'} is on the slate.</div>` : '<div class="empty">No user games this week.</div>'}</div></div>`}
       <div><h2>${recap ? `Season ${seasonNum(L.season)} in Review` : bowls ? 'Bowl Season Storylines' : "This Week's Storylines"}</h2><div class="card">${stories.length ? stories.map(st => `<${st.href ? `a href="${esc(st.href)}"` : 'div'} class="story${st.href ? ' link' : ''}"><span class="tag">${esc(st.tag)}</span><h3>${esc(st.title)}</h3><p>${esc((() => { const vs = {}; vary(st.title, vs); return vary(st.body, vs); })())}</p>${st.href ? '<span class="go" aria-hidden="true">›</span>' : ''}</${st.href ? 'a' : 'div'}>`).join('') : '<div class="empty">Storylines appear once games are played.</div>'}</div></div></div>
-      <div class="grid home2"><div class="card"><h2>Power Rankings</h2><table>${pr.map(x => `<tr><td class="rank">${x.rank}</td><td>${chip(x.id)}</td><td class="num">${rec(x.rec)}</td><td class="num">${mvHtml(x.move)}</td></tr>`).join('')}</table><p><a href="#rankings">Full rankings →</a></p></div>
-      <div class="card"><h2>Betting Leaders</h2>${leaders.length ? `<table>${leaders.map((x, i) => `<tr><td class="rank">${i + 1}</td><td>${esc(x.u.name)}</td><td class="num">${x.b.w}-${x.b.l}${x.b.p ? '-' + x.b.p : ''}</td><td class="num"><b class="${x.b.net >= 0 ? 'win' : 'loss'}">${x.b.net >= 0 ? '+' : ''}${x.b.net.toLocaleString()}</b></td></tr>`).join('')}</table>` : '<div class="muted">No coaches linked yet.</div>'}<p><a href="#betting">Place wagers →</a></p></div></div>`;
+      <div class="grid home2 lbpair"><div class="card"><h2>Power Rankings</h2><table class="minilb">${pr.map(x => `<tr><td class="rank">${x.rank}</td><td><span class="lb-full">${chip(x.id)}</span><span class="lb-short">${chip(x.id, { abbr: true })}</span></td><td class="num">${rec(x.rec)}</td><td class="num hide-sm">${mvHtml(x.move)}</td></tr>`).join('')}</table><p><a href="#rankings">Full rankings →</a></p></div>
+      <div class="card"><h2>Betting Leaders</h2>${leaders.length ? `<table class="minilb">${leaders.map((x, i) => `<tr><td class="rank">${i + 1}</td><td class="lb-nm">${esc(x.u.name)}</td><td class="num hide-sm">${x.b.w}-${x.b.l}${x.b.p ? '-' + x.b.p : ''}</td><td class="num"><b class="${x.b.net >= 0 ? 'win' : 'loss'}">${x.b.net >= 0 ? '+' : ''}${x.b.net.toLocaleString()}</b></td></tr>`).join('')}</table>` : '<div class="muted">No coaches linked yet.</div>'}<p><a href="#betting">Place bets →</a></p></div></div>`;
     return html;
   },
 
@@ -2019,7 +2019,10 @@ function todoCard(me, T) {
   const body = (todo.length ? todo.map(row).join('') : '<div class="todo done"><span class="todo-ic" style="--c:#43c97e"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l4 4L19 6"/></svg></span><span class="todo-t"><b>You\'re all caught up</b><span>Nothing is waiting on you right now.</span></span></div>')
     + (done.length ? `<div class="todo-donehd">Done ${esc(L.phase === PHASES.REG ? 'this week' : 'so far')}</div>${done.map(row).join('')}` : '');
   const stage = L.phase === PHASES.REG ? weekLabel() : phaseName();
-  return `<section class="card todolist" aria-labelledby="tdH"><div class="mt-title"><h2 id="tdH">Your To-Do List</h2><span>${esc(stage)}${items.length ? ` · ${done.length} of ${items.length} done` : ''}</span></div>${items.length ? `<div class="todo-prog" aria-hidden="true"><i style="width:${Math.round(done.length / items.length * 100)}%"></i></div>` : ''}${body}</section>`;
+  // Collapsible: open while something is waiting on you, folded once everything is done (tap to open either way;
+  // your choice sticks until the list changes).
+  const sig = `${s}|${L.week}|${todo.length}`, open = UI.todoOpen && UI.todoOpen.sig === sig ? UI.todoOpen.open : todo.length > 0;
+  return `<details class="card todolist" data-todo="${esc(sig)}" ${open ? 'open' : ''}><summary><div class="mt-title"><h2>Your To-Do List</h2><span>${esc(stage)}${items.length ? ` · ${todo.length ? `${todo.length} to do · ` : ''}${done.length} of ${items.length} done` : ''}</span></div><span class="go" aria-hidden="true">›</span></summary>${items.length ? `<div class="todo-prog" aria-hidden="true"><i style="width:${Math.round(done.length / items.length * 100)}%"></i></div>` : ''}${body}</details>`;
 }
 function picksCard() {
   if (!picksOpen()) return '';
@@ -2914,6 +2917,7 @@ function hideSplash() {
   setTimeout(() => { clearInterval(splashClock); const c = $('#spClock'); if (c) c.textContent = ':00'; sp.classList.add('out'); setTimeout(() => sp.remove(), 1000); }, Math.max(0, 700 - (Date.now() - SPLASH_T0)));
 }
 setTimeout(hideSplash, 9000);   // never trap anyone behind it
+document.addEventListener('toggle', e => { const d = e.target; if (d && d.dataset && d.dataset.todo) UI.todoOpen = { sig: d.dataset.todo, open: d.open }; }, true);
 (async function init() {
   try {
     await loadAll();

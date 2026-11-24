@@ -1670,3 +1670,28 @@ html.fieldbg body{overscroll-behavior-y:none}
 /* The page already leaves room for the tab bar, so the footer doesn't need its own extra space */
 footer.hubfoot{padding-bottom:16px}
 html.fieldbg{background-repeat:no-repeat}
+/* Footer: "Get the app" sits above Follow the OEC (it disappears once you have the app) */
+.ft-app{margin:0 auto 14px}
+/* To-do list folds up */
+details.todolist>summary{display:block;cursor:pointer;list-style:none;position:relative;padding-right:28px}
+details.todolist>summary::-webkit-details-marker{display:none}
+details.todolist>summary .go{position:absolute;right:2px;top:50%;transform:translateY(-50%);color:#8d8183;font-size:24px;transition:transform .2s}
+details.todolist[open]>summary .go{transform:translateY(-50%) rotate(90deg)}
+details.todolist>summary .mt-title{margin-bottom:0}
+details.todolist[open]>summary{margin-bottom:8px}
+/* Home leaders: Power Rankings and Betting Leaders side by side, even on phones */
+.grid.home2.lbpair{grid-template-columns:1fr 1fr;gap:10px}
+.minilb td{padding:7px 4px}
+.minilb td.rank{width:22px;padding-left:0}
+.minilb .lb-short{display:none}
+.minilb .lb-nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
+@media(max-width:760px){
+  .lbpair>.card{padding:12px 10px}
+  .lbpair h2{font-size:17px}
+  .minilb .lb-full{display:none}.minilb .lb-short{display:inline}
+  .minilb td{font-size:14px;padding:7px 2px}
+  .minilb .lb-nm{max-width:78px}
+  .lbpair p{margin:8px 0 0;font-size:13px}
+}
+details.todolist>summary::before,details.todolist>summary::after{display:none!important;content:none!important}
+@media(max-width:760px){.lbpair>.card>h2{font-size:19px!important;margin-bottom:6px;white-space:nowrap}}
