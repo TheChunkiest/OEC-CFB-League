@@ -1,15 +1,5 @@
 {
- "live": true,
- "videoId": "RpQ60P21CgA",
- "url": "https://www.youtube.com/watch?v=RpQ60P21CgA",
- "title": "S4, W0: UAB @ #10 PUR",
- "streams": [
-  {
-   "videoId": "RpQ60P21CgA",
-   "url": "https://www.youtube.com/watch?v=RpQ60P21CgA",
-   "title": "S4, W0: UAB @ #10 PUR"
-  }
- ],
+ "live": false,
  "notified": "RpQ60P21CgA",
  "notifiedIds": [
   "5qPkG2_ar0Y",
@@ -22,6 +12,5 @@
   "HakDMpJWDRs",
   "dG3RW1qdo3E",
   "RpQ60P21CgA"
- ],
- "checkedAt": 1795506965529
+ ]
 }
