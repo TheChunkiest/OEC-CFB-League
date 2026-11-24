@@ -362,6 +362,8 @@ export function vary(text, state) {
   });
   return text.replace(/\u0001(\d+)\u0002/g, (_, i) => keep[+i]);
 }
+// Black or white lettering, whichever reads better on a team color.
+export function plateInk(hex) { const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '')); if (!m) return '#fff'; const n = parseInt(m[1], 16), r = n >> 16 & 255, g = n >> 8 & 255, b = n & 255; return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? '#000' : '#fff'; }
 export const teamColor = t => (t && (t.color || lookupColor(t.name))) || '#6b6b6b';
 export const isUserTeam = t => !!(t && t.coach && t.coach.trim() && t.coach.trim().toUpperCase() !== 'CPU');
 export const leagueTeams = () => D.teams.filter(t => t.conf === D.league.conference);
@@ -451,7 +453,10 @@ export function chip(id, opts = {}) {
   const t = team(id), r = opts.rank === false ? null : rankOf(id, opts.season, opts.week);
   // A past-season context links to that season's version of the team page (#team/<id>/<season>).
   const hs = opts.season != null && +opts.season !== +D.league.season ? '/' + opts.season : '';
-  return `<a class="chip" href="${esc(opts.href || '#team/' + t.id + hs)}"><i class="sw" style="background:${esc(teamColor(t))}"></i>${r ? `<span class="rk">#${r}</span>` : ''}${esc(opts.abbr ? (t.abbr || t.name) : t.name)}</a>`;
+  // Jersey plate: the team's color with its abbreviation; in abbreviation mode the plate is the label.
+  const c = teamColor(t), ab = t.abbr || (t.name || '').slice(0, 4).toUpperCase();
+  const plate = `<i class="plate" style="background:${esc(c)};color:${plateInk(c)}">${esc(ab)}</i>`;
+  return `<a class="chip${opts.abbr ? ' abbr' : ''}" href="${esc(opts.href || '#team/' + t.id + hs)}" ${opts.abbr ? `aria-label="${esc(t.name)}"` : ''}>${r ? `<span class="rk">#${r}</span>` : ''}${plate}${opts.abbr ? '' : esc(t.name)}</a>`;
 }
 
 /* ---------------- Ratings & lines ---------------- */

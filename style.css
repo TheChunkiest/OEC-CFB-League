@@ -1134,3 +1134,128 @@ table.h2h .h2hrow.on td{border-bottom-color:transparent}
 .statgrid .stat{display:flex;flex-direction:column;gap:2px;background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:10px}
 .statgrid .stat span{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700}
 .statgrid .stat b{font-size:18px}
+
+/* ======================================================================================================
+   GAME DAY BROADCAST THEME (redesign stage 1): football-field background with stadium lights, condensed
+   broadcast headlines, see-through tinted buttons, red chyron section headers, jersey-plate team badges,
+   gold-underline sub-tabs and a floating tab bar. Later rules here override the older look above.
+   ====================================================================================================== */
+:root{--body:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--cond:"Barlow Condensed","Arial Narrow",Impact,sans-serif;
+  --glass:rgba(20,16,18,.82);--glass-line:rgba(255,255,255,.09);--tint-red:rgba(211,18,28,.24);--tint-red-line:rgba(255,80,88,.55);
+  --tint-gold:rgba(245,184,46,.16);--tint-gold-line:rgba(245,184,46,.55);--tint-white:rgba(255,255,255,.07);--tint-white-line:rgba(255,255,255,.16)}
+body{font-family:var(--body);background-color:#0a120c;
+  background-image:radial-gradient(circle at 6% 0,rgba(255,236,180,.34) 0,rgba(255,236,180,.08) 70px,transparent 230px),
+    radial-gradient(circle at 94% 0,rgba(255,236,180,.34) 0,rgba(255,236,180,.08) 70px,transparent 230px),
+    radial-gradient(900px 420px at 50% -120px,rgba(211,18,28,.22),transparent 70%),
+    repeating-linear-gradient(180deg,transparent 0 118px,rgba(255,255,255,.05) 118px 120px),
+    linear-gradient(180deg,#0d1a10 0,#0a120c 600px,#0b0a0b 1600px);
+  background-attachment:scroll}
+h1,h2,h3,.brand{font-family:var(--cond)}
+
+/* Header: compact, see-through, logo + brand + season/week pills + account */
+.hero{background:linear-gradient(180deg,rgba(26,8,10,.85),rgba(10,10,11,.2));border-bottom:0}
+.hero::after{display:none}
+.hero-in{padding:12px 16px 6px;gap:12px}
+.logo{height:64px}
+.titleblock{min-width:180px}
+.brand{font-weight:800;font-style:italic;font-size:26px;line-height:1.05;letter-spacing:.4px;text-transform:uppercase}
+.brand span{color:#ff3b42}
+.titleblock .sub{font-size:12px;color:#c9c0c1}
+.badges{gap:6px}
+.badge,.badge.gold,.badge.adv{min-width:0;padding:5px 11px;border-radius:999px;background:var(--tint-white);border:1px solid var(--tint-white-line);box-shadow:none;color:var(--text);display:flex;align-items:baseline;gap:6px;backdrop-filter:blur(6px)}
+.badge.gold{background:var(--tint-gold);border-color:var(--tint-gold-line)}
+.badge span{display:inline;font-size:10px;letter-spacing:1px;opacity:.85}
+.badge b,.badge.gold b,.badge.adv b,.badge b.word{font-family:var(--cond);font-weight:800;font-size:18px;line-height:1;margin:0;color:inherit}
+.badge.gold b{color:var(--gold)}
+@media(max-width:760px){.logo{height:52px}.brand{font-size:21px}.hero-in{gap:10px}}
+
+/* Page title + description + sub-tabs */
+.pagehead{max-width:1100px;margin:0 auto;padding:10px 16px 0}
+.pagehead h1{margin:0;font-family:var(--cond);font-weight:800;font-style:italic;font-size:36px;line-height:1;letter-spacing:.5px;text-transform:uppercase}
+.pagehead p{margin:4px 0 0;color:#c9c0c1;font-size:13px}
+.subtabs{display:flex;gap:4px;margin-top:10px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid rgba(255,255,255,.12)}
+.subtabs::-webkit-scrollbar{display:none}
+.subtabs a{flex:none;padding:11px 10px;color:#a79a9c;font-weight:600;font-size:14px;border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.subtabs a:hover{color:var(--text);text-decoration:none}
+.subtabs a.on{color:var(--text);font-weight:700;border-bottom-color:var(--gold)}
+
+/* Floating tab bar: bottom of the screen on phones, under the header on wide screens */
+nav.tabbar{position:fixed;top:auto;right:auto;height:auto;-webkit-mask-image:none;mask-image:none;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(520px,calc(100% - 24px));z-index:40;
+  display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:2px;padding:6px 4px;border-radius:22px;border:1px solid rgba(255,255,255,.12);
+  background:rgba(14,10,12,.84);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 10px 28px rgba(0,0,0,.55);overflow:visible;justify-content:stretch;border-bottom:1px solid rgba(255,255,255,.12)}
+nav.tabbar a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:50px;padding:4px 2px;border-radius:16px;border:1px solid transparent;
+  color:#b3a6a8;font-size:11px;font-weight:600;background:transparent}
+nav.tabbar a svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+nav.tabbar a:hover{color:var(--text);background:rgba(255,255,255,.05);text-decoration:none}
+nav.tabbar a.on{color:var(--gold);font-weight:700;background:var(--tint-gold);border-color:rgba(245,184,46,.45)}
+body.hub{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+@media(min-width:900px){
+  nav.tabbar{position:sticky;top:10px;left:auto;bottom:auto;transform:none;margin:4px auto 0;width:min(620px,calc(100% - 32px))}
+  nav.tabbar a{flex-direction:row;gap:8px;font-size:14px;min-height:44px}
+  body.hub{padding-bottom:0;display:flex;flex-direction:column}
+  /* the bar sits after the page in the markup; on wide screens show it right under the header */
+  body.hub>.hero{order:1}body.hub>nav.tabbar{order:2}body.hub>.pagehead{order:3}body.hub>main{order:4}body.hub>footer{order:5}body.hub>#modal{order:6}
+  body.hub>main,body.hub>.pagehead{width:100%}
+}
+
+/* Cards: dark glass over the field */
+.card{background:var(--glass);border:1px solid var(--glass-line);border-radius:16px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.notice{background:rgba(31,23,9,.82);border:1px solid rgba(245,184,46,.3);border-left:4px solid var(--gold);border-radius:12px}
+
+/* Section headers: red slanted chyron (cards, pop-ups and game headlines keep a plain title) */
+#view h2{display:block;width:max-content;max-width:100%;font-family:var(--cond);font-style:italic;font-weight:800;font-size:20px;letter-spacing:.8px;text-transform:uppercase;
+  background:var(--red);color:#fff;padding:3px 22px 3px 10px;clip-path:polygon(0 0,100% 0,calc(100% - 12px) 100%,0 100%);line-height:1.25}
+#view h2::before{display:none}
+#view .card h2,#view .modal h2,#view h2.gp-title{display:block;width:auto;background:none;clip-path:none;padding:0;color:var(--text);font-style:normal;text-transform:none;letter-spacing:.2px}
+.modal h2{font-family:var(--cond)}
+h3{font-family:var(--body);font-weight:700}
+
+/* Buttons: tinted, see-through, rounded; they blend with the theme instead of shouting */
+button,.btn{background:var(--tint-red);border:1px solid var(--tint-red-line);color:#ffe3e4;border-radius:12px;font-weight:700;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+button:hover,.btn:hover{filter:none;background:rgba(211,18,28,.38)}
+button.gold,.btn.gold{background:var(--tint-gold);border:1px solid var(--tint-gold-line);color:var(--gold)}
+button.gold:hover,.btn.gold:hover{background:rgba(245,184,46,.26)}
+button.ghost,.btn.ghost{background:var(--tint-white);border:1px solid var(--tint-white-line);color:var(--text)}
+button.ghost:hover,.btn.ghost:hover{background:rgba(255,255,255,.13)}
+button.danger{background:rgba(120,20,26,.35);border:1px solid rgba(255,90,95,.45);color:#ffc9cb}
+button.pick{background:var(--tint-white);border:1px solid var(--tint-white-line);border-radius:12px;color:var(--text)}
+button.pick:hover{border-color:var(--tint-gold-line)}
+button.pick.sel{background:rgba(211,18,28,.34);border-color:rgba(255,80,88,.75);color:#fff}
+select,input,textarea{background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.14);border-radius:10px}
+
+/* Filter chips (weeks, seasons, bet types): small and separate from the page tabs */
+.chipbtn{background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.12);border-radius:10px;color:#c9c0c1}
+.chipbtn.on{background:rgba(211,18,28,.3);border-color:rgba(255,80,88,.7);color:#fff}
+
+/* Tables and pills pick up the glass look */
+th,td{border-bottom-color:rgba(255,255,255,.07)}
+.tag{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14)}
+
+/* Jersey-plate team badges */
+.chip{gap:7px}
+.chip .plate{display:inline-flex;align-items:center;justify-content:center;flex:none;min-width:34px;height:22px;padding:0 5px;border-radius:5px;font:normal 800 12.5px/1 var(--cond);letter-spacing:.3px;
+  box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.55),0 1px 3px rgba(0,0,0,.4);text-decoration:none}
+.chip.abbr{gap:5px}
+.chip:hover .plate{box-shadow:inset 0 0 0 1.5px var(--gold),0 1px 3px rgba(0,0,0,.4)}
+
+/* Loading screen + tunnel run-out */
+#splash{position:fixed;inset:0;z-index:100;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:32px;
+  background:radial-gradient(ellipse at 50% 30%,#3a0a0e 0%,#0b0a0b 62%);color:var(--text);transition:opacity .8s ease .2s,filter .8s ease}
+#splash .sp-logo{width:min(220px,56vw);height:auto;transition:transform .9s cubic-bezier(.7,0,.2,1),opacity .9s ease,filter .9s ease}
+#splash .sp-clockwrap{display:flex;flex-direction:column;align-items:center;gap:6px;transition:opacity .4s ease}
+#splash .sp-lbl{font-size:11px;font-weight:700;letter-spacing:3px;color:#b3a6a8}
+#splash .sp-clock{background:#000;border:2px solid #3a2e1c;border-radius:10px;padding:4px 22px;font:800 68px/1 var(--cond);letter-spacing:4px;color:var(--gold);text-shadow:0 0 18px rgba(245,184,46,.55);font-variant-numeric:tabular-nums}
+#splash .sp-field{position:relative;width:min(300px,80vw);height:40px;border-radius:6px;border:2px solid #f4f1f1;background:repeating-linear-gradient(90deg,#14532d 0 9.6%,#166534 9.6% 10%)}
+#splash .sp-ball{position:absolute;top:50%;left:4%;width:26px;height:15px;margin:-7.5px 0 0 -13px;border-radius:50%;background:#7a3e12;border:1px solid #2a1200;box-shadow:0 2px 6px rgba(0,0,0,.6);animation:spball 6s cubic-bezier(.2,.6,.3,1) forwards}
+#splash .sp-yards{display:flex;justify-content:space-between;width:min(300px,80vw);margin-top:-16px;font:700 13px var(--cond);color:#b3a6a8;letter-spacing:1px}
+#splash .sp-status{font:italic 800 19px var(--cond);letter-spacing:6px;transition:opacity .3s ease}
+@keyframes spball{to{left:92%}}
+#splash.out{opacity:0;filter:blur(14px);pointer-events:none}
+#splash.out .sp-logo{transform:scale(7);opacity:0;filter:blur(6px)}
+#splash.out .sp-clockwrap,#splash.out .sp-field,#splash.out .sp-yards,#splash.out .sp-status{opacity:0;transition:opacity .25s ease}
+@media (prefers-reduced-motion:reduce){
+  #splash,#splash .sp-logo{transition:opacity .4s ease}
+  #splash .sp-ball{animation:none;left:50%}
+  #splash.out{filter:none}#splash.out .sp-logo{transform:none}
+}
+footer{border-top:1px solid rgba(255,255,255,.07)}

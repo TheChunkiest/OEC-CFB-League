@@ -6,12 +6,28 @@ import {
 , playbookOf, pbSeason, pbText
 , AWARD_DEFS, awardGames, awardGameLabel, awardCoaches
 , curWeek, wkShort, wkOf, phaseName, PICK_DEFS, picksOpen, pickAnswers, loadPicks, pickFacts, OPENER_BOOST, isOpener
-} from './core.js?v=112';
+} from './core.js?v=113';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
-const NAV = [['home', 'Home'], ['standings', 'Standings'], ['schedule', 'Schedule'], ['betting', 'Betting'], ['odds', 'Odds'],
-  ['rankings', 'Power Rankings'], ['teams', 'Teams'], ['vote', 'Vote'], ['history', 'History'], ['rules', 'Rules']];
+// Main tabs (floating bar): five hubs, each holding the pages that belong to it as gold-underline sub-tabs.
+const HUBS = [
+  ['home', 'Home', 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', []],
+  ['schedule', 'Schedule', 'M4 6h16M4 12h16M4 18h10', [['schedule', 'Schedule & scores']]],
+  ['betting', 'Betting', 'M4 7h16v10H4zM12 10v4M9 12h6', [['betting', 'Sportsbook'], ['mybets', 'My bets'], ['odds', 'Odds & trends']]],
+  ['league', 'League', 'M7 4h10v4a5 5 0 0 1-10 0zM12 13v4M8 20h8', [['standings', 'Standings'], ['rankings', 'Power rankings'], ['teams', 'Teams'], ['vote', 'Vote'], ['history', 'History'], ['rules', 'Rules']]],
+  ['account', 'Account', 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0', []]];
+const HUB_OF = { game: 'schedule', mybets: 'betting', odds: 'betting', standings: 'league', rankings: 'league', teams: 'league', team: 'league', coach: 'league', vote: 'league', history: 'league', rules: 'league' };
+// Page title and one-line description under the header (Home has its own layout and skips this).
+const PAGE_META = {
+  schedule: ['Schedule', 'Every game, line and result, week by week.'], game: ['Game Center', 'Preview, odds, bets and recap for this game.'],
+  betting: ['Betting', "Bet with Crackers on this week's games and the season."], mybets: ['My Bets', "Every bet you've placed and how it turned out."],
+  odds: ['Odds & Trends', 'Title odds, win totals and how they have moved.'], standings: ['Standings', 'Conference records and the race for the League Title game.'],
+  rankings: ['Power Rankings', "Who's playing best right now, by results and margin."], teams: ['Teams', 'Every team, its coach and ratings.'],
+  team: ['Team', 'Record, schedule, stats and history.'], coach: ['Coach', 'Career record, stops and stats.'],
+  vote: ['Vote', 'Game of the Week, season awards and preseason picks.'], history: ['History', 'Champions, awards and every coach\'s career.'],
+  rules: ['Rules', 'How the league and the sportsbook work.'], account: ['Account', 'Your login, notifications and settings.'] };
+const NAV = HUBS.map(h => [h[0], h[1]]);
 const UI = { stSort: { key: 'place', dir: 1 }, prSort: { key: 'rank', dir: 1 }, prUsers: false, oddsSort: { key: 'titlePct', dir: -1 }, lbSort: { key: 'place', dir: 1 }, wkSort: { key: 'ts', dir: -1 }, metric: 'titlePct', acct: 'login', slip: null, msg: '', betWeek: null, mode: 'single', legs: [] };
 
 /* ---------- small renderers ---------- */
@@ -2442,11 +2458,21 @@ function route() {
     history.replaceState(null, '', location.pathname + location.search + '#betting');
     route(); showTailModal(id); return;
   }
-  const [page, arg] = (location.hash.slice(1) || 'home').split('/');
-  const active = page === 'mybets' ? 'betting' : page === 'team' ? 'teams' : page === 'coach' ? 'history' : page === 'game' ? 'schedule' : page;
-  $('#nav').innerHTML = NAV.map(([k, label]) => `<a href="#${k}" class="${k === active ? 'on' : ''}">${label}</a>`).join('');
+  let [page, arg] = (location.hash.slice(1) || 'home').split('/');
+  if (page === 'league') page = 'standings';   // the League tab opens on Standings
+  const hub = HUB_OF[page] || (HUBS.some(h => h[0] === page) ? page : 'home');
+  $('#nav').innerHTML = HUBS.map(([k, label, icon]) => `<a href="#${k}" class="${k === hub ? 'on' : ''}"${k === hub ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${icon}"/></svg><span>${label}</span></a>`).join('');
+  // Page title, description and the hub's sub-tabs (gold underline). Home skips this: it has its own top section.
+  const meta = PAGE_META[page], subs = (HUBS.find(h => h[0] === hub) || [])[3] || [];
+  $('#pagehead').hidden = !meta;
+  if (meta) {
+    $('#pageTitle').textContent = meta[0]; $('#pageSub').textContent = meta[1];
+    const subOn = page === 'team' ? 'teams' : page === 'coach' ? 'history' : page === 'game' ? 'schedule' : page;
+    $('#subnav').innerHTML = subs.length > 1 ? subs.map(([k, l]) => `<a role="tab" href="#${k}" class="${k === subOn ? 'on' : ''}" aria-selected="${k === subOn}">${l}</a>`).join('') : '';
+    $('#subnav').hidden = subs.length <= 1;
+  }
   // Keep the selected tab in view when the tab bar scrolls sideways (phones).
-  requestAnimationFrame(() => { const on = $('#nav a.on'), n = $('#nav'); if (on && n.scrollWidth > n.clientWidth) n.scrollLeft = Math.max(0, on.offsetLeft - (n.clientWidth - on.offsetWidth) / 2); });
+  requestAnimationFrame(() => { const on = $('#subnav a.on'), n = $('#subnav'); if (on && n.scrollWidth > n.clientWidth) n.scrollLeft = Math.max(0, on.offsetLeft - (n.clientWidth - on.offsetWidth) / 2); });
   header();
   try { $('#view').innerHTML = (PAGES[page] || PAGES.home)(decodeURIComponent(arg || '')); parlayBar(); nameFields($('#view')); }
   catch (e) { console.error(e); $('#view').innerHTML = `<div class="card err">Something went wrong rendering this page: ${esc(e.message)}</div>`; }
@@ -2605,18 +2631,27 @@ document.addEventListener('submit', async e => {
   } catch (err) { msg.textContent = (err.code || err.message || 'Error').replace('auth/', '').replace(/-/g, ' '); }
 });
 
+// Loading screen: the play clock runs while data loads, then a "tunnel run-out" clears it (a plain fade for people
+// who turn off motion). It stays at least a moment so it never just flickers.
+const SPLASH_T0 = Date.now();
+const splashClock = setInterval(() => { const c = $('#spClock'); if (!c) return clearInterval(splashClock); const n = Math.max(0, 40 - Math.floor((Date.now() - SPLASH_T0) / 250)); c.textContent = ':' + String(n).padStart(2, '0'); }, 125);
+function hideSplash() {
+  const sp = $('#splash'); if (!sp || sp.classList.contains('out')) return;
+  setTimeout(() => { clearInterval(splashClock); const c = $('#spClock'); if (c) c.textContent = ':00'; sp.classList.add('out'); setTimeout(() => sp.remove(), 1000); }, Math.max(0, 700 - (Date.now() - SPLASH_T0)));
+}
+setTimeout(hideSplash, 9000);   // never trap anyone behind it
 (async function init() {
   try {
     await loadAll();
     window.addEventListener('hashchange', route);
-    route();
+    route(); hideSplash();
     checkVersion(); document.addEventListener('visibilitychange', () => { if (!document.hidden) checkVersion(); });
     loadVideos().then(() => { if (VIDS && /^#(game|schedule|home|team)/.test(location.hash || '#home')) route(); });
     loadMoments();
     checkLive();
     await watchAuth(async () => { if (D.league.awards?.open && auth.user) await loadBallots(false); if (picksOpen() && auth.user) await loadPicks(); try { await ensureFutures(); } catch (e) { console.warn('futures post failed', e); } route(); showResultsPopup(); });
   } catch (e) {
-    console.error(e);
+    console.error(e); hideSplash();
     $('#view').innerHTML = `<div class="card"><b>Couldn't load league data.</b><p class="muted">${esc(e.message)}. If you opened index.html straight from your computer, publish it with GitHub Pages (or run a local server).</p></div>`;
   }
 })();

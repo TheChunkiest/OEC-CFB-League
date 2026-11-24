@@ -13,15 +13,24 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="theme-color" content="#09090a">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&display=swap" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="style.css?v=134">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,700;1,800&family=Inter:wght@400;500;600;700;800&display=swap" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="style.css?v=135">
 </head>
-<body>
+<body class="hub">
+<!-- Loading screen: a play clock and a football moving down the field while the league loads; it leaves with a
+     "tunnel run-out" (the logo rushes forward as the screen clears). -->
+<div id="splash" aria-hidden="true">
+  <img src="logo.png" class="sp-logo" alt="">
+  <div class="sp-clockwrap"><div class="sp-lbl">PLAY CLOCK</div><div class="sp-clock" id="spClock">:40</div></div>
+  <div class="sp-field"><i class="sp-ball"></i></div>
+  <div class="sp-yards"><span>G</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span><span>40</span><span>30</span><span>20</span><span>10</span><span>G</span></div>
+  <div class="sp-status">LOADING THE LEAGUE</div>
+</div>
 <header class="hero">
   <div class="hero-in">
     <a href="#home"><img src="logo.png" class="logo" alt="OEC — Original Entertaining Crackers"></a>
     <div class="titleblock">
-      <h1><span>OEC</span> CFB League Hub</h1>
+      <div class="brand"><span>OEC</span> CFB League Hub</div>
       <div class="sub" id="sub">College Football 27 Online Dynasty</div>
     </div>
     <div class="hdr-right">
@@ -34,7 +43,7 @@
     </div>
   </div>
 </header>
-<nav id="nav"></nav>
+<div class="pagehead" id="pagehead" hidden><h1 id="pageTitle"></h1><p id="pageSub"></p><div id="subnav" class="subtabs" role="tablist"></div></div>
 <main id="view"><p class="muted">Loading…</p></main>
 <footer>
   <div class="social">
@@ -45,7 +54,8 @@
   </div>
   <span>OEC CFB League Hub · Original Entertaining Crackers</span><span id="footAdmin"></span>
 </footer>
+<nav id="nav" class="tabbar" aria-label="Main"></nav>
 <div id="modal"></div>
-<script type="module" src="app.js?v=233"></script>
+<script type="module" src="app.js?v=234"></script>
 </body>
 </html>
