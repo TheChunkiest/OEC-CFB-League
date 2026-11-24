@@ -1130,3 +1130,7 @@ table.h2h .h2hrow.on td{border-bottom-color:transparent}
 .pkrow+.pkrow{border-top:1px solid var(--line)}
 .pkrow.hit{background:rgba(46,160,67,.14)}
 .pkrow>span:last-child{text-align:right}
+.statgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin:10px 0}
+.statgrid .stat{display:flex;flex-direction:column;gap:2px;background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:10px}
+.statgrid .stat span{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700}
+.statgrid .stat b{font-size:18px}

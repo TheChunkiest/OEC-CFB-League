@@ -4,7 +4,7 @@ import {
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum, divOf, oneConference, playbookOf, pbSeason, pbOpen, pbLocked
 , loadAI, kickoffOf, fmtKick
 , reliefPatch, winTotalsSnapshot, winsLockedTeam, postEarlyCcg, earlyCcg, raceSim, AWARD_DEFS, tallyAwards, awardGames, awardGameLabel, awardCoaches, sameName, curWeek, wkName, wkShort, wkOf, phaseName, picksOpen, openerId, firstGameOf
-} from './core.js?v=110';
+} from './core.js?v=112';
 // Broadcast scouting nudges the ratings a little, so load it before any lines get posted from here.
 loadAI();
 import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
@@ -459,6 +459,40 @@ const views = {
           <button data-act="addOutside">Add team &amp; link</button></div></div>` : ''}`;
   },
 
+  // How the posted lines have held up: every finished game whose line was saved when it was posted.
+  // Books Report (bottom of Sportsbook): how the posted lines have held up, for finished games whose line was saved.
+  books() {
+    const all = D.games.filter(g => played(g) && !g.forfeit && g.lines && g.lines.spread != null && g.lines.pHome != null);
+    const seasons = [...new Set(all.map(g => g.season))].sort((a, b) => b - a), pick = ST.booksSeason ?? '';
+    const gs = all.filter(g => pick === '' || g.season === +pick), n = gs.length;
+    const head = `<details class="card" data-keepopen="books" ${ST.open?.books ? 'open' : ''}><summary><b>📊 Books Report</b> <span class="muted small">how accurate the lines have been</span></summary>`;
+    const sel = seasons.length > 1 ? `<select id="booksSel" style="width:auto;margin:8px 0"><option value="">All seasons</option>${seasons.map(x => `<option value="${x}" ${String(x) === String(pick) ? 'selected' : ''}>${x}</option>`).join('')}</select>` : '';
+    if (!n) return head + `<p class="muted small">Fills in as games are played: every line is saved on its game when it's posted.</p></details>`;
+    const mean = a => a.reduce((x, y) => x + y, 0) / (a.length || 1), f1 = x => (x > 0 ? '+' : '') + x.toFixed(1);
+    const R = gs.map(g => { const l = g.lines, am = +g.homeScore - +g.awayScore, favH = l.spread <= 0;
+      return { g, l, am, pm: -l.spread, T: +g.homeScore + +g.awayScore, favM: favH ? am : -am, sp: Math.abs(l.spread), favWon: favH ? am > 0 : am < 0, pFav: Math.max(l.pHome, 1 - l.pHome) }; });
+    const favWon = R.filter(r => r.favWon).length, favExp = R.reduce((x, r) => x + r.pFav, 0);
+    const coverBias = mean(R.map(r => r.favM - r.sp)), covered = R.filter(r => r.favM > r.sp).length;
+    const totBias = mean(R.map(r => r.T - r.l.total)), overs = R.filter(r => r.T > r.l.total).length, unders = R.filter(r => r.T < r.l.total).length;
+    const mae = mean(R.map(r => Math.abs(r.am - r.pm))), homeR = R.filter(r => !r.g.neutral), homeM = mean(homeR.map(r => r.am));
+    // Plain-English takeaways; quiet unless something is clearly off.
+    const tips = [];
+    if (Math.abs(favWon - favExp) >= Math.max(2, Math.sqrt(n) * 0.8)) tips.push(`Favorites are winning ${favWon > favExp ? 'more' : 'less'} than the odds say: win % is ${favWon > favExp ? 'too cautious' : 'too confident'}.`);
+    if (Math.abs(coverBias) >= 3) tips.push(`Spreads are ${coverBias > 0 ? 'too small' : 'too big'}: favorites ${coverBias > 0 ? 'win by' : 'fall short by'} ${Math.abs(coverBias).toFixed(1)} more than the spread on average.`);
+    if (Math.abs(totBias) >= 3) tips.push(`Totals are ${totBias > 0 ? 'too low' : 'too high'}: games land ${Math.abs(totBias).toFixed(1)} points ${totBias > 0 ? 'over' : 'under'} on average.`);
+    if (homeR.length >= 10 && Math.abs(homeM) >= 4) tips.push(`Home teams average ${f1(homeM)}: home field matters ${homeM > 0 ? 'more' : 'less'} than the model thinks.`);
+    const verdict = tips.length ? `<ul class="clean" style="margin:6px 0">${tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p style="margin:6px 0">✅ The lines are landing where they should.</p>';
+    // Predicted vs actual margin, one dot per game; on the dashed line the spread was exactly right.
+    const lim = Math.max(20, ...R.map(r => Math.abs(r.am)), ...R.map(r => Math.abs(r.pm))), W = 260, P = 16, sx = v => P + (v + lim) / (2 * lim) * (W - 2 * P), sy = v => W - P - (v + lim) / (2 * lim) * (W - 2 * P);
+    const svg = `<svg viewBox="0 0 ${W} ${W}" style="width:100%;max-width:320px;display:block;margin:4px auto">
+      <line x1="${sx(-lim)}" y1="${sy(0)}" x2="${sx(lim)}" y2="${sy(0)}" stroke="var(--line)"/><line x1="${sx(0)}" y1="${sy(-lim)}" x2="${sx(0)}" y2="${sy(lim)}" stroke="var(--line)"/>
+      <line x1="${sx(-lim)}" y1="${sy(-lim)}" x2="${sx(lim)}" y2="${sy(lim)}" stroke="var(--gold)" stroke-dasharray="4 4"/>
+      ${R.map(r => `<circle cx="${sx(r.pm).toFixed(1)}" cy="${sy(r.am).toFixed(1)}" r="4.5" fill="var(--red)" fill-opacity=".85" stroke="var(--card)" stroke-width="1.5"><title>${esc(team(r.g.away).abbr || team(r.g.away).name)} @ ${esc(team(r.g.home).abbr || team(r.g.home).name)}: line ${f1(r.pm)}, final ${f1(r.am)}</title></circle>`).join('')}</svg>`;
+    const stat = (k, v, sub) => `<div class="stat"><span>${k}</span><b>${v}</b><small class="muted">${sub}</small></div>`;
+    return head + `${sel}<p class="muted small" style="margin:6px 0">${n} finished game${n === 1 ? '' : 's'}${n < 30 ? ' (small sample: a hint, not a verdict)' : ''}.</p>${verdict}
+      <div class="statgrid">${stat('Favorites won', `${favWon} of ${n}`, `${favExp.toFixed(1)} expected`)}${stat('Favorites covered', `${covered} of ${n}`, `${f1(coverBias)} pts vs spread`)}${stat('Overs–unders', `${overs}–${unders}`, `${f1(totBias)} pts vs total`)}${stat('Avg line miss', `${mae.toFixed(1)} pts`, 'predicted vs final margin')}</div>
+      <p class="muted small" style="margin:10px 0 0;text-align:center">Predicted (across) vs. actual (up) home margin. Dashed line = spread was exactly right.</p>${svg}</details>`;
+  },
   betting() {
     const lg = L(), s = lg.season, wk = D.wagers.filter(w => w.season === s).sort((a, b) => b.week - a.week || (b.ts || 0) - (a.ts || 0));
     return `<div class="card"><h2>Sportsbook Controls</h2><p>Betting is <b>${lg.bettingOpen ? 'OPEN' : 'LOCKED'}</b> for ${esc(weekLabel())}. <span class="muted small">Lock or unlock it on This Week.</span></p><div class="row">
@@ -466,7 +500,7 @@ const views = {
       <div class="card"><h3 style="margin-top:0">${s} wagers (${wk.length})</h3>${(() => { const grp = w => w.status === 'void' ? 'push' : w.status, FL = [['open', 'Open'], ['all', 'All'], ['won', 'Won'], ['lost', 'Lost'], ['cashed', 'Cashed out'], ['push', 'Push / void']], cnt = k => k === 'all' ? wk.length : wk.filter(w => grp(w) === k).length, cur = ST.wf || 'open';
           ST.wfList = cur === 'all' ? wk : wk.filter(w => grp(w) === cur);
           return `<div class="bfilters">${FL.filter(([k]) => k === 'open' || k === 'all' || cnt(k)).map(([k, l]) => `<button class="bfilter${k === cur ? ' on' : ''}" data-act="wfilter" data-f="${k}">${l} <span>${cnt(k)}</span></button>`).join('')}</div>`; })()}${ST.wfList.length ? `<div class="tablewrap"><table><tr><th>Wk</th><th>Coach</th><th>Bet</th><th>Placed</th><th class="num">Stake</th><th class="num">Status</th><th></th></tr>
-        ${ST.wfList.map(w => `<tr><td>${esc(wkShort(w.week, w.season))}</td><td>${esc(w.coach)}</td><td style="white-space:normal">${esc(wagerLabel(w))}${legsHtml(w)}</td><td class="muted small">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num"><span class="pill ${w.status}">${w.status}${w.payout ? ' ' + (w.payout > 0 ? '+' : '') + w.payout : ''}</span></td><td>${w.status !== 'void' ? `<button class="sm danger" data-void="${esc(w.id)}">Void</button>` : ''}</td></tr>`).join('')}</table></div>` : `<p class="muted">${wk.length ? 'No bets in this group.' : 'No wagers yet.'}</p>`}</div>`;
+        ${ST.wfList.map(w => `<tr><td>${esc(wkShort(w.week, w.season))}</td><td>${esc(w.coach)}</td><td style="white-space:normal">${esc(wagerLabel(w))}${legsHtml(w)}</td><td class="muted small">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num"><span class="pill ${w.status}">${w.status}${w.payout ? ' ' + (w.payout > 0 ? '+' : '') + w.payout : ''}</span></td><td>${w.status !== 'void' ? `<button class="sm danger" data-void="${esc(w.id)}">Void</button>` : ''}</td></tr>`).join('')}</table></div>` : `<p class="muted">${wk.length ? 'No bets in this group.' : 'No wagers yet.'}</p>`}</div>${views.books()}`;
   },
 
   awards() {
@@ -1143,6 +1177,7 @@ document.addEventListener('click', async e => {
 document.addEventListener('change', e => {
   if (e.target.id === 'gwSel') { ST.gamesWeek = +e.target.value; render(); }
   if (e.target.id === 'pollWkSel') { ST.pollWk = +e.target.value; render(); }
+  if (e.target.id === 'booksSel') { ST.booksSeason = e.target.value; render(); }
   if (e.target.id === 'gwNew' && e.target.value !== '') { ST.gamesWeek = +e.target.value; render(); }
   if (e.target.dataset.k === 'name' && e.target.closest('[data-team]')) {
     const sel = e.target, tr = sel.closest('tr');

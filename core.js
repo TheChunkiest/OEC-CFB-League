@@ -455,7 +455,9 @@ export function chip(id, opts = {}) {
 }
 
 /* ---------------- Ratings & lines ---------------- */
-const AVG = 27, HFA = 2.5, SIG = 13.5, BASE = 75, SCALE = 0.45, K = 0.13;
+// Tuned Nov 2026 against the 2028 season (52 coach-vs-coach games): scoring runs ~29 a team, home field is worth
+// almost nothing, ratings and results both deserved more weight, and margins swing wider than 13.5 points.
+const AVG = 29.5, HFA = 0.5, SIG = 19, BASE = 75, SCALE = 0.6, K = 0.25;
 const memo = new Map();
 export function clearCache() { memo.clear(); }
 const cached = (key, fn) => { if (!memo.has(key)) memo.set(key, fn()); return memo.get(key); };
@@ -482,8 +484,8 @@ function seasonCoach(t, season) {
   return g ? g[(g.home === t.id ? 'home' : 'away') + 'Coach'] : (t.coach || '');
 }
 // Coach factor, in points of margin: how a coach has done head-to-head against other league coaches in earlier
-// seasons (average margin, pulled toward even until there's a real sample: 6 imaginary even games are mixed in),
-// half-weighted and capped at ±6. Ratings already cover the roster; this covers who's holding the controller.
+// seasons (average margin, pulled toward even until there's a real sample: 8 imaginary even games are mixed in),
+// weighted 0.8 and capped at ±12. Ratings already cover the roster; this covers who's holding the controller.
 export function coachEdge(name, season = D.league.season) {
   const key = canonCoach(name || '').toLowerCase(); if (!key || key === 'cpu') return 0;
   return cached(`ce|${key}|${season}`, () => {
@@ -494,7 +496,7 @@ export function coachEdge(name, season = D.league.season) {
       if (hc === 'cpu' || ac === 'cpu' || (hc !== key && ac !== key)) return;
       const m = +g.homeScore - +g.awayScore; sum += hc === key ? m : -m; n++;
     });
-    return n ? clamp(0.5 * sum / (n + 6), -6, 6) : 0;
+    return n ? clamp(0.8 * sum / (n + 8), -12, 12) : 0;
   });
 }
 function expect(H, A, neutral) {
@@ -1672,10 +1674,13 @@ export function storylines() {
   if (hot) pool.push({ href: '#team/' + hot.t.id, tag: 'Hot Streak', title: pk([`${hot.t.name} has won ${hot.st.slice(1)} straight`, `${hot.t.name} is on a heater: ${hot.st.slice(1)} in a row`, `Can anyone stop ${hot.t.name}?`, `${hot.st.slice(1)} straight and counting for ${hot.t.name}`]), body: `${hot.t.coach} is ${rec(recs[hot.t.id])} and rolling into Week ${L.week}.${nextTxt(hot.t.id)}` });
   const cold = userTeams().map(t => ({ t, st: streak(recs[t.id]) })).filter(x => /^L\d+$/.test(x.st) && +x.st.slice(1) >= 3).sort((a, b) => b.st.slice(1) - a.st.slice(1))[0];
   if (cold) pool.push({ href: '#team/' + cold.t.id, tag: 'Cold Streak', title: pk([`${cold.t.name} needs a win, badly`, `${cold.st.slice(1)} straight losses for ${cold.t.name}`, `Can ${cold.t.coach} stop the slide?`]), body: `${poss(cold.t.coach)} ${cold.t.name} has dropped ${cold.st.slice(1)} in a row and sits at ${rec(recs[cold.t.id])}.${nextTxt(cold.t.id)}` });
-  // Preseason picks: only when a team the league picked has a coach-vs-coach game this week. The most-picked team in such a game gets the story.
+  // Preseason picks: only when a team the league picked has a big game this week. The most-picked team in such a game gets the story.
   const T = (L.prePicks && L.prePicks.season === s && !L.prePicks.open && L.prePicks.tally) || null;
   if (T) {
-    const big = g => g.type === 'ccg' || (isUserTeam(team(g.home)) && isUserTeam(team(g.away)));   // coach vs coach (the title game included)
+    // Every tracked game is coach vs coach, so "big" means: the title game, the Game of the Week, two ranked teams,
+    // or two of the top three in the standings meeting (once a couple of games are in).
+    const gw = gotwTally(s, L.week).game, top = (() => { const R = records(s); return new Set(leagueTeams().map(t => t.id).filter(id => R[id] && R[id].w + R[id].l >= 2).sort((a, b) => (R[b].w - R[b].l) - (R[a].w - R[a].l)).slice(0, 3)); })();
+    const big = g => g.type === 'ccg' || (gw && gw.id === g.id) || (rankOf(g.home, s) && rankOf(g.away, s)) || (top.has(g.home) && top.has(g.away));
     const weight = id => ['champ', 'offense', 'defense', 'special'].reduce((n, k) => n + ((T[k] || {})[id] || []).length, 0);
     const cand = nextGames.filter(big).flatMap(g => [g.home, g.away].map(id => ({ g, id, w: weight(id), f: pickFacts(id, s) }))).filter(x => x.w && x.f.length).sort((a, b) => b.w - a.w)[0];
     if (cand) {
