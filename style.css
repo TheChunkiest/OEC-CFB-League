@@ -1450,3 +1450,21 @@ table.standings tr.me td.rank{color:var(--gold)}
 .tc-rec{display:flex;align-items:baseline;gap:4px}
 .tc-rec .tc-pl{margin-left:auto;font:800 13px var(--cond);letter-spacing:.5px;color:#a79a9c;text-transform:uppercase}
 .tcard.me .tc-pl{color:var(--gold)}
+
+/* ===== Header scoreboard: Season / Current Week / Next Advance as three matching tiles ===== */
+.badges{display:flex;gap:6px;align-items:stretch}
+.badge,.badge.gold,.badge.adv{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:84px;height:auto;padding:7px 14px 8px;border-radius:12px;text-align:center}
+.badge span,.badge.adv span{display:block;font-size:9.5px;letter-spacing:1.1px;line-height:1;white-space:nowrap;margin:0}
+.badge b,.badge.gold b,.badge.adv b,.badge b.word{font-family:var(--cond);font-weight:800;font-style:italic;font-size:22px;line-height:1;margin:0;white-space:nowrap;letter-spacing:.3px}
+.badge.adv b,.badge b.word{font-size:17px;line-height:22px}
+@media(max-width:640px){
+  .badges{display:flex;width:100%;gap:6px}
+  .badge,.badge.gold,.badge.adv{min-width:0;padding:7px 6px 8px;flex:1 1 0}
+  .badge.adv{flex-grow:1.45}
+  .badge span,.badge.adv span{font-size:8.5px;letter-spacing:.6px;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .badge b,.badge.gold b{font-size:20px}
+  .badge.adv b,.badge b.word{font-size:15px;line-height:20px}
+}
+/* rank sits with the team name (after the jersey plate), gold like the score bug */
+.chip .rk{color:var(--gold);margin:0 -3px 0 0;font-weight:800}
+.chip.abbr .rk{margin:0}

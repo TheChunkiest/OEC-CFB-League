@@ -456,7 +456,7 @@ export function chip(id, opts = {}) {
   // Jersey plate: the team's color with its abbreviation; in abbreviation mode the plate is the label.
   const c = teamColor(t), ab = t.abbr || (t.name || '').slice(0, 4).toUpperCase();
   const plate = `<i class="plate" style="background:${esc(c)};color:${plateInk(c)}">${esc(ab)}</i>`;
-  return `<a class="chip${opts.abbr ? ' abbr' : ''}" href="${esc(opts.href || '#team/' + t.id + hs)}" ${opts.abbr ? `aria-label="${esc(t.name)}"` : ''}>${r ? `<span class="rk">#${r}</span>` : ''}${plate}${opts.abbr ? '' : esc(t.name)}</a>`;
+  return `<a class="chip${opts.abbr ? ' abbr' : ''}" href="${esc(opts.href || '#team/' + t.id + hs)}" ${opts.abbr ? `aria-label="${esc(t.name)}"` : ''}>${plate}${r ? `<span class="rk">#${r}</span>` : ''}${opts.abbr ? '' : esc(t.name)}</a>`;
 }
 
 /* ---------------- Ratings & lines ---------------- */
