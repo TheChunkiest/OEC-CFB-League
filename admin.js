@@ -800,12 +800,16 @@ const ACT = {
     ST.msg = `Added ${ops.length} game(s).` + (bad.length ? ` Couldn't read: ${bad.join(' | ')} (save new teams first, and check spelling).` : ''); render();
   },
   async publish() {
+    syncTeams();   // check the team table as it's shown, saved or not
     const s = +$('#psSeason').value, fw = +$('#psFinal').value, sg = D.games.filter(g => g.season === s), fmt = $('#psFormat').value;
     if (!sg.length) return alert(`Add the ${s} schedule first.`);
     if (fmt === 'div' && leagueTeams().some(t => !t.div)) return alert('Give every conference team a Div (or pick "One conference").');
     if (fmt === 'div' && new Set(leagueTeams().map(t => t.div)).size < 2) return alert('Divisions need at least two different Div names (or pick "One conference").');
     if (L().phase !== PHASES.PRE && s !== L().season && !confirm(`The ${L().season} season hasn't been finalized. Publish ${s} anyway?`)) return;
     if (!confirm(`Publish the ${s} season? This posts preseason odds and opens betting.`)) return;
+    // Save the team table as it's shown first: a change marked there but never saved (a team moved into the
+    // conference, a new Div or rating) would otherwise be left out of the new season.
+    if ($('#teamTbl')) await ACT.saveTeams();
     const first = Math.min(...sg.map(g => g.week));
     // Remember this season's alignment (and the earlier seasons', if never saved) so standings stay right later.
     const align = { ...(alignSnapshot() || L().align || {}), [s]: fmt === 'one' ? { _one: true } : { _one: false, ...Object.fromEntries(leagueTeams().map(t => [t.id, t.div])) } };
