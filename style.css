@@ -1560,20 +1560,22 @@ a.champrow:hover{text-decoration:none;border-color:rgba(255,255,255,.25);border-
 .todo.did .todo-ic{width:30px;height:30px;border-radius:9px;margin:0 4px}
 .todo-donehd+.todo{border-top:0}
 
-/* ===== Field backdrop that moves as you scroll (lines drawn here, numbers added by app.js) ===== */
-#field{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
-#field .fl-in{position:absolute;left:0;right:0;top:0;height:7200px;will-change:transform;
-  background:repeating-linear-gradient(180deg,transparent 0 118px,rgba(255,255,255,.085) 118px 120px)}
-/* 1-yard hash marks in two columns and along both sidelines */
-#field .fl-in::before,#field .fl-in::after{content:'';position:absolute;inset:0;
-  background:repeating-linear-gradient(180deg,rgba(255,255,255,.09) 0 2px,transparent 2px 24px);
-  -webkit-mask-image:linear-gradient(90deg,transparent calc(33% - 8px),#000 calc(33% - 8px) calc(33% + 8px),transparent calc(33% + 8px),transparent calc(67% - 8px),#000 calc(67% - 8px) calc(67% + 8px),transparent calc(67% + 8px));
-          mask-image:linear-gradient(90deg,transparent calc(33% - 8px),#000 calc(33% - 8px) calc(33% + 8px),transparent calc(33% + 8px),transparent calc(67% - 8px),#000 calc(67% - 8px) calc(67% + 8px),transparent calc(67% + 8px))}
-#field .fl-in::after{-webkit-mask-image:linear-gradient(90deg,#000 0 12px,transparent 12px calc(100% - 12px),#000 calc(100% - 12px));mask-image:linear-gradient(90deg,#000 0 12px,transparent 12px calc(100% - 12px),#000 calc(100% - 12px))}
-#field .fl-n{position:absolute;font:800 italic 64px/1 var(--cond);color:rgba(255,255,255,.1);letter-spacing:4px;transform-origin:center;margin-top:-32px}
+/* ===== Field backdrop that moves as you scroll (numbers are filled in by app.js) ===== */
+#field{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none;contain:strict}
+#field .fl-in{position:absolute;left:0;right:0;top:0;will-change:transform;backface-visibility:hidden;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.09) 0 2px,transparent 2px) calc(33% - 8px) 0/16px 24px repeat-y,
+    linear-gradient(180deg,rgba(255,255,255,.09) 0 2px,transparent 2px) calc(67% + 8px) 0/16px 24px repeat-y,
+    linear-gradient(180deg,rgba(255,255,255,.09) 0 2px,transparent 2px) 0 0/12px 24px repeat-y,
+    linear-gradient(180deg,rgba(255,255,255,.09) 0 2px,transparent 2px) 100% 0/12px 24px repeat-y,
+    linear-gradient(180deg,rgba(255,255,255,.085) 0 2px,transparent 2px) 0 0/100% 120px repeat-y}
+#field .fl-n{position:absolute;font:800 italic 64px/1 var(--cond);color:rgba(255,255,255,.1);letter-spacing:4px;margin-top:-32px}
 #field .fl-n.l{left:10px;transform:rotate(90deg)}
 #field .fl-n.r{right:10px;transform:rotate(-90deg)}
 @media(min-width:900px){#field .fl-n{font-size:84px;margin-top:-42px}#field .fl-n.l{left:4%}#field .fl-n.r{right:4%}}
+/* Frosted-glass blur over a moving backdrop has to be redrawn every frame, which is what made scrolling lag on
+   phones. The cards are nearly solid anyway, so page content skips the blur (the tab bar keeps it). */
+html.fieldbg main *,html.fieldbg .pagehead,html.fieldbg .hero *{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
 /* The page backdrop moves from <body> to <html> on the main site, so the field layer can sit between it and the page. */
 html.fieldbg{background-color:#0a120c;
   background-image:radial-gradient(circle at 6% 0,rgba(255,236,180,.34) 0,rgba(255,236,180,.08) 70px,transparent 230px),
@@ -1582,3 +1584,52 @@ html.fieldbg{background-color:#0a120c;
     linear-gradient(180deg,#0d1a10 0,#0a120c 600px,#0b0a0b 1600px)}
 html.fieldbg body{background:transparent}
 html.fieldbg body::before{display:none}
+
+/* ===== Footer: follow the OEC + get the app, in one card ===== */
+footer.hubfoot{border-top:0;padding:10px 14px calc(110px + env(safe-area-inset-bottom));text-align:left}
+@media(min-width:900px){footer.hubfoot{padding-bottom:36px}}
+.ft-card{max-width:640px;margin:0 auto;padding:16px;border-radius:18px;background:linear-gradient(135deg,rgba(120,14,20,.45),rgba(20,16,18,.85) 60%);border:1px solid rgba(255,255,255,.1)}
+.ft-head{display:flex;align-items:center;gap:12px}
+.ft-logo{width:52px;height:52px;object-fit:contain;filter:drop-shadow(0 3px 8px rgba(0,0,0,.6))}
+.ft-head b{display:block;font:800 italic 22px/1.05 var(--cond);letter-spacing:.6px;text-transform:uppercase;color:#fff}
+.ft-head span{display:block;font-size:13px;color:#c9c0c1;margin-top:3px}
+.ft-social{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+.soc{display:flex;align-items:center;justify-content:center;gap:8px;min-height:46px;border-radius:12px;font-weight:800;font-size:15px;color:#fff;border:1px solid}
+.soc:hover{text-decoration:none;filter:brightness(1.15)}
+.soc svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.soc svg .fill{fill:currentColor;stroke:none}
+.soc.yt{background:rgba(230,33,23,.22);border-color:rgba(255,80,72,.6)}
+.soc.yt svg{color:#ff4f47}
+.soc.tt{background:rgba(37,244,238,.08);border-color:rgba(37,244,238,.45)}
+.soc.tt svg{color:#25f4ee}
+.ft-app{display:flex;align-items:center;gap:12px;margin-top:12px;padding:11px 12px;border-radius:12px;background:var(--tint-white);border:1px solid var(--tint-white-line);color:var(--text)}
+.ft-app[hidden]{display:none}
+.ft-app:hover{text-decoration:none;border-color:rgba(245,184,46,.5)}
+.ft-app-ic{flex:none;width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:rgba(245,184,46,.14);border:1px solid rgba(245,184,46,.45);color:var(--gold)}
+.ft-app-ic svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ft-app-t{flex:1;min-width:0;display:flex;flex-direction:column}
+.ft-app-t b{font-size:15px}
+.ft-app-t small{font-size:12px;color:#a79a9c}
+.ft-app .go{color:#8d8183;font-size:22px}
+.ft-meta{text-align:center;margin-top:14px;font-size:12px;color:#8d8183}
+.ft-meta a{color:#c9c0c1}
+
+/* ===== Commissioner Tools: status strip, collapsible game extras ===== */
+.adminstatus{padding:12px 14px}
+.as-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.as-it{display:flex;flex-direction:column;align-items:flex-start;gap:3px;min-width:0}
+.as-it span{font-size:10.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.as-it b{font-size:17px;line-height:1.15}
+.as-it b.win{color:#43c97e}.as-it b.loss{color:#ff6b6b}
+.as-it small{font-size:12px;color:var(--muted)}
+.as-it button{margin-top:2px}
+.as-more{margin-top:10px;padding-top:8px;border-top:1px solid var(--line)}
+.as-more>summary,.sc-more>summary{cursor:pointer;font-size:13px;color:var(--gold);font-weight:700}
+.sc-line{margin:6px 0 0}
+.sc-more{margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
+.sc-more>summary{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-weight:600;list-style:none}
+.sc-more>summary::-webkit-details-marker{display:none}
+.sc-more>summary span{color:var(--gold);font-weight:700;white-space:nowrap}
+.sc-more>summary span::after{content:' ›'}
+.sc-more[open]>summary span::after{content:' ⌄'}
+@media(max-width:480px){.as-row{grid-template-columns:1fr 1fr}.as-it:nth-child(3){grid-column:1/-1}}

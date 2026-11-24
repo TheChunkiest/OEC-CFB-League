@@ -15,7 +15,7 @@ const HUBS = [
   ['home', 'Home', 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', []],
   ['schedule', 'Schedule', 'M4 6h16M4 12h16M4 18h10', [['schedule', 'Schedule & scores']]],
   ['betting', 'Betting', 'M4 7h16v10H4zM12 10v4M9 12h6', [['betting', 'Sportsbook'], ['mybets', 'My bets'], ['odds', 'Odds & trends']]],
-  ['league', 'League', 'M7 4h10v4a5 5 0 0 1-10 0zM12 13v4M8 20h8', [['standings', 'Standings'], ['vote', 'Vote'], ['rankings', 'Power rankings'], ['teams', 'Teams'], ['history', 'History'], ['rules', 'Rules']]],
+  ['league', 'League', 'M7 4h10v4a5 5 0 0 1-10 0zM12 13v4M8 20h8', [['standings', 'Standings'], ['rankings', 'Power rankings'], ['vote', 'Voting'], ['teams', 'Teams'], ['history', 'History'], ['rules', 'Rules']]],
   ['account', 'Account', 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0', []]];
 const HUB_OF = { game: 'schedule', mybets: 'betting', odds: 'betting', standings: 'league', rankings: 'league', teams: 'league', team: 'league', coach: 'league', vote: 'league', history: 'league', rules: 'league' };
 // Page title and one-line description under the header (Home has its own layout and skips this).
@@ -25,7 +25,7 @@ const PAGE_META = {
   odds: ['Odds & Trends', 'Title odds, win totals and how they have moved.'], standings: ['Standings', 'Conference records and the race for the League Title game.'],
   rankings: ['Power Rankings', "Who's playing best right now, by results and margin."], teams: ['Teams', 'Every team, its coach and ratings.'],
   team: ['Team', 'Record, schedule, stats and history.'], coach: ['Coach', 'Career record, stops and stats.'],
-  vote: ['Vote', 'Game of the Week, season awards and preseason picks.'], history: ['History', 'Champions, awards and every coach\'s career.'],
+  vote: ['Voting', 'Game of the Week, season awards and preseason picks.'], history: ['History', 'Champions, awards and every coach\'s career.'],
   rules: ['Rules', 'How the league and the sportsbook work.'], account: ['Account', 'Your login, notifications and settings.'] };
 const NAV = HUBS.map(h => [h[0], h[1]]);
 const UI = { stSort: { key: 'place', dir: 1 }, prSort: { key: 'rank', dir: 1 }, prUsers: false, oddsSort: { key: 'titlePct', dir: -1 }, lbSort: { key: 'place', dir: 1 }, wkSort: { key: 'ts', dir: -1 }, metric: 'titlePct', acct: 'login', slip: null, msg: '', betWeek: null, mode: 'single', legs: [] };
@@ -2600,6 +2600,7 @@ function header() {
   const p = auth.profile;
   $('#acct').innerHTML = auth.user ? acctHtml(p) : '<a class="btn" href="#account">Log In</a>';
   $('#footAdmin').innerHTML = isCommish() ? ' · <a href="admin.html">Commissioner Tools</a>' : '';
+  const fa = $('#ftApp'); if (fa) fa.hidden = isStandalone();   // already on the Home Screen: no need to offer it
 }
 // Header greeting: time of day on the viewer's device, their balance and next game.
 function greeting() { const h = new Date().getHours(); return h >= 4 && h < 12 ? 'Good morning' : h >= 12 && h < 17 ? 'Good afternoon' : 'Good evening'; }
@@ -2823,25 +2824,33 @@ document.addEventListener('submit', async e => {
 });
 
 // Field backdrop: yard lines, hash marks and yard numbers that drift up a little slower than the page as you scroll,
-// so scrolling feels like moving down the field. One 100-yard field (20 five-yard lines) repeats seamlessly.
-// People who turn off motion get the same field, standing still.
+// so scrolling feels like moving down the field (10, 20 … 50 … 20, 10, then the next field).
+// Kept light for phones: the moving layer is only one screen plus ten yards tall, shifted with a GPU transform, and
+// the yard numbers are relabeled as each ten-yard stripe scrolls past. People who turn off motion get it standing still.
 (function fieldBackdrop() {
   if (!document.body.classList.contains('hub')) return;
-  const FIVE = 120, PERIOD = FIVE * 20, RATE = 0.45;
+  const TEN = 240, RATE = 0.4;
   const f = document.createElement('div'); f.id = 'field'; f.setAttribute('aria-hidden', 'true');
-  let nums = '';
-  for (let k = 0; k < 30; k++) {   // 3 fields, numbers every 10 yards
-    const yd = (k % 10) * 10; if (!yd) continue;
-    const lbl = yd <= 50 ? yd : 100 - yd, y = k * FIVE * 2;
-    nums += `<span class="fl-n l" style="top:${y}px">${lbl}</span><span class="fl-n r" style="top:${y}px">${lbl}</span>`;
-  }
-  f.innerHTML = `<div class="fl-in">${nums}</div>`;
+  f.innerHTML = '<div class="fl-in"></div>';
   document.body.prepend(f); document.documentElement.classList.add('fieldbg');
   const inner = f.firstChild, still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let ticking = false;
-  const move = () => { ticking = false; inner.style.transform = `translate3d(0,${-((scrollY * RATE) % PERIOD)}px,0)`; };
+  let slots = [], base = null, ticking = false;
+  const build = () => {
+    const n = Math.ceil(innerHeight / TEN) + 2;
+    inner.style.height = (n * TEN) + 'px';
+    inner.innerHTML = Array.from({ length: n }, (_, k) => `<span class="fl-n l" style="top:${k * TEN}px"></span><span class="fl-n r" style="top:${k * TEN}px"></span>`).join('');
+    slots = [...inner.children]; base = null;
+  };
+  const label = idx => { const yd = (((idx % 10) + 10) % 10) * 10; return yd ? String(yd <= 50 ? yd : 100 - yd) : ''; };
+  const move = () => {
+    ticking = false;
+    const off = scrollY * RATE, b = Math.floor(off / TEN);
+    inner.style.transform = `translate3d(0,${-(off - b * TEN)}px,0)`;
+    if (b !== base) { base = b; for (let k = 0; k < slots.length; k += 2) { const t = label(b + k / 2); slots[k].textContent = t; slots[k + 1].textContent = t; } }
+  };
+  build(); move();
   if (!still) addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(move); } }, { passive: true });
-  move();
+  let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { build(); move(); }, 200); });
 })();
 // Loading screen: the play clock runs while data loads, then a "tunnel run-out" clears it (a plain fade for people
 // who turn off motion). It stays at least a moment so it never just flickers.

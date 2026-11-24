@@ -36,15 +36,22 @@ const acctTeamOpts = u => {
 };
 // Advance clock: the header shows a projected advance 3 days after the last one (+24h when extended).
 const toLocalInput = ts => { const d = new Date(ts - new Date(ts).getTimezoneOffset() * 60000); return d.toISOString().slice(0, 16); };
-function advClock() {
-  const lg = L(), p = projectedAdvance(), ext = lg.advExt || 0;
-  return `<div class="card advclock"><div class="row spread"><h3 style="margin:0">⏱️ Advance clock</h3>
-      ${ext ? `<button class="ghost sm" data-act="advExt" data-h="0">Remove +${ext}h</button>` : `<button class="ghost sm" data-act="advExt" data-h="24">+24 hours</button>`}</div>
-    <p style="margin:8px 0 0">${p ? `Next advance: <b>${esc(fmtAdvance(p))}</b>${ext ? ` <span class="muted small">(includes +${ext}h)</span>` : ''}` : '<span class="muted">Starts with your next advance.</span>'}</p>
-    <div class="row" style="margin-top:8px"><label class="muted small" style="margin:0">Set the next advance date</label><input type="date" id="advNext" value="${lg.advNext && lg.advNext > (lg.advancedAt || 0) ? toLocalInput(lg.advNext).slice(0, 10) : ''}" style="width:auto"><button class="sm" data-act="saveAdvNext">Save</button>${lg.advNext && lg.advNext > (lg.advancedAt || 0) ? '<button class="ghost sm" data-act="saveAdvNext" data-clear="1">Back to 3 days</button>' : ''}</div>
-    <details class="small" style="margin-top:8px"><summary class="muted">Fix the last advance time</summary>
-      <div class="row" style="margin-top:8px"><input type="datetime-local" id="advAt" value="${lg.advancedAt ? toLocalInput(lg.advancedAt) : ''}"><button class="sm" data-act="saveAdvAt">Save</button></div>
-      <p class="muted small" style="margin:6px 0 0">Every advance records its own time and the next one is projected 3 days later, so you normally never touch this.</p></details></div>`;
+// Open/closed state for collapsible sections, remembered across reloads (falls back to a default).
+const kOpen = (k, def = false) => ((ST.open && k in ST.open) ? ST.open[k] : def) ? 'open' : '';
+// League status strip at the top of every tab: where the league is, whether betting is open and when the next
+// advance is due, with the advance-date controls tucked into a dropdown.
+function statusBar() {
+  const lg = L(), p = projectedAdvance(), ext = lg.advExt || 0, clock = lg.phase === PHASES.REG || lg.phase === PHASES.CCG;
+  return `<div class="card adminstatus">
+    <div class="as-row">
+      <div class="as-it"><span>Now</span><b>${esc(weekLabel())}</b><small>${esc(phaseName(lg))} · ${lg.season}</small></div>
+      <div class="as-it"><span>Betting</span><b class="${lg.bettingOpen ? 'win' : 'loss'}">${lg.bettingOpen ? 'Open' : 'Locked'}</b><button class="sm ghost" data-act="toggleBet">${lg.bettingOpen ? 'Lock all' : 'Unlock'}</button></div>
+      ${clock ? `<div class="as-it"><span>Next advance</span><b>${p ? esc(fmtAdvance(p)) : '—'}</b>${ext ? `<button class="sm ghost" data-act="advExt" data-h="0">Remove +${ext}h</button>` : `<button class="sm ghost" data-act="advExt" data-h="24">+24 hours</button>`}</div>` : ''}
+    </div>
+    ${clock ? `<details class="as-more" data-keepopen="clock" ${kOpen('clock')}><summary>Change the advance date</summary>
+      <div class="row" style="margin-top:8px"><label class="muted small" style="margin:0">Next advance date</label><input type="date" id="advNext" value="${lg.advNext && lg.advNext > (lg.advancedAt || 0) ? toLocalInput(lg.advNext).slice(0, 10) : ''}" style="width:auto"><button class="sm" data-act="saveAdvNext">Save</button>${lg.advNext && lg.advNext > (lg.advancedAt || 0) ? '<button class="sm ghost" data-act="saveAdvNext" data-clear="1">Back to 3 days</button>' : ''}</div>
+      <div class="row" style="margin-top:8px"><label class="muted small" style="margin:0">Last advance was</label><input type="datetime-local" id="advAt" value="${lg.advancedAt ? toLocalInput(lg.advancedAt) : ''}" style="width:auto"><button class="sm ghost" data-act="saveAdvAt">Fix</button></div>
+      <p class="muted small" style="margin:6px 0 0">The next advance is projected 3 days after the last one${ext ? ` (+${ext}h this week)` : ''}. Set a date to override it for this week; the next advance clears it.</p></details>` : ''}</div>`;
 }
 const flash = m => { ST.msg = m; ST.clear = true; render(); window.scrollTo(0, 0); };
 // Broadcast list edits: redraw in place (same scroll, sections stay open, other unsaved picks kept).
@@ -149,9 +156,13 @@ function scoreRows(games, dr) {
       <button class="sm" data-act="setKick" data-g="${esc(g.id)}">${ko ? 'Update' : 'Set'}</button>${ko ? `<button class="sm ghost" data-act="clearKick" data-g="${esc(g.id)}">Clear</button>` : ''}</div>`;
     // Per-game bet lock: e.g. lock a game once it kicks off while the rest of the board (the title game) stays open.
     const lock = played(g) ? '' : `<div class="kickrow"><span class="muted small">${g.locked ? '🔒 Bets on this game are locked' : '🎟️ Bets on this game are open'}</span><button class="sm ${g.locked ? '' : 'ghost'}" data-act="gameLock" data-g="${esc(g.id)}">${g.locked ? 'Unlock' : 'Lock bets'}</button></div>`;
-    return `<div class="card scorecard">${row('away', av)}${row('home', hv)}${kick}${lock}
-      <div class="row spread" style="margin-top:6px"><span class="meta" style="margin:0">${g.week !== L().week ? `<b class="gstat">${wkOf(g)}</b> · ` : ''}${l ? `${g.lines ? 'Line' : 'Projected'}: ${esc(team(g.home).abbr)} ${fmtLine(l.spread)} · O/U ${l.total}` : ''} ${g.type && g.type !== 'reg' ? '· <span class="tag gold">' + esc(g.type.toUpperCase()) + '</span>' : ''}</span>
-      <select data-ff="${esc(g.id)}" style="font-size:13px;padding:4px 8px"><option value="">Played</option><option value="away" ${ff === 'away' ? 'selected' : ''}>Away forfeit win</option><option value="home" ${ff === 'home' ? 'selected' : ''}>Home forfeit win</option></select></div></div>`;
+    // Kickoff, the per-game bet lock and the forfeit pick are occasional, so they sit in a dropdown under the scores
+    // with a one-line summary of where they stand.
+    const sum = [played(g) ? '' : ko ? '🕗 ' + esc(fmtKick(ko, true)) : '🕗 No kickoff set', played(g) ? '' : g.locked ? '🔒 Bets locked' : '🎟️ Bets open', ff ? '⚠️ Forfeit' : ''].filter(Boolean).join(' · ') || 'Forfeit';
+    return `<div class="card scorecard">${row('away', av)}${row('home', hv)}
+      <div class="meta sc-line">${g.week !== L().week ? `<b class="gstat">${wkOf(g)}</b> · ` : ''}${l ? `${g.lines ? 'Line' : 'Projected'}: ${esc(team(g.home).abbr)} ${fmtLine(l.spread)} · O/U ${l.total}` : ''} ${g.type && g.type !== 'reg' ? '· <span class="tag gold">' + esc(g.type.toUpperCase()) + '</span>' : ''}</div>
+      <details class="sc-more"${ff ? ' open' : ''}><summary>${sum}<span>Edit</span></summary>${kick}${lock}
+      <div class="kickrow"><span class="muted small">Result</span><select data-ff="${esc(g.id)}" style="font-size:13px;padding:4px 8px;width:auto"><option value="">Played</option><option value="away" ${ff === 'away' ? 'selected' : ''}>Away forfeit win</option><option value="home" ${ff === 'home' ? 'selected' : ''}>Home forfeit win</option></select></div></details></div>`;
   }).join('');
 }
 function readScores(games) {
@@ -220,8 +231,8 @@ function wizard() {
   if (ST.done) return ST.done;
   if (ST.step === 1) {
     const g = wizGames(), cur = g.filter(x => x.week === W), late = g.filter(x => x.week < W);
-    return `${stepper(1)}<div class="card"><h2>${wkName(W)} results</h2><p class="muted small" style="margin:0">Enter every score (or mark a forfeit). Use <b>Save scores now</b> to lock finished user games mid-week. Betting is <b>${lg.bettingOpen ? 'OPEN' : 'LOCKED'}</b> <button class="sm ghost" data-act="toggleBet">${lg.bettingOpen ? 'Lock all betting' : 'Unlock'}</button>${lg.bettingOpen ? ` <button class="sm" data-act="lockWeek">Lock ${wkName(W)} games only</button>` : ''}</p>
-      <p class="muted small" style="margin:6px 0 0">"Lock all" stops every bet (including the League Title and future weeks). "${wkName(W)} only" locks this week's games and leaves the rest open; you can also lock a single game on its card below.</p></div>
+    return `${stepper(1)}<div class="card"><h2>${wkName(W)} results</h2><p class="muted small" style="margin:0">Enter every score as games finish. <b>Save scores now</b> locks those games and grades their bets mid-week; <b>Next</b> moves on to the Top 25 and advancing. Kickoff times, single-game bet locks and forfeits are under <b>Edit</b> on each game.</p>${lg.bettingOpen ? `<div class="row" style="margin-top:8px"><button class="sm ghost" data-act="lockWeek">🔒 Lock every ${wkName(W)} game</button><span class="muted small">Other weeks and the title game stay open.</span></div>` : ''}
+</div>
       ${late.length ? `<div class="notice">⚠️ ${late.length} earlier game${late.length === 1 ? ' is' : 's are'} still missing a result. Enter ${late.length === 1 ? 'it' : 'them'} here too.</div>${scoreRows(late, dr)}` : ''}
       ${cur.length ? scoreRows(cur, dr) : '<div class="card empty">No games scheduled this week. Add them on Scores &amp; Schedule, or continue.</div>'}
       <div class="card row spread"><button class="ghost" data-act="wizSave">Save scores now</button><button data-act="wizNext">Next: set up ${nextLbl} →</button></div>`;
@@ -332,7 +343,7 @@ function broadcastCard() {
 const views = {
   advance() {
     const lg = L(), body = views.advanceBody();
-    return renamedCard() + picksAdminCard() + openerAdminCard() + body + ((lg.phase === PHASES.REG || lg.phase === PHASES.CCG) && !ST.done ? advClock() : '');
+    return renamedCard() + picksAdminCard() + openerAdminCard() + body;
   },
   advanceBody() {
     const lg = L(), s = lg.season;
@@ -387,14 +398,14 @@ const views = {
         <div><label>League conference</label><input id="psConf" value="${esc(lg.conference)}" style="width:120px"></div>
         <div><label>Conference format</label><select id="psFormat"><option value="div" ${oneConference(lg.season) ? '' : 'selected'}>Divisions (each team's Div)</option><option value="one" ${oneConference(lg.season) ? 'selected' : ''}>One conference, no divisions</option></select></div></div>
         <p class="muted small" style="margin:8px 0 0">Set every season. <b>One conference:</b> one standings table, one race, and the top two teams play for the title. <b>Divisions:</b> uses the Div column below; division winners meet in the title game. Past seasons keep the format they were played in.</p></div>
-      <div class="card"><h3 style="margin-top:0">Teams, coaches & ratings</h3><p class="muted small">Every user team belongs in the league conference (${esc(lg.conference)}). Add any non-conference opponents as "Non-Conf" so they can be scheduled. OVR/OFF/DEF drive the odds. Division is optional (e.g. East/West).</p>
+      <details class="card" data-keepopen="psTeams" ${kOpen('psTeams', lg.phase === PHASES.PRE)}><summary><b>Teams, coaches & ratings</b> <span class="muted small">(${ts.filter(t => t.conf === lg.conference).length} in the ${esc(lg.conference)} · ${ts.length} total)</span></summary><p class="muted small">Every user team belongs in the league conference (${esc(lg.conference)}). Add any non-conference opponents as "Non-Conf" so they can be scheduled. OVR/OFF/DEF drive the odds. Division is optional (e.g. East/West).</p>
         <div class="tablewrap"><table id="teamTbl" class="stack-sm"><tr><th>Team</th><th>Abbr</th><th>Conf</th><th>Div</th><th>Coach</th><th>Account</th><th>Color</th><th>OVR</th><th>OFF</th><th>DEF</th><th></th></tr>
         ${ts.map(t => teamRow(t)).join('')}</table></div>
-        <div class="row" style="margin-top:10px">${programSelect('id="newTeam" style="max-width:190px"', '', usedNames())}<button class="ghost sm" data-act="addTeam">+ Add team</button><button data-act="saveTeams">Save teams</button><button class="ghost sm" data-act="seedRatings">Apply ratings from league-data.json</button></div></div>
-      <div class="card"><h3 style="margin-top:0">${next} schedule (${sg.length} games)</h3><p class="muted small">Add user-vs-user games and each user team's games vs CPU teams.</p>${(() => { const n = schedDupes(sg).length; return n ? `<div class="notice">${n} duplicate game${n === 1 ? '' : 's'} (same week and matchup entered twice). <button class="sm" data-act="dedupeSched">Remove duplicates</button></div>` : ''; })()}
+        <div class="row" style="margin-top:10px">${programSelect('id="newTeam" style="max-width:190px"', '', usedNames())}<button class="ghost sm" data-act="addTeam">+ Add team</button><button data-act="saveTeams">Save teams</button><button class="ghost sm" data-act="seedRatings">Apply ratings from league-data.json</button></div></details>
+      <details class="card" data-keepopen="psSched" ${kOpen('psSched', lg.phase === PHASES.PRE)}><summary><b>${next} schedule</b> <span class="muted small">(${sg.length} games)</span></summary><p class="muted small">Add user-vs-user games and each user team's games vs CPU teams.</p>${(() => { const n = schedDupes(sg).length; return n ? `<div class="notice">${n} duplicate game${n === 1 ? '' : 's'} (same week and matchup entered twice). <button class="sm" data-act="dedupeSched">Remove duplicates</button></div>` : ''; })()}
         <div class="row"><input id="sgW" type="number" value="0" style="width:70px" title="Week"><select id="sgA">${teamOpts('', 'Away')}</select> @ <select id="sgH">${teamOpts('', 'Home')}</select><label class="row" style="margin:0"><input type="checkbox" id="sgN" style="width:auto"> Neutral</label><button class="ghost" data-act="addSched">Add game</button></div>
         <label>Bulk add — one game per line: <code>week, away team, home team</code> (add <code>, neutral</code> if needed). Team name or abbreviation.</label><textarea id="bulk" rows="4" placeholder="0, Liberty, Kennesaw State&#10;1, KENN, Ohio"></textarea><button class="ghost sm" data-act="bulkSched" style="margin-top:6px">Add these games</button> <span id="bulkMsg" class="muted"></span>
-        <div class="tablewrap" style="margin-top:10px"><table>${sg.map(g => `<tr><td>${wkShort(g.week, g.season)}</td><td class="wrap">${esc(team(g.away).name)} ${g.neutral ? 'vs' : '@'} ${esc(team(g.home).name)}${!isUserTeam(team(g.home)) || !isUserTeam(team(g.away)) ? ' <span class="h2h cputag">CPU GAME</span>' : ''}</td><td class="num">${played(g) ? g.awayScore + '-' + g.homeScore : ''}</td><td class="num"><button class="sm danger" data-delgame="${esc(g.id)}">✕</button></td></tr>`).join('')}</table></div></div>
+        <div class="tablewrap" style="margin-top:10px"><table>${sg.map(g => `<tr><td>${wkShort(g.week, g.season)}</td><td class="wrap">${esc(team(g.away).name)} ${g.neutral ? 'vs' : '@'} ${esc(team(g.home).name)}${!isUserTeam(team(g.home)) || !isUserTeam(team(g.away)) ? ' <span class="h2h cputag">CPU GAME</span>' : ''}</td><td class="num">${played(g) ? g.awayScore + '-' + g.homeScore : ''}</td><td class="num"><button class="sm danger" data-delgame="${esc(g.id)}">✕</button></td></tr>`).join('')}</table></div></details>
       ${views.playbooks()}
       <details class="card" data-keepopen="prepoll" ${ST.open?.prepoll ? 'open' : ''}><summary><b>Preseason Top 25</b> <span class="muted small">(${next}, entering ${esc(sg.length ? wkName(Math.min(...sg.map(g => g.week)), next) : 'Week 0')})</span></summary>
         <p class="muted small">The rankings going into the first week of ${next}. They show as #N on the opening games and team pages.</p>
@@ -416,15 +427,15 @@ const views = {
   },
 
   teams() {
-    return renamedCard() + views.coaches() + views.ratings() + views.playbooks() + `<details class="card"><summary><b>Fix this week's Top 25</b> <span class="muted small">(normally set during the weekly advance)</span></summary>${views.top25()}</details>`;
+    return views.coaches() + views.ratings() + views.playbooks() + `<details class="card" data-keepopen="top25" ${kOpen('top25')}><summary><b>Fix this week's Top 25</b> <span class="muted small">(normally set during the weekly advance)</span></summary>${views.top25()}</details>`;
   },
   ratings() {
     const ts = leagueTeams().slice().sort((a, b) => a.name.localeCompare(b.name));
-    return `<div class="card"><h2>Team Ratings</h2><p class="muted small">Update OVR / OFF / DEF whenever rosters change. Saving re-posts this week's lines and updates odds and power rankings right away. Wagers already placed keep their line.</p>
+    return `<details class="card" data-keepopen="ratings" ${kOpen('ratings')}><summary><b>Team Ratings</b> <span class="muted small">(OVR / OFF / DEF for ${ts.length} teams)</span></summary><p class="muted small">Update OVR / OFF / DEF whenever rosters change. Saving re-posts this week's lines and updates odds and power rankings right away. Wagers already placed keep their line.</p>
       ${ts.map(t => `<div class="row" data-rate="${esc(t.id)}" style="padding:8px 0;border-bottom:1px solid var(--line)">
         <div style="flex:1 1 100%"><i class="sw" style="background:${esc(teamColor(t))};margin-right:6px"></i><b>${esc(t.name)}</b> <span class="muted small">${esc(t.coach || 'CPU')}</span></div>
         ${['ovr', 'off', 'def'].map(k => `<label style="margin:0;font-size:11px;text-align:center">${k.toUpperCase()}<br><input class="score" type="number" inputmode="numeric" min="40" max="99" data-k="${k}" value="${t[k] ?? ''}" style="width:64px"></label>`).join('')}</div>`).join('')}
-      <div class="row" style="margin-top:12px"><button data-act="saveRatings">Save ratings</button></div></div>`;
+      <div class="row" style="margin-top:12px"><button data-act="saveRatings">Save ratings</button></div></details>`;
   },
 
   playbooks() {
@@ -449,16 +460,17 @@ const views = {
 
   coaches() {
     const us = D.users.slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-    return `<div class="card"><h2>Coach Accounts</h2><p class="muted small">Coaches create their own login on the hub (Coach Login → Create account). Link each account to a team here so they can bet and vote. Commissioners can use these tools; you can be a coach and the commissioner at the same time.</p>
+    const linked = us.filter(u => u.teamId).length;
+    return `<details class="card" data-keepopen="accts" ${kOpen('accts')}><summary><b>Coach Accounts</b> <span class="muted small">(${us.length} accounts · ${linked} linked to a team${us.length - linked ? ` · ${us.length - linked} spectator${us.length - linked === 1 ? '' : 's'}` : ''})</span></summary><p class="muted small">Coaches create their own login on the hub (Coach Login → Create account). Link each account to a team here so they can bet and vote. Commissioners can use these tools; you can be a coach and the commissioner at the same time.</p>
       ${us.length ? `<div class="acctlist"><div class="acchd"><span>Name</span><span>Team</span><span>Role</span></div>${us.map(u => `<div class="acctrow" data-user="${esc(u.id)}"><input data-k="name" value="${esc(u.name)}" aria-label="Name">
         <select data-k="teamId" aria-label="Team">${acctTeamOpts(u)}</select><select data-k="role" aria-label="Role"><option value="coach" ${u.role !== 'commish' ? 'selected' : ''}>Coach</option><option value="commish" ${u.role === 'commish' ? 'selected' : ''}>Commish</option></select></div>`).join('')}</div>
-        <div style="margin-top:10px"><button data-act="saveUsers">Save accounts</button></div>` : '<p class="muted">No one has signed up yet.</p>'}</div>
-      ${us.length ? `<div class="card"><h3 style="margin-top:0">Coach from outside the ${esc(L().conference)}</h3>
+        <div style="margin-top:10px"><button data-act="saveUsers">Save accounts</button></div>` : '<p class="muted">No one has signed up yet.</p>'}</details>
+      ${us.length ? `<details class="card" data-keepopen="outside" ${kOpen('outside')}><summary><b>Add a coach from outside the ${esc(L().conference)}</b> <span class="muted small">(mid-season joiner)</span></summary>
         <p class="muted small">For a coach who joined mid-season and plays outside the ${esc(L().conference)} this year. Their team is added as non-conference, so they can bet, vote and show on the betting leaderboard, but they won't appear in the standings, odds or power rankings. When they join the ${esc(L().conference)}, open the New Season tab, change the team's Conf to ${esc(L().conference)}, pick a division and save.</p>
         <div class="row"><div><label>Their team</label>${programSelect('id="ocTeam" style="width:180px"', '', new Set(D.teams.filter(t => t.conf === L().conference).map(t => t.name.toLowerCase())))}</div>
           <div><label>Abbreviation</label><input id="ocAbbr" placeholder="ORST" maxlength="5" style="width:90px"></div>
           <div><label>Account</label><select id="ocUser"><option value="">Pick an account</option>${us.slice().sort((a, b) => !!a.teamId - !!b.teamId).map(u => `<option value="${esc(u.id)}">${esc(u.name || '(no name)')}${u.teamId ? ' · ' + esc(team(u.teamId).name) : ' · spectator'}</option>`).join('')}</select></div>
-          <button data-act="addOutside">Add team &amp; link</button></div></div>` : ''}`;
+          <button data-act="addOutside">Add team &amp; link</button></div></details>` : ''}`;
   },
 
   // How the posted lines have held up: every finished game whose line was saved when it was posted.
@@ -497,7 +509,7 @@ const views = {
   },
   betting() {
     const lg = L(), s = lg.season, wk = D.wagers.filter(w => w.season === s).sort((a, b) => b.week - a.week || (b.ts || 0) - (a.ts || 0));
-    return `<div class="card"><h2>Sportsbook Controls</h2><p>Betting is <b>${lg.bettingOpen ? 'OPEN' : 'LOCKED'}</b> for ${esc(weekLabel())}. <span class="muted small">Lock or unlock it on This Week.</span></p><div class="row">
+    return `<div class="card"><h2>Sportsbook Controls</h2><div class="row">
       <button class="ghost" data-act="repost">Re-post lines for ${esc(weekLabel())}</button></div><p class="muted small">Re-posting recalculates lines for this week's unplayed games (use after adding games mid-week or fixing ratings). Existing wagers keep the line they were placed at.</p></div>
       <div class="card"><h3 style="margin-top:0">${s} wagers (${wk.length})</h3>${(() => { const grp = w => w.status === 'void' ? 'push' : w.status, FL = [['open', 'Open'], ['all', 'All'], ['won', 'Won'], ['lost', 'Lost'], ['cashed', 'Cashed out'], ['push', 'Push / void']], cnt = k => k === 'all' ? wk.length : wk.filter(w => grp(w) === k).length, cur = ST.wf || 'open';
           ST.wfList = cur === 'all' ? wk : wk.filter(w => grp(w) === cur);
@@ -648,7 +660,8 @@ function titleCard() {
   const e = earlyCcg();
   if (e) return `<div class="card"><b>🏆 Both division winners have clinched:</b> ${nm(e.away)} vs ${nm(e.home)}. <button class="gold sm" data-act="postEarly">Post the League Title game now</button></div>`;
   const alive = divisions(s).map(d => { const r = raceSim(d, {}, s); if (!r || !r.teams) return ''; const cl = r.teams.find(t => t.status === 'clinched'); return `${esc(d)}: ${cl ? nm(cl.id) + ' (clinched)' : r.teams.filter(t => t.status === 'alive').map(t => esc(team(t.id).abbr || team(t.id).name)).join(' or ') + ' still alive'}`; }).filter(Boolean);
-  return `<div class="card"><span class="muted small">🏆 The League Title game posts itself (with betting open) as soon as both division winners clinch. ${alive.join(' · ')}</span></div>`;
+  const one = divisions(s).length <= 1 && !divisions(s)[0];
+  return `<div class="card"><span class="muted small">🏆 The League Title game posts itself (with betting open) as soon as ${one ? 'the top two spots are clinched' : 'both division winners clinch'}.${alive.filter(Boolean).length ? ` Still alive: ${alive.filter(Boolean).join(' · ').replace(/^: /, '')}` : ''}</span></div>`;
 }
 // Relief top-ups at an advance that opens betting. Waits a moment so the bets just graded are in D.wagers.
 async function giveRelief() {
@@ -1148,7 +1161,7 @@ function render() {
   const T = TABS(); if (!T.some(([k]) => k === ST.tab) && !['coaches', 'ratings', 'top25'].includes(ST.tab)) ST.tab = 'advance';
   $('#tabs').innerHTML = T.map(([k, l]) => `<a href="#" data-tab="${k}" class="${k === ST.tab ? 'on' : ''}">${l}</a>`).join('');
   $('#sub').textContent = `${L().season} · ${weekLabel()}${DEMO ? ' · DEMO (changes are not saved)' : ''}`;
-  $('#panel').innerHTML = (ST.msg ? `<div class="notice">${esc(ST.msg)}</div>` : '') + views[ST.tab]();
+  $('#panel').innerHTML = (ST.msg ? `<div class="notice">${esc(ST.msg)}</div>` : '') + (['advance', 'games', 'betting'].includes(ST.tab) ? statusBar() : '') + views[ST.tab]();
   nameFields($('#panel'));
   if (!ST.clear) KEEP.forEach(id => { const el = document.getElementById(id); if (el && kept[id] != null) el.value = kept[id]; });
   ST.msg = ''; ST.clear = false;
