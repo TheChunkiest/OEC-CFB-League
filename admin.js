@@ -3,8 +3,8 @@ import {
   team, teamColor, isUserTeam, leagueTeams, played, seasonGames, slug, fmtOdds, fmtLine, weekLabel, lineOf, freshLine,
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum, divOf, oneConference, playbookOf, pbSeason, pbOpen, pbLocked
 , loadAI, kickoffOf, fmtKick
-, reliefPatch, winTotalsSnapshot, winsLockedTeam, postEarlyCcg, earlyCcg, raceSim, AWARD_DEFS, tallyAwards, awardGames, awardGameLabel, awardCoaches, sameName, curWeek, wkName, wkShort, wkOf, phaseName, picksOpen
-} from './core.js?v=109';
+, reliefPatch, winTotalsSnapshot, winsLockedTeam, postEarlyCcg, earlyCcg, raceSim, AWARD_DEFS, tallyAwards, awardGames, awardGameLabel, awardCoaches, sameName, curWeek, wkName, wkShort, wkOf, phaseName, picksOpen, openerId, firstGameOf
+} from './core.js?v=110';
 // Broadcast scouting nudges the ratings a little, so load it before any lines get posted from here.
 loadAI();
 import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
@@ -75,6 +75,14 @@ function renamedCard() {
     <button class="gold sm" data-act="splitTeam" data-id="${esc(t.id)}">Split into ${esc(o.name)} and ${esc(t.name)}</button></div>`; }).join('');
 }
 // Preseason picks status for the commissioner: open from publishing until the first score, with manual control.
+// Season Opener boost: which game gets it (set to the season's first game automatically), changeable until a score is in.
+function openerAdminCard() {
+  const lg = L(); if (lg.phase !== PHASES.REG || D.games.some(g => g.season === lg.season && played(g))) return '';
+  const cur = openerId(), gs = D.games.filter(g => g.season === lg.season && !played(g) && (g.type || 'reg') === 'reg'), w = gs.length ? Math.min(...gs.map(g => g.week)) : null;
+  const opts = gs.filter(g => g.week === w);
+  return `<div class="card"><b>🏈 Season Opener boost</b><p class="muted small" style="margin:6px 0">+15% profit on moneyline bets (either team) on the first game of the season.</p>
+    <div class="row"><select id="openerSel" style="width:auto">${!cur ? '<option value="">Pick the opener</option>' : ''}${opts.map(g => `<option value="${esc(g.id)}" ${g.id === cur ? 'selected' : ''}>${esc(team(g.away).name)} @ ${esc(team(g.home).name)}</option>`).join('')}</select><button class="sm" data-act="setOpener">Save</button></div></div>`;
+}
 function picksAdminCard() {
   const lg = L(), pp = lg.prePicks; if (lg.phase !== PHASES.REG) return '';
   const open = picksOpen(lg), started = D.games.some(g => g.season === lg.season && played(g));
@@ -322,7 +330,7 @@ function broadcastCard() {
 const views = {
   advance() {
     const lg = L(), body = views.advanceBody();
-    return renamedCard() + picksAdminCard() + body + ((lg.phase === PHASES.REG || lg.phase === PHASES.CCG) && !ST.done ? advClock() : '');
+    return renamedCard() + picksAdminCard() + openerAdminCard() + body + ((lg.phase === PHASES.REG || lg.phase === PHASES.CCG) && !ST.done ? advClock() : '');
   },
   advanceBody() {
     const lg = L(), s = lg.season;
@@ -830,6 +838,10 @@ const ACT = {
     await batch(ops); await loadAll(); refreshProfile(); await refreshBooks();
     flash(`Done: ${o.name} has its history back and ${old.name} is its own team.`);
   },
+  async setOpener() {
+    const v = $('#openerSel').value; if (!v) return alert('Pick a game.');
+    await put('meta', 'league', { opener: { season: L().season, gameId: v } }); const g = D.games.find(x => x.id === v); flash(`Season Opener boost is on ${team(g.away).name} @ ${team(g.home).name}.`);
+  },
   async togglePicks() {
     const pp = L().prePicks || { season: L().season }, open = !picksOpen();
     await put('meta', 'league', { prePicks: { ...pp, season: L().season, open, ...(open ? {} : { closedAt: Date.now() }) } }); flash(open ? 'Preseason picks reopened.' : 'Preseason picks closed.');
@@ -871,7 +883,7 @@ const ACT = {
     const align = { ...(alignSnapshot() || L().align || {}), [s]: fmt === 'one' ? { _one: true } : { _one: false, ...Object.fromEntries(leagueTeams().map(t => [t.id, t.div])) } };
     D.league.align = align;
     await put('meta', 'league', { align });
-    await put('meta', 'league', { season: s, finalWeek: fw, week: first, advancedAt: Date.now(), advExt: 0, phase: PHASES.REG, pre: false, bettingOpen: true, desk: deskValue(), awards: { open: false, season: s, categories: [], results: [] }, prePicks: { season: s, open: true, openedAt: Date.now() } });
+    await put('meta', 'league', { season: s, finalWeek: fw, week: first, advancedAt: Date.now(), advExt: 0, phase: PHASES.REG, pre: false, bettingOpen: true, desk: deskValue(), awards: { open: false, season: s, categories: [], results: [] }, prePicks: { season: s, open: true, openedAt: Date.now() }, opener: { season: s, gameId: (firstGameOf(s) || {}).id || '' } });
     await batch(lineOps(first, s));
     ST.desk = 'no'; ST.tab = 'advance'; flash(`${s} season published. ${wkName(first)} lines are posted and preseason odds are live.`);
   },

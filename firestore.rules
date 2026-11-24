@@ -91,7 +91,7 @@ service cloud.firestore {
         && (n < 5 || validLeg(d.legs[4], L, t)) && (n < 6 || validLeg(d.legs[5], L, t));
     }
     // Profit boosts, only on single bets on one game or parlays made only of that game's lines:
-    // Game of the Week +10%, League Championship Game +25%.
+    // Game of the Week +10%, League Championship Game +25%, Season Opener +15% (moneyline only).
     function boostGid(d) { return d.market == 'parlay' ? d.legs[0].get('gameId', '') : d.get('gameId', ''); }
     function legOn(ls, i, gid) { return ls.size() <= i || ls[i].get('gameId', '') == gid; }
     function allOn(d, gid) {
@@ -102,7 +102,9 @@ service cloud.firestore {
     function validBoost(d, L) {
       return !('boost' in d)
         || (d.boost == 1.1 && L.gotw.season == L.season && L.gotw.week == L.week && allOn(d, L.gotw.gameId))
-        || (d.boost == 1.25 && allOn(d, boostGid(d)) && gameOf(boostGid(d)).get('type', 'reg') == 'ccg');
+        || (d.boost == 1.25 && allOn(d, boostGid(d)) && gameOf(boostGid(d)).get('type', 'reg') == 'ccg')
+        // Season Opener +15%: moneyline singles on the game the commissioner set as the opener.
+        || (d.boost == 1.15 && d.market == 'ml' && L.get('opener', {}).get('season', 0) == L.season && d.gameId == L.get('opener', {}).get('gameId', ''));
     }
     // The league doc and the bettor's profile are each read once here and passed down, so even a 6-leg parlay
     // stays well under Firestore's limit of 10 document lookups per request (profile + league + up to 6 games).

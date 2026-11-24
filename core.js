@@ -925,10 +925,26 @@ export function boostRate(gameId) {
   if (g && g.type === 'ccg' && !played(g)) return CCG_BOOST;
   return gameId && gameId === gotwGameId() ? GOTW_BOOST : null;
 }
-export const boostName = b => b === CCG_BOOST ? 'Championship' : 'Game of the Week';
+export const boostName = b => b === CCG_BOOST ? 'Championship' : b === OPENER_BOOST ? 'Season Opener' : 'Game of the Week';
+// Season Opener: +15% profit on moneyline bets (either team) on the season's first game.
+export const OPENER_BOOST = 1.15;
+export function openerId(season = D.league.season) {
+  const O = D.league.opener; if (O && O.season === season && O.gameId) return O.gameId;
+  return null;
+}
+// The game that should be the opener: the earliest game of the season (by week, then kickoff time).
+export function firstGameOf(season = D.league.season) {
+  const gs = D.games.filter(g => g.season === season && (g.type || 'reg') === 'reg'); if (!gs.length) return null;
+  const w = Math.min(...gs.map(g => g.week)), wk = gs.filter(g => g.week === w);
+  const ko = g => { const k = kickoffOf(g); return k ? +new Date(k) || 9e15 : 9e15; };
+  return wk.sort((a, b) => ko(a) - ko(b) || String(a.id).localeCompare(String(b.id)))[0];
+}
+export const isOpener = g => !!g && g.id === openerId(g.season) && !played(g);
 export function boostFor(legs) {
   const id = legs.length && legs[0].gameId; if (!id) return null;
-  return legs.every(l => l.gameId === id && GAME_MARKETS.includes(l.market)) ? boostRate(id) : null;
+  if (!legs.every(l => l.gameId === id && GAME_MARKETS.includes(l.market))) return null;
+  if (legs.every(l => l.market === 'ml') && isOpener(D.games.find(g => g.id === id))) return OPENER_BOOST;
+  return boostRate(id);
 }
 // Profit a bet pays if it wins, including any boost.
 export function winProfit(w) { return boosted(w.market === 'parlay' ? parlayProfit(w.stake, w.legs || []) : profit(w.stake, w.odds), w); }
@@ -1148,6 +1164,10 @@ export async function fixPostWeek() {
 export async function ensureFutures() {
   const L = D.league;
   try { await fixPostWeek(); } catch (e) { console.warn('postseason week', e); }
+  // The Season Opener boost goes on the season's first game unless the commissioner already picked one.
+  if (isCommish() && L.phase === PHASES.REG && !openerId() && !D.games.some(g => g.season === L.season && played(g))) {
+    const f = firstGameOf(L.season); if (f) try { await put('meta', 'league', { opener: { season: L.season, gameId: f.id } }); } catch (e) { console.warn('opener', e); }
+  }
   // Close picks once the season has started, and keep a tally of them on the league doc (storylines and game pages
   // quote it, at no extra reads).
   if (isCommish() && L.prePicks && L.prePicks.season === L.season && ((L.prePicks.open && !picksOpen()) || (!L.prePicks.open && !L.prePicks.tally)))
