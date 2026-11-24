@@ -5,7 +5,7 @@ import {
   gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, wkName, gWeek, champOpen, titleSet, DIAG, storylines, seasonStorylines, RELIEF, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory, legLabel
 , playbookOf, pbSeason, pbText
 , AWARD_DEFS, awardGames, awardGameLabel, awardCoaches
-, curWeek, wkShort, wkOf, phaseName, PICK_DEFS, picksOpen, pickAnswers, loadPicks, pickFacts, OPENER_BOOST, isOpener
+, curWeek, wkShort, wkOf, phaseName, PICK_DEFS, picksOpen, pickAnswers, loadPicks, pickFacts, OPENER_BOOST, isOpener, coachEdge, canonCoach, plateInk
 } from './core.js?v=113';
 import { lookupStadium } from './programs.js?v=3';
 
@@ -386,7 +386,11 @@ const PAGES = {
     const leaders = bettors().map(u => ({ u, b: bankroll(u.id) })).sort((a, b) => b.b.net - a.b.net || b.b.balance - a.b.balance).slice(0, 5);
     let html = installTip();
     if (L.desk && L.desk.show && L.desk.text) html += `<div class="card banner"><h2>Commissioner's Desk</h2><div style="white-space:pre-wrap">${esc(L.desk.text)}</div></div>`;
-    html += picksCard() + awardsVoteCard() + offseasonAwardsCard();
+    // Signed-in coach: My Team (with a scouting report on the next opponent) and a to-do list come first.
+    const me = auth.profile, myT = me && me.teamId ? team(me.teamId) : null, coachHome = !!(myT && isUserTeam(myT));
+    html += offseasonAwardsCard();
+    if (coachHome) html += myTeamCard(me, myT) + todoCard(me, myT);
+    else html += picksCard() + awardsVoteCard();
     const ccgNow = games.find(g => g.type === 'ccg');
     if (ccgNow && !gt.game) html += featureCard(ccgNow, { ribbon: champRibbon(), note: played(ccgNow) ? 'League champion crowned' : '' });
     if (gt.game) html += featureCard(gt.game, { ribbon: '★ Game of the Week' });
@@ -398,8 +402,9 @@ const PAGES = {
         : `No Game of the Week votes were cast for ${esc(weekLabel())}.`} <a href="#vote">${wk === firstWk ? 'Vote now' : `Vote for ${esc(nxt)}'s game`} →</a></div></div>`;
     }
     const userWk = games.some(g => isUserTeam(team(g.home)) || isUserTeam(team(g.away)));
-    html += `<div class="${offseason ? '' : 'grid2'}"><div><h2>${recap ? `Season ${seasonNum(L.season)} in Review` : bowls ? 'Bowl Season Storylines' : "This Week's Storylines"}</h2><div class="card">${stories.length ? stories.map(st => `<${st.href ? `a href="${esc(st.href)}"` : 'div'} class="story${st.href ? ' link' : ''}"><span class="tag">${esc(st.tag)}</span><h3>${esc(st.title)}</h3><p>${esc((() => { const vs = {}; vary(st.title, vs); return vary(st.body, vs); })())}</p>${st.href ? '<span class="go" aria-hidden="true">›</span>' : ''}</${st.href ? 'a' : 'div'}>`).join('') : '<div class="empty">Storylines appear once games are played.</div>'}</div></div>
-      ${offseason ? '' : `<div><h2>${esc(weekLabel())} Matchups</h2><div class="card matchbox">${bowls ? (games.length ? games.slice().sort((a, b) => played(a) - played(b) || a.week - b.week).map(g => gameCard(g)).join('') : '<div class="empty">No bowl or playoff games posted yet.</div>') : userWk ? weekOrder(games.filter(g => g.id !== gt.game?.id && g.id !== ccgNow?.id)).map(g => gameCard(g)).join('') || `<div class="empty">Only the ${ccgNow && !gt.game ? 'championship game' : 'Game of the Week'} is on the slate.</div>` : '<div class="empty">No user games this week.</div>'}</div></div>`}</div>
+    // This week's games first (matchups), then storylines; side by side on wide screens.
+    html += `<div class="${offseason ? '' : 'grid2'}">${offseason ? '' : `<div><h2>${bowls ? 'Bowl Season Games' : `${esc(weekLabel())} Games`}</h2><div class="card matchbox">${bowls ? (games.length ? games.slice().sort((a, b) => played(a) - played(b) || a.week - b.week).map(g => gameCard(g)).join('') : '<div class="empty">No bowl or playoff games posted yet.</div>') : userWk ? weekOrder(games.filter(g => g.id !== gt.game?.id && g.id !== ccgNow?.id)).map(g => gameCard(g)).join('') || `<div class="empty">Only the ${ccgNow && !gt.game ? 'championship game' : 'Game of the Week'} is on the slate.</div>` : '<div class="empty">No user games this week.</div>'}</div></div>`}
+      <div><h2>${recap ? `Season ${seasonNum(L.season)} in Review` : bowls ? 'Bowl Season Storylines' : "This Week's Storylines"}</h2><div class="card">${stories.length ? stories.map(st => `<${st.href ? `a href="${esc(st.href)}"` : 'div'} class="story${st.href ? ' link' : ''}"><span class="tag">${esc(st.tag)}</span><h3>${esc(st.title)}</h3><p>${esc((() => { const vs = {}; vary(st.title, vs); return vary(st.body, vs); })())}</p>${st.href ? '<span class="go" aria-hidden="true">›</span>' : ''}</${st.href ? 'a' : 'div'}>`).join('') : '<div class="empty">Storylines appear once games are played.</div>'}</div></div></div>
       <div class="grid home2"><div class="card"><h2>Power Rankings</h2><table>${pr.map(x => `<tr><td class="rank">${x.rank}</td><td>${chip(x.id)}</td><td class="num">${rec(x.rec)}</td><td class="num">${mvHtml(x.move)}</td></tr>`).join('')}</table><p><a href="#rankings">Full rankings →</a></p></div>
       <div class="card"><h2>Betting Leaders</h2>${leaders.length ? `<table>${leaders.map((x, i) => `<tr><td class="rank">${i + 1}</td><td>${esc(x.u.name)}</td><td class="num">${x.b.w}-${x.b.l}${x.b.p ? '-' + x.b.p : ''}</td><td class="num"><b class="${x.b.net >= 0 ? 'win' : 'loss'}">${x.b.net >= 0 ? '+' : ''}${x.b.net.toLocaleString()}</b></td></tr>`).join('')}</table>` : '<div class="muted">No coaches linked yet.</div>'}<p><a href="#betting">Place wagers →</a></p></div></div>`;
     return html;
@@ -1789,6 +1794,75 @@ function picksSection(s, me, canVote) {
   return `<h2 id="picks">🔮 ${ps} Preseason Picks</h2><div class="card awballot"><p class="muted small" style="margin-top:0">${ans ? 'How everyone\'s preseason calls turned out.' : `Locked in before the first game. ${all.length} coach${all.length === 1 ? '' : 'es'} made picks; results come with the season awards.`}</p>${board}${cats}</div>`;
 }
 // Home: while picks are open, a card that takes coaches to them.
+// ---- Home, signed-in coach ----
+// My Team: record, bankroll and the next game, with a scouting report on that opponent.
+function myTeamCard(me, T) {
+  const L = D.league, s = S(), R = records(s)[T.id] || { w: 0, l: 0 }, bal = bankroll(me.id).balance, rk = rankOf(T.id);
+  const g = nextGameOf(T.id), myCoach = canonCoach(T.coach || '');
+  const head = `<div class="mt-head"><i class="plate big" style="background:${esc(teamColor(T))};color:${plateInk(teamColor(T))}">${esc(T.abbr || T.name)}</i>
+    <div class="mt-name"><a href="#team/${esc(T.id)}">${rk ? `<span class="rk">#${rk}</span> ` : ''}${esc(T.name)}</a><span>Coach ${esc(T.coach)} · ${R.w}-${R.l}${T.ovr ? ` · ${T.ovr} OVR` : ''}</span></div>
+    <div class="mt-bal"><b>${bal.toLocaleString()}</b><span>Crackers</span></div></div>`;
+  let next = '';
+  if (!g) next = `<div class="mt-next"><div class="mt-k">Next game</div><div class="mt-v">${L.phase === PHASES.PRE ? 'The season is over. Next season starts when it is published.' : 'No games left on your schedule.'}</div></div>`;
+  else {
+    const home = g.home === T.id, opp = team(home ? g.away : g.home), oppCoach = coachOf(g, home ? 'away' : 'home'), l = lineOf(g);
+    const p = l && l.pHome != null ? (home ? l.pHome : 1 - l.pHome) : null, my = l && l.spread != null ? (home ? l.spread : -l.spread) : null;
+    const when = g.type === 'ccg' ? 'League Title' : g.type === 'bowl' ? (g.note || 'Bowl Season') : wkOf(g), ko = kickoffOf(g);
+    const gap = g.week > L.week && (g.type || 'reg') === 'reg' ? ` (no game ${g.week - L.week === 1 ? wkName(L.week) : `until ${wkName(g.week)}`})` : '';
+    next = `<a class="mt-next" href="#game/${esc(g.id)}"><div class="mt-k">Next game · <b>${esc(when)}</b>${esc(gap)}${ko ? ` · 🕗 ${esc(fmtKick(ko, true))}` : ''}</div>
+      <div class="mt-row"><span class="mt-v">${g.neutral ? 'vs' : home ? 'vs' : 'at'} ${rankName(opp.id)}</span>${my != null ? `<span class="mt-line ${my <= 0 ? 'fav' : 'dog'}">${esc(T.abbr || T.name)} ${esc(fmtLine(my))}</span>` : ''}</div>
+      ${p != null ? `<div class="mt-bar" style="background:${esc(teamColor(opp))}"><i style="width:${Math.round(p * 100)}%;background:${esc(teamColor(T))}"></i></div><div class="mt-sub"><span>${esc(T.abbr || T.name)} win chance ${Math.round(p * 100)}%</span><span>${oppCoach && oppCoach !== 'CPU' ? `Coach ${esc(oppCoach)}` : 'CPU'}</span></div>` : ''}</a>`;
+    next += scoutingReport(g, T, opp, myCoach, oppCoach);
+  }
+  return `<section class="card myteam" aria-labelledby="mtH"><div class="mt-title"><h2 id="mtH">My Team</h2><span>Your record, bankroll and next opponent</span></div>${head}${next}</section>`;
+}
+// Scouting report: facts from the league's own history about the next opponent and its coach.
+function scoutingReport(g, T, opp, myCoach, oppCoach) {
+  const pts = [], s = S(), userOpp = oppCoach && oppCoach.toUpperCase() !== 'CPU', key = x => canonCoach(x || '').toLowerCase();
+  if (userOpp && myCoach) {
+    const meets = D.games.filter(x => played(x) && !x.forfeit && ((key(coachOf(x, 'home')) === key(myCoach) && key(coachOf(x, 'away')) === key(oppCoach)) || (key(coachOf(x, 'away')) === key(myCoach) && key(coachOf(x, 'home')) === key(oppCoach))))
+      .sort((a, b) => b.season - a.season || b.week - a.week);
+    if (meets.length) {
+      let w = 0, l = 0, mg = 0;
+      meets.forEach(x => { const mine = key(coachOf(x, 'home')) === key(myCoach) ? 'home' : 'away', d = mine === 'home' ? x.homeScore - x.awayScore : x.awayScore - x.homeScore; mg += d; d > 0 ? w++ : l++; });
+      const avg = Math.round(Math.abs(mg) / meets.length);
+      pts.push(`You're <b>${w}-${l}</b> against ${esc(oppCoach)}${avg ? `, ${mg >= 0 ? 'winning' : 'losing'} by <b>${avg}</b> a game on average` : ''}.`);
+      const x = meets[0], A = team(x.away), H = team(x.home);
+      pts.push(`Last meeting: ${x.season} ${esc(wkOf(x))}, <b>${esc(A.abbr || A.name)} ${x.awayScore}, ${esc(H.abbr || H.name)} ${x.homeScore}</b>.`);
+    } else pts.push(`First time you've faced ${esc(oppCoach)}.`);
+    const cs = coachStats()[Object.keys(coachStats()).find(k => key(k) === key(oppCoach))];
+    if (cs) { let w = 0, l = 0; Object.values(cs.vs || {}).forEach(v => { w += v.w; l += v.l; }); const first = Math.min(...cs.seasons);
+      if (w + l >= 4) pts.push(`${esc(oppCoach)} is <b>${w}-${l}</b> against league coaches since ${first}.`); }
+  }
+  const sg = D.games.filter(x => x.season === s && played(x) && !x.forfeit && (x.home === opp.id || x.away === opp.id));
+  const pg = (gs, id) => gs.reduce((t, x) => t + (x.home === id ? +x.awayScore : +x.homeScore), 0) / gs.length;
+  if (sg.length >= 2) pts.push(`${esc(opp.abbr || opp.name)} is giving up <b>${pg(sg, opp.id).toFixed(1)} points a game</b> this season.`);
+  else { const lg = D.games.filter(x => x.season === s - 1 && played(x) && !x.forfeit && (x.home === opp.id || x.away === opp.id)); if (lg.length >= 3) pts.push(`${esc(opp.abbr || opp.name)} gave up <b>${pg(lg, opp.id).toFixed(1)} a game</b> last season.`); }
+  if (T.ovr && opp.ovr) pts.push(`Ratings: ${esc(T.name)} <b>${T.ovr}</b> OVR, ${esc(opp.name)} <b>${opp.ovr}</b>.`);
+  if (!pts.length) return '';
+  return `<details class="scout" open><summary>Scouting report: ${esc(opp.name)}</summary><ul>${pts.map(t => `<li>${t}</li>`).join('')}</ul><a href="#game/${esc(g.id)}">Full game preview →</a></details>`;
+}
+// To-do list: what's waiting on this coach right now, each a tap away. Empty = all caught up.
+function todoCard(me, T) {
+  const L = D.league, s = S(), items = [], I = {
+    star: 'M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.5 6.7 19.4l1.2-6L3.4 9.3l6-.7z', bet: 'M4 7h16v10H4zM12 10v4M9 12h6', vote: 'M5 12l4 4L19 6', clock: 'M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', trophy: 'M7 4h10v4a5 5 0 0 1-10 0zM12 13v4M8 20h8' };
+  const add = (href, icon, color, label, help) => items.push({ href, icon, color, label, help });
+  const inv = invitesFor(me.id);
+  if (inv.length) add(`#game/${inv[0].gameId}`, I.clock, '#6fa8ff', inv.length === 1 ? 'Answer a kickoff invite' : `Answer ${inv.length} kickoff invites`, 'Another coach proposed a time for your game');
+  const g = nextGameOf(T.id);
+  if (g && canSchedule(g) && !kickoffOf(g) && !inv.length) { const opp = team(g.home === T.id ? g.away : g.home); add(`#game/${g.id}`, I.clock, '#6fa8ff', `Set a kickoff time with Coach ${opp.coach}`, `Your ${wkOf(g)} game ${g.home === T.id ? 'vs' : 'at'} ${opp.name}`); }
+  if (picksOpen() && !D.picks.some(p => p.season === s && p.uid === me.id)) add('#vote/picks', I.star, '#f5b82e', 'Make your preseason picks', 'Open until the first game of the season is in');
+  if (L.awards?.open && !D.ballots.some(b => b.season === s && b.uid === me.id)) add('#vote/awards', I.trophy, '#f5b82e', 'Vote for the season awards', 'Voting closes after bowl season');
+  const nw = L.week + 1, nextG = L.phase === PHASES.REG ? D.games.filter(x => x.season === s && x.week === nw && (x.type || 'reg') === 'reg' && isUserTeam(team(x.home)) && isUserTeam(team(x.away))) : [];
+  if (nextG.length > 1 && !D.gotw.some(v => v.season === s && v.week === nw && v.uid === me.id)) add('#vote', I.vote, '#43c97e', `Vote for ${wkName(nw)}'s Game of the Week`, `${nextG.length} games to choose from`);
+  if (L.bettingOpen && !D.wagers.some(w => !w.deleted && w.uid === me.id && w.season === s && w.week === L.week)) {
+    const board = D.games.filter(x => x.season === s && x.week === L.week && !played(x) && lineOf(x) && !x.locked && x.home !== T.id && x.away !== T.id), op = board.find(isOpener);
+    if (board.length) add('#betting', I.bet, '#ff4f57', `Place your ${weekLabel()} bets`, op ? `${board.length} game${board.length > 1 ? 's' : ''} · the opener has a +${Math.round((OPENER_BOOST - 1) * 100)}% moneyline boost` : `${board.length} game${board.length > 1 ? 's' : ''} on the board`);
+  }
+  const body = items.length ? items.map(t => `<a class="todo" href="${esc(t.href)}"><span class="todo-ic" style="--c:${t.color}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${t.icon}"/></svg></span><span class="todo-t"><b>${esc(t.label)}</b><span>${esc(t.help)}</span></span><span class="go" aria-hidden="true">›</span></a>`).join('')
+    : '<div class="todo done"><span class="todo-ic" style="--c:#43c97e"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l4 4L19 6"/></svg></span><span class="todo-t"><b>You\'re all caught up</b><span>Nothing is waiting on you this week.</span></span></div>';
+  return `<section class="card todolist" aria-labelledby="tdH"><div class="mt-title"><h2 id="tdH">Your To-Do List</h2><span>Things waiting on you this week</span></div>${body}</section>`;
+}
 function picksCard() {
   if (!picksOpen()) return '';
   const L = D.league, me = auth.profile, coach = me && me.teamId, mine = coach && D.picks.find(p => p.season === L.season && p.uid === me.id);
