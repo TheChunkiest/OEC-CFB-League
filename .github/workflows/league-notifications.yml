@@ -153,7 +153,7 @@ jobs:
                   if f: return int(f.get('integerValue', 0))
               return 0
           def season_docs(col, cur):
-              res = post(f'{base}:runQuery', {'structuredQuery': {'from': [{'collectionId': col}], 'where': {'fieldFilter': {'field': {'fieldPath': 'season'}, 'op': 'EQUAL', 'value': {'integerValue': str(cur)}}}}})
+              res = post(f'{base}:runQuery', {'structuredQuery': {'from': [{'collectionId': col}], 'where': {'fieldFilter': {'field': {'fieldPath': 'season'}, 'op': 'GREATER_THAN_OR_EQUAL' if col == 'games' else 'EQUAL', 'value': {'integerValue': str(cur)}}}}})   # games: next season's schedule too
               out = []
               for row in res:
                   x = row.get('document')
@@ -265,9 +265,11 @@ jobs:
 
               try:   # whatever happens, remember what was already sent so nothing goes out twice
                 if fresh:   # first run: remember where things stand, so old events aren't announced...
-                    st = {'adv': advkey, 'ann': ann.get('id'), 'inv': int(now), 'resp': int(now), 'kick': {}, 'settle': int(now), 'final': int(now), 'awards': (lg.get('awards') or {}).get('season') if (lg.get('awards') or {}).get('results') else None}
+                    st = {'adv': advkey, 'ann': ann.get('id'), 'inv': int(now), 'resp': int(now), 'kick': {}, 'settle': int(now), 'final': int(now), 'awards': (lg.get('awards') or {}).get('season') if (lg.get('awards') or {}).get('results') else None, 'awOpen': (lg.get('awards') or {}).get('season') if (lg.get('awards') or {}).get('open') else None}
                     if now - int(lg.get('advancedAt') or 0) < 3600e3:   # ...except an advance from the last hour
                         st['adv'] = ''; fresh = False
+                if 'awOpen' not in st:   # state from before this existed: don't announce a vote that's already open
+                    av0 = lg.get('awards') or {}; st['awOpen'] = av0.get('season') if av0.get('open') else None
                 if not fresh:
                     # League advanced
                     if advkey != st.get('adv'):
@@ -276,6 +278,11 @@ jobs:
                         dk = lg.get('desk') or {}
                         note = (dk.get('text') or '').strip() if dk.get('show') else ''
                         body = (note[:170] + '…' if len(note) > 170 else note) if note else {'Offseason': 'A new season is on the way. Get your team ready.' if lg.get('pre') else 'The season is in the books. Offseason work is underway.', 'Postseason': 'Bowl games are set. Lines are up when betting opens.'}.get(ph, 'The league advanced. Results are in and new lines are up.')
+                        # Awards voting opens with this advance (League Title week): say so in the same notification.
+                        av = lg.get('awards') or {}
+                        if av.get('open') and av.get('season') and av.get('season') != st.get('awOpen'):
+                            body = (body[:110] + '…' if len(body) > 110 else body) + ' 🗳️ Awards voting is open: cast your ballot.'
+                            st['awOpen'] = av['season']
                         to('advance', t, body, link + '#home', tag='advance')
                         st['adv'] = advkey
                     # League awards announced (the commissioner finalized the season with winners)
