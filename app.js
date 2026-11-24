@@ -1830,22 +1830,14 @@ function confRecOf(tid, season) {
 // Over/under record as "13 O, 8 U" (plus pushes).
 const fmtOU = a => `${a[0]} O, ${a[1]} U${a[2] ? `, ${a[2]} P` : ''}`;
 // History: one Season Awards card with a centered season picker (newest first).
-function awardWinnerHtml(h, a) {
-  const g = awardGame(h, a);
-  if (g) return `<a class="reclink" href="#game/${esc(g.id)}"><b>${esc(a.winner)}</b><div class="small goty">${esc(team(g.away).abbr || team(g.away).name)} ${g.awayScore} @ ${esc(team(g.home).abbr || team(g.home).name)} ${g.homeScore} · ${g.type === 'ccg' ? 'Title game' : g.type === 'bowl' ? esc(g.note || 'Bowl Season') : wkName(g.week, g.season)}</div></a>`;
-  // Coach of the Year links to the coach, with the team they won it with.
-  if (/coach of the year/i.test(a.award || '')) { const c = coachName(a.winner); return `${c ? `<a href="#coach/${slug(c)}">${esc(c)}</a>` : `<b>${esc(a.winner)}</b>`}${a.team ? `<div class="small">${chip(a.team, { season: h.season, rank: false })}</div>` : ''}`; }
-  // Team awards (winner is the team itself): just the team chip, no repeated name.
-  if (a.team && String(a.winner || '').trim().toLowerCase() === String(team(a.team).name || '').toLowerCase()) return `<b>${chip(a.team, { season: h.season, rank: false })}</b>`;
-  return `<b>${esc(a.winner)}</b>${a.team ? `<div class="small">${chip(a.team, { season: h.season, rank: false })}</div>` : ''}`;
-}
-// Award icon by category, and a player winner split into name and position ("B. Hopson, KENN MIKE" → B. Hopson · MIKE).
+// Award icon by category, and a player winner's name without the team and position typed after it.
 const awardIcon = a => { const n = String(a || '').toLowerCase(); return /coach/.test(n) ? '🏅' : /defens/.test(n) ? '🛡️' : /offens/.test(n) ? '⚡' : /special|kick|punt/.test(n) ? '🦶' : /player|mvp|heisman|freshman|rookie/.test(n) ? '⭐' : /game of the year/.test(n) ? '🎬' : '🏆'; };
 function playerWinner(a) {
   const w = String(a.winner || '').trim();
-  const m = w.match(/^(.*?),\s*([A-Z&]{2,5})\s+([A-Z]{1,5})$/);
-  if (m) return `${esc(m[1])} <span class="aw-pos">${esc(m[3])}</span>`;
-  return esc(w);
+  // Older winners were typed as "B. Hopson, KENN MIKE": positions aren't tracked anymore, and the team shows as a
+  // plate next to the name, so only the name is kept.
+  const m = w.match(/^(.*?),\s*[A-Z&]{2,5}(?:\s+[A-Z0-9]{1,5})?$/);
+  return esc(m ? m[1] : w);
 }
 // One award as a row: icon, award name, and the winner (team plate, coach or player).
 function awardRow(h, a) {
