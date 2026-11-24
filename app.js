@@ -176,7 +176,7 @@ function featureCard(g, { ribbon, note = '' } = {}) {
   const recs = records(s, g.week), rk = t => rankOf(t.id, s, g.week);   // record and rank both as of kickoff
   const coach = side => done ? coachOf(g, side) : isUserTeam(side === 'home' ? H : A) ? (side === 'home' ? H : A).coach : 'CPU';
   const hw = +g.homeScore > +g.awayScore;
-  const sideHtml = (t, side, won) => `<div class="gp-team ${done && !won ? 'l' : ''}"><i class="sw big" style="background:${esc(teamColor(t))}"></i><div><div class="gp-name">${rk(t) ? `<span class="rk">#${rk(t)}</span>` : ''}${esc(t.name)}</div>
+  const sideHtml = (t, side, won) => `<div class="gp-team ${done && !won ? 'l' : ''}">${teamPlate(t, 'gp')}<div><div class="gp-name">${rk(t) ? `<span class="rk">#${rk(t)}</span>` : ''}${esc(t.name)}</div>
     <div class="muted small">${rec(recs[t.id])} · ${esc(coach(side))}</div></div>${done ? `<div class="gp-score">${g.forfeit ? (won ? 'FW' : 'FL') : g[side + 'Score']}</div>` : ''}</div>`;
   const ko = kickoffOf(g);
   return `<div class="card gp-head gotw feature" data-game="${esc(g.id)}"><span class="ribbon">${ribbon}</span>
@@ -187,32 +187,38 @@ function featureCard(g, { ribbon, note = '' } = {}) {
     ${note ? `<div class="meta" style="text-align:center;margin-top:8px">${note}</div>` : ''}
     <div class="feat-act"><a class="btn ghost" href="#game/${esc(g.id)}">${done ? 'Recap' : 'Preview'} →</a></div></div>`;
 }
+// Score bug: two team rows (plate, name, coach; score when final, line and win chance before), a win bar, and a
+// one-line footer. Used on Home, Schedule and team pages; the whole card opens the game.
+const teamPlate = (t, cls = '') => `<i class="plate ${cls}" style="background:${esc(teamColor(t))};color:${plateInk(teamColor(t))}">${esc(t.abbr || (t.name || '').slice(0, 4).toUpperCase())}</i>`;
 function gameCard(g, opts = {}) {
-  const h = team(g.home), a = team(g.away), done = played(g);
-  const hw = done && +g.homeScore > +g.awayScore, aw = done && !hw;
-  const tags = [];
-  const gt = gameTags(g); if (gt) tags.push(gt);
-  // (the title game is marked by its gold ribbon instead of a tag)
-  if (g.type === 'bowl') tags.push('<span class="tag">Bowl Season</span>');
-  const l = lineOf(g);
-  let odds = '';
-  if (done && g.forfeit) odds = 'Forfeit win';
-  else if (l && !done) odds = (g.lines ? '' : 'Proj. ') + lineText(g, l);
-  else if (l && done) {
-    const m = +g.homeScore - +g.awayScore + l.spread, fav = l.spread <= 0 ? g.home : g.away, tot = +g.homeScore + +g.awayScore;
-    const cov = m === 0 ? 'Push' : (m > 0 ? team(g.home).abbr : team(g.away).abbr) + ' covered';
-    odds = `${l.spread === 0 ? 'PK' : esc(team(fav).abbr) + ' ' + fmtLine(-Math.abs(l.spread))} · ${esc(cov)} · ${tot > l.total ? 'Over' : tot < l.total ? 'Under' : 'Push'} ${l.total}`;
-  }
-  const sc = (side, won) => done ? `<b class="msc ${won ? 'w' : 'l'}">${g.forfeit ? (won ? 'FW' : 'FL') : g[side + 'Score']}</b>` : '';
-  const status = `<b class="gstat">${done ? 'Final' : esc(gWeek(g))}</b>${done && videoOf(g) ? ' · <span class="vidtag">▶ Broadcast</span>' : ''}`;
+  const h = team(g.home), a = team(g.away), done = played(g), l = lineOf(g), p = winPct(g, l);
+  const hw = done && +g.homeScore > +g.awayScore, aw = done && !hw, champ = g.type === 'ccg';
   // Finished games show who actually coached them (saved on the game); upcoming ones show today's coaches.
   const ca = done ? coachOf(g, 'away') : isUserTeam(a) ? a.coach : 'CPU', ch = done ? coachOf(g, 'home') : isUserTeam(h) ? h.coach : 'CPU';
-  const who = ca !== 'CPU' || ch !== 'CPU' ? ` · ${esc(ca)} ${g.neutral ? 'vs' : '@'} ${esc(ch)}` : '';
-  const champ = g.type === 'ccg';
-  return `<div class="card game clickable${opts.gotw || champ ? ' gotw' : ''}" data-game="${esc(g.id)}">${champ ? `<span class="ribbon">${champRibbon()}</span>` : opts.gotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}<span class="go" aria-hidden="true">›</span><div class="teams">
-      <div class="matchup"><span class="mt ${done ? (aw ? 'w' : 'l') : ''}">${chip(a.id, { season: g.season, week: g.week, href: '#game/' + g.id })}${sc('away', aw)}</span><span class="at">${g.neutral ? 'vs' : '@'}</span><span class="mt ${done ? (hw ? 'w' : 'l') : ''}">${chip(h.id, { season: g.season, week: g.week, href: '#game/' + g.id })}${sc('home', hw)}</span>${tags.join('')}</div>
-      <div class="meta">${status}${who}${!done && kickoffOf(g) ? ` · ${esc(fmtKick(kickoffOf(g), true))}` : ''}</div>
-      ${done || g.forfeit ? '' : probBar(g, l, done)}${!done && odds ? `<div class="meta">${odds}</div>` : ''}${opts.extra || ''}</div></div>`;
+  const me = myTeam(), mine = me && (g.home === me.id || g.away === me.id);
+  const strip = [];
+  if (mine && !done) strip.push('<span class="bugtag mine">YOUR GAME</span>');
+  if (isOpener(g)) strip.push(`<span class="bugtag gold">SEASON OPENER · +${Math.round((OPENER_BOOST - 1) * 100)}% ML BOOST</span>`);
+  if (g.type === 'bowl') strip.push(`<span class="bugtag">${esc((g.note || 'Bowl Season').toUpperCase())}</span>`);
+  const tags = gameTags(g);
+  const row = (t, side, coach, won) => {
+    const rk = rankOf(t.id, g.season, g.week), line = l && l.spread != null ? (side === 'home' ? l.spread : -l.spread) : null;
+    const right = done ? `<b class="bugsc">${g.forfeit ? (won ? 'FW' : 'FL') : g[side + 'Score']}</b>`
+      : `<span class="bugln">${line != null ? esc(fmtLine(line)) : ''}${p ? `<small>${side === 'home' ? p.h : p.a}% to win</small>` : ''}</span>`;
+    return `<div class="bugrow${done ? (won ? ' w' : ' l') : ''}">${teamPlate(t)}<span class="bugteam"><b>${rk ? `<span class="rk">#${rk}</span> ` : ''}${esc(t.name)}${side === 'home' && !g.neutral ? ' <em>home</em>' : ''}</b><span>${coach && coach !== 'CPU' ? 'Coach ' + esc(coach) : 'CPU'}</span></span>${right}</div>`;
+  };
+  let foot = '';
+  if (done && g.forfeit) foot = `${esc(gWeek(g))} · Final · forfeit win`;
+  else if (done && l && l.spread != null) {
+    const m = +g.homeScore - +g.awayScore + l.spread, fav = l.spread <= 0 ? g.home : g.away, tot = +g.homeScore + +g.awayScore;
+    foot = `${esc(gWeek(g))} · Final · ${l.spread === 0 ? 'PK' : esc(team(fav).abbr) + ' ' + fmtLine(-Math.abs(l.spread))} ${m === 0 ? 'pushed' : esc((m > 0 ? h : a).abbr) + ' covered'} · ${tot > l.total ? 'Over' : tot < l.total ? 'Under' : 'Push'} ${l.total}`;
+  } else if (done) foot = `${esc(gWeek(g))} · Final`;
+  else { const ko = kickoffOf(g); foot = `${esc(gWeek(g))} · ${ko ? '🕗 ' + esc(fmtKick(ko, true)) : 'Kickoff not set'}${l && l.total != null ? ` · O/U ${l.total}` : ''}${l && !g.lines ? ' · projected' : ''}`; }
+  return `<div class="card game bug clickable${opts.gotw || champ ? ' gotw' : ''}${mine ? ' mine' : ''}" data-game="${esc(g.id)}">${champ ? `<span class="ribbon">${champRibbon()}</span>` : opts.gotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}
+    ${strip.length || tags ? `<div class="bugstrip">${strip.join('')}${tags}</div>` : ''}
+    ${row(a, 'away', ca, aw)}${row(h, 'home', ch, hw)}
+    ${!done && p ? `<div class="bugbar" style="background:${esc(teamColor(h))}"><i style="width:${p.a}%;background:${esc(teamColor(a))}"></i></div>` : ''}
+    <div class="bugfoot"><span>${foot}${done && videoOf(g) ? ' · <span class="vidtag">▶ Broadcast</span>' : ''}</span><span class="bugopen">${done ? 'Recap' : 'Preview'} ›</span></div>${opts.extra || ''}</div>`;
 }
 const sortTh = (st, key, label, cls = '', tbl = '') => `<th data-sort="${key}"${tbl ? ` data-st="${tbl}"` : ''} class="${cls}${st.key === key ? ' sorted' : ''}">${label}${st.key === key ? (st.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
 function sortRows(rows, st, getters) {
@@ -430,13 +436,30 @@ const PAGES = {
   },
 
   schedule(arg) {
-    const s = S(), weeks = [...new Set(seasonGames().map(g => g.week))].sort((a, b) => a - b);
-    const wk = arg != null && arg !== '' ? +arg : (weeks.includes(curWeek()) ? curWeek() : weeks[weeks.length - 1]);
+    const s = S(), weeks = [...new Set(seasonGames().map(g => g.week))].sort((a, b) => a - b), me = myTeam();
+    const view = arg === 'mine' ? 'mine' : arg === 'h2h' ? 'h2h' : 'week';
+    // Page sections (gold underline) — separate from the week picker below them.
+    const tabs = [['week', 'This season', '#schedule'], ...(me ? [['mine', 'My games', '#schedule/mine'], ['h2h', 'Head-to-head', '#schedule/h2h']] : [])];
+    let html = tabs.length > 1 ? `<div class="subtabs inpage" role="tablist">${tabs.map(([k, l, h]) => `<a role="tab" href="${h}" class="${k === view ? 'on' : ''}" aria-selected="${k === view}">${l}</a>`).join('')}</div>` : '';
+    if (view === 'mine') {
+      const gs = D.games.filter(g => g.season === s && (g.home === me.id || g.away === me.id)).sort((a, b) => a.week - b.week);
+      const R = records(s)[me.id] || { w: 0, l: 0 };
+      return html + `<h2>${esc(me.name)} · ${s}</h2><p class="h2sub">${R.w}-${R.l} so far · ${gs.filter(g => !played(g)).length} game${gs.filter(g => !played(g)).length === 1 ? '' : 's'} left</p>` + (gs.length ? gs.map(g => gameCard(g)).join('') : '<div class="card empty">No games scheduled yet.</div>');
+    }
+    if (view === 'h2h') {
+      const mc = canonCoach(me.coach || ''), C = coachStats(), mine = C[Object.keys(C).find(k => k.toLowerCase() === mc.toLowerCase())];
+      const rows = userTeams().filter(t => t.id !== me.id).map(t => { const v = mine && mine.vs[Object.keys(mine.vs).find(k => k.toLowerCase() === canonCoach(t.coach).toLowerCase())]; return { t, w: v ? v.w : 0, l: v ? v.l : 0 }; })
+        .sort((a, b) => (b.w + b.l) - (a.w + a.l) || b.w - a.w);
+      return html + `<h2>Head-to-Head</h2><p class="h2sub">Your all-time record against every coach in the league. Tap a coach for every game.</p>
+        <div class="card"><table class="compact"><tr><th>Coach</th><th>Team now</th><th class="num">Record</th></tr>${rows.map(r => `<tr class="clickable" onclick="location.hash='#coach/${esc(slug(r.t.coach))}'"><td><a href="#coach/${esc(slug(r.t.coach))}">${esc(r.t.coach)}</a></td><td>${chip(r.t.id, { abbr: true, rank: false })}</td><td class="num"><b class="${r.w > r.l ? 'win' : r.w < r.l ? 'loss' : ''}">${r.w}-${r.l}</b></td></tr>`).join('')}</table></div>`;
+    }
+    const wk = arg != null && arg !== '' && !isNaN(+arg) ? +arg : (weeks.includes(curWeek()) ? curWeek() : weeks[weeks.length - 1]);
     const games = D.games.filter(g => g.season === s && g.week === wk);
-    const gt = gotwTally(s, wk).game;
-    return `<div class="row spread schedhead"><h2 style="margin:0">Schedule &amp; Scores</h2>
-      <select data-nav="schedule" aria-label="Week">${weeks.map(w => `<option value="${w}" ${w === wk ? 'selected' : ''}>${esc(wkName(w, s))}</option>`).join('')}</select></div>
-      ${games.length ? weekOrder(games, gt && gt.id).map(g => gameCard(g, { gotw: gt && gt.id === g.id })).join('') : '<div class="card empty">No games for this week.</div>'}`;
+    const gt = gotwTally(s, wk).game, short = w => { const n = wkName(w, s); return n === 'League Title' ? 'Title' : n === 'Bowl Season' ? 'Bowls' : String(w); };
+    html += `<div class="weekpick"><span class="wp-lbl">WEEK</span><div class="wp-row">${weeks.map(w => `<a href="#schedule/${w}" class="wp${w === wk ? ' on' : ''}${w === curWeek() && s === D.league.season ? ' now' : ''}" aria-label="${esc(wkName(w, s))}"${w === wk ? ' aria-current="true"' : ''}>${esc(short(w))}</a>`).join('')}</div></div>`;
+    const n = games.length, left = games.filter(g => !played(g)).length;
+    html += `<h2>${esc(wkName(wk, s))}${wk === curWeek() && s === D.league.season ? ' · This Week' : ''}</h2><p class="h2sub">${n ? `${n} game${n === 1 ? '' : 's'}${left && left < n ? ` · ${left} still to play` : !left ? ' · all final' : ''} · tap a game for its preview, odds and bets` : 'No games this week.'}</p>`;
+    return html + (n ? weekOrder(games, gt && gt.id).map(g => gameCard(g, { gotw: gt && gt.id === g.id })).join('') : '<div class="card empty">No games for this week.</div>');
   },
 
   odds(focus) {
@@ -2429,7 +2452,7 @@ PAGES.game = function (id) {
   const stv = r => { const x = streak(r); return /^[WL]\d+$/.test(x) ? (x[0] === 'W' ? 1 : -1) * +x.slice(1) : null; };
   const num = (P, k) => P.gp ? P[k] / P.gp : null, rkv = v => v || 999, nz = v => +v || null;
   const ppg = P => P.gp ? (P.pf / P.gp).toFixed(1) : '–', papg = P => P.gp ? (P.pa / P.gp).toFixed(1) : '–', rec3 = a => a[0] + a[1] + a[2] ? `${a[0]}-${a[1]}${a[2] ? '-' + a[2] : ''}` : '–';
-  const side = (t, coach, scr, won) => `<div class="gp-team ${done && !won ? 'l' : ''}"><i class="sw big" style="background:${esc(teamColor(t))}"></i><div><div class="gp-name">${rk(t) ? `<span class="rk">#${rk(t)}</span>` : ''}<a href="#team/${esc(t.id)}${s === L.season ? '' : '/' + s}">${esc(t.name)}</a></div>
+  const side = (t, coach, scr, won) => `<div class="gp-team ${done && !won ? 'l' : ''}">${teamPlate(t, 'gp')}<div><div class="gp-name">${rk(t) ? `<span class="rk">#${rk(t)}</span>` : ''}<a href="#team/${esc(t.id)}${s === L.season ? '' : '/' + s}">${esc(t.name)}</a></div>
     <div class="muted small">${rec(recs[t.id])}${coach && coach !== 'CPU' ? ` · <a href="#coach/${slug(coach)}">${esc(coach)}</a>` : ' · CPU'}</div></div>${done ? `<div class="gp-score">${g.forfeit ? (won ? 'FW' : 'FL') : scr}</div>` : ''}</div>`;
   const hw = +g.homeScore > +g.awayScore;
   const ko = kickoffCard(g);
@@ -2546,6 +2569,7 @@ function route() {
     $('#subnav').hidden = subs.length <= 1;
   }
   // Keep the selected tab in view when the tab bar scrolls sideways (phones).
+  requestAnimationFrame(() => { const wp = $('.wp-row .wp.on'), wr = $('.wp-row'); if (wp && wr && wr.scrollWidth > wr.clientWidth) wr.scrollLeft = Math.max(0, wp.offsetLeft - (wr.clientWidth - wp.offsetWidth) / 2); });
   requestAnimationFrame(() => { const on = $('#subnav a.on'), n = $('#subnav'); if (on && n.scrollWidth > n.clientWidth) n.scrollLeft = Math.max(0, on.offsetLeft - (n.clientWidth - on.offsetWidth) / 2); });
   header();
   try { $('#view').innerHTML = (PAGES[page] || PAGES.home)(decodeURIComponent(arg || '')); parlayBar(); nameFields($('#view')); }
