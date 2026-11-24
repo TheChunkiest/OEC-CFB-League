@@ -1,5 +1,15 @@
 {
- "live": false,
+ "live": true,
+ "videoId": "dG3RW1qdo3E",
+ "url": "https://www.youtube.com/watch?v=dG3RW1qdo3E",
+ "title": "OEC CFB League S4 W0 2029 Liberty vs #23 Colorado",
+ "streams": [
+  {
+   "videoId": "dG3RW1qdo3E",
+   "url": "https://www.youtube.com/watch?v=dG3RW1qdo3E",
+   "title": "OEC CFB League S4 W0 2029 Liberty vs #23 Colorado"
+  }
+ ],
  "notified": "HakDMpJWDRs",
  "notifiedIds": [
   "qwkTlJND-FM",
@@ -12,5 +22,6 @@
   "ZIiNV2zaP1I",
   "RHj5SJJ92Kg",
   "HakDMpJWDRs"
- ]
+ ],
+ "checkedAt": 1795501886518
 }
