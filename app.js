@@ -2115,7 +2115,17 @@ function statsBoard(s) {
       <td class="hide-sm muted small">${rec(records(s)[l.t.id])}</td><td class="num tsv"><b>${l.x.f}</b>${w ? `<i style="width:${w.toFixed(0)}%;background:${esc(liftColor(teamColor(l.t)))}"></i>` : ''}</td></tr>`; }).join('');
   return `<h2>${s} Season Stats</h2><div class="card"><div class="row" style="gap:6px;flex-direction:column;align-items:center;text-align:center"><select data-tstat aria-label="Stat">${opts.map(([g, rows]) => `<optgroup label="${g}">${rows.map(([k, l]) => `<option value="${k}" ${k === key ? 'selected' : ''}>${l}</option>`).join('')}</optgroup>`).join('')}</select>
     ${tip ? `<span class="muted small">${esc(tip)}</span>` : ''}</div>
-    <div class="tablewrap" style="margin-top:8px"><table class="tsboard"><tr><th>#</th><th>Team</th><th class="hide-sm">Record</th><th class="num sortable" data-tsflip="1">${esc(label)} ${UI.tsFlip ? '▲' : '▼'}</th></tr>${rows}</table></div></div>`;
+    <div class="tablewrap" style="margin-top:8px"><table class="tsboard"><tr><th>#</th><th>Team</th><th class="hide-sm">Record</th><th class="num sortable" data-tsflip="1">${esc(label)} ${UI.tsFlip ? '▲' : '▼'}</th></tr>${rows}</table></div>${seasonTrend(s, key, label, dir0)}</div>`;
+}
+// Stats page graph: the stat picked above, week by week through this season, one line per league coach. It shows up
+// once two weeks have scores and redraws after every advance. Ratings, schedule strength, power rank and odds aren't
+// tracked week to week, so those stats skip the graph (title odds have their own chart on Odds & Trends).
+const TREND_OF = { rec: 'rec', ppg: 'ppg', papg: 'papg', diff: 'diff', home: 'home', away: 'away', close: 'close', ats: 'ats', fav: 'fav', dog: 'dog' };
+function seasonTrend(s, key, label, dir0) {
+  const ck = TREND_OF[key];
+  if (!ck) return `<p class="muted small" style="margin:10px 0 0;text-align:center">${key === 'title' ? 'Title odds over time are on <a href="#odds">Odds &amp; Trends</a>.' : 'This stat has no week-by-week graph. Pick a result, scoring or betting stat to see one.'}</p>`;
+  const coaches = leagueTeams().filter(isUserTeam).map(t => ({ n: t.coach, col: teamColor(t) }));
+  return coachTrend(s, ck, label, dir0 || 1, coaches) || `<p class="muted small" style="margin:10px 0 0;text-align:center">📈 A week-by-week graph of this stat shows up here once two weeks of games are in.</p>`;
 }
 function teamStatsCard(tid, s) {
   // Past seasons rank against that season's league members (teams a league coach ran that year).
