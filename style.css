@@ -1126,3 +1126,7 @@ table.h2h .h2hrow.on td{border-bottom-color:transparent}
 .badge b.word{font-family:var(--body);font-weight:800;font-size:16px;letter-spacing:.2px;line-height:1.2;white-space:nowrap}
 @media(max-width:640px){.badge b.word{font-size:14px}}
 .awvote .btn,.awpop .btn{padding:10px 18px;border-radius:10px;min-height:40px}
+.pkrow{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:6px 8px;border-radius:8px;flex-wrap:wrap}
+.pkrow+.pkrow{border-top:1px solid var(--line)}
+.pkrow.hit{background:rgba(46,160,67,.14)}
+.pkrow>span:last-child{text-align:right}

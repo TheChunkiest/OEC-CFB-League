@@ -283,6 +283,11 @@ jobs:
                         if av.get('open') and av.get('season') and av.get('season') != st.get('awOpen'):
                             body = (body[:110] + '…' if len(body) > 110 else body) + ' 🗳️ Awards voting is open: cast your ballot.'
                             st['awOpen'] = av['season']
+                        # Publishing a new season opens preseason picks: say so in the same notification.
+                        pp = lg.get('prePicks') or {}
+                        if pp.get('open') and pp.get('season') == lg.get('season') and pp.get('season') != st.get('pkOpen'):
+                            body = (body[:100] + '…' if len(body) > 100 else body) + ' 🔮 Preseason picks are open: make yours before the first game.'
+                            st['pkOpen'] = pp['season']
                         to('advance', t, body, link + '#home', tag='advance')
                         st['adv'] = advkey
                     # League awards announced (the commissioner finalized the season with winners)

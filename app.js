@@ -5,8 +5,8 @@ import {
   gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, wkName, gWeek, champOpen, titleSet, DIAG, storylines, seasonStorylines, RELIEF, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory, legLabel
 , playbookOf, pbSeason, pbText
 , AWARD_DEFS, awardGames, awardGameLabel, awardCoaches
-, curWeek, wkShort, wkOf, phaseName
-} from './core.js?v=106';
+, curWeek, wkShort, wkOf, phaseName, PICK_DEFS, picksOpen, pickAnswers, loadPicks, pickFacts
+} from './core.js?v=109';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -370,7 +370,7 @@ const PAGES = {
     const leaders = bettors().map(u => ({ u, b: bankroll(u.id) })).sort((a, b) => b.b.net - a.b.net || b.b.balance - a.b.balance).slice(0, 5);
     let html = installTip();
     if (L.desk && L.desk.show && L.desk.text) html += `<div class="card banner"><h2>Commissioner's Desk</h2><div style="white-space:pre-wrap">${esc(L.desk.text)}</div></div>`;
-    html += awardsVoteCard() + offseasonAwardsCard();
+    html += picksCard() + awardsVoteCard() + offseasonAwardsCard();
     const ccgNow = games.find(g => g.type === 'ccg');
     if (ccgNow && !gt.game) html += featureCard(ccgNow, { ribbon: champRibbon(), note: played(ccgNow) ? 'League champion crowned' : '' });
     if (gt.game) html += featureCard(gt.game, { ribbon: '★ Game of the Week' });
@@ -612,6 +612,8 @@ const PAGES = {
       ${next.map(g => `<label class="vote-opt ${mine && mine.gameId === g.id ? 'on' : ''}"><input type="radio" name="gotw" value="${esc(g.id)}" ${mine && mine.gameId === g.id ? 'checked' : ''} ${canVote ? '' : 'disabled'}>
         <span style="flex:1">${chip(g.away)} @ ${chip(g.home)} ${gameTags(g)}</span><span class="muted small">${tally.counts[g.id] || 0} vote${tally.counts[g.id] === 1 ? '' : 's'}</span></label>`).join('')}
       ${canVote ? `<button data-act="gotw" style="margin-top:8px">${mine ? 'Change vote' : 'Submit vote'}</button>` : ''}</div>`;
+    const pk = picksSection(s, me, canVote);
+    if (picksOpen()) html = html + pk; 
     // Season awards
     const A = L.awards || {};
     html += `<h2 id="awards-ballot">${s} Season Awards</h2>`;
@@ -632,6 +634,7 @@ const PAGES = {
         ${AWARD_DEFS.map(d => `<div class="awcat"><h3>${d.key === 'coty' ? '🏅 ' : ''}${esc(d.label)}</h3>${field(d)}</div>`).join('')}
         ${canVote ? `<button data-act="ballot" style="margin-top:12px">${ballot.id ? 'Update ballot' : 'Submit ballot'}</button>` : ''} <span id="bmsg" class="muted"></span></div>`;
     }
+    if (!picksOpen()) html += pk;
     return html;
   },
 
@@ -1731,6 +1734,48 @@ function awardsVoteCard() {
   const btn = !me ? '<a class="btn" href="#account">Log in to vote →</a>' : coach ? `<a class="btn${mine ? ' ghost' : ' gold'}" href="#vote/awards">${mine ? 'Review my ballot →' : 'Cast my ballot →'}</a>` : '<a class="btn ghost" href="#vote/awards">See the ballot →</a>';
   return `<div class="card gotw awvote"><span class="ribbon">🗳️ Season ${seasonNum(L.season)} Awards · Voting Open</span><p style="margin:6px 0 10px;text-align:center">${msg}</p><div style="text-align:center">${btn}</div></div>`;
 }
+// ---- Preseason picks ----
+// Vote page: the ballot while picks are open; afterwards everyone's picks, and once the awards are in, who called it.
+function picksSection(s, me, canVote) {
+  const L = D.league, open = picksOpen(), pp = L.prePicks;
+  const mine = me && D.picks.find(p => p.season === s && p.uid === me.id), P = (mine && mine.picks) || {};
+  const head = `<h2 id="picks">🔮 ${s} Preseason Picks</h2>`;
+  if (open) {
+    const dis = canVote ? '' : 'disabled', teams = leagueTeams().slice().sort((a, b) => a.name.localeCompare(b.name)), coaches = awardCoaches();
+    const field = d => d.type === 'coach'
+      ? `<select data-pk="${d.key}" ${dis} aria-label="${esc(d.label)}"><option value="">Pick a coach</option>${coaches.map(c => `<option ${P[d.key] === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`
+      : `<select data-pk="${d.key}" ${dis} aria-label="${esc(d.label)}"><option value="">Pick a team</option>${teams.map(t => `<option value="${esc(t.id)}" ${P[d.key] === t.id ? 'selected' : ''}>${esc(t.name)}${t.coach ? ` (${esc(t.coach)})` : ''}</option>`).join('')}</select>`;
+    return head + `<div class="card awballot"><p class="muted small" style="margin-top:0">Call the season before it starts. Picks lock when the first game of the season is in, then everyone's picks go public. After the awards are announced, see who called it.</p>
+      ${PICK_DEFS.map(d => `<div class="awcat"><h3>${d.key === 'champ' ? '🏆 ' : d.key === 'coty' ? '🏅 ' : ''}${esc(d.label)}</h3>${field(d)}</div>`).join('')}
+      ${canVote ? `<button data-act="prepicks" style="margin-top:12px">${mine ? 'Update my picks' : 'Lock in my picks'}</button> <span id="pkmsg" class="muted"></span>` : ''}</div>`;
+  }
+  // Closed: show the season's picks (the season being viewed, or the last one that had picks).
+  if (!D.picksLoaded) { loadPicks().then(() => { if (location.hash.startsWith('#vote')) route(); }); return ''; }
+  const seasons = [...new Set(D.picks.map(p => p.season))].sort((a, b) => b - a), ps = seasons.includes(s) ? s : seasons[0];
+  if (ps == null) return pp && pp.season === s ? head + '<div class="card empty">Nobody made preseason picks this season.</div>' : '';
+  const all = D.picks.filter(p => p.season === ps), ans = pickAnswers(ps);
+  const name = (d, v) => d.type === 'coach' ? esc(v) : chip(v, { season: ps, rank: false });
+  const score = {}; if (ans) all.forEach(p => score[p.coach] = PICK_DEFS.filter(d => ans[d.key] && p.picks?.[d.key] && (d.type === 'coach' ? String(ans[d.key]).toLowerCase() === String(p.picks[d.key]).toLowerCase() : ans[d.key] === p.picks[d.key])).length);
+  const cats = PICK_DEFS.map(d => {
+    const by = {}; all.forEach(p => { const v = p.picks?.[d.key]; if (v) (by[v] = by[v] || []).push(p.coach); });
+    const rows = Object.entries(by).sort((a, b) => b[1].length - a[1].length); if (!rows.length) return '';
+    const hit = v => ans && ans[d.key] && (d.type === 'coach' ? String(ans[d.key]).toLowerCase() === String(v).toLowerCase() : ans[d.key] === v);
+    return `<div class="awcat"><h3>${esc(d.label)}${ans && ans[d.key] ? ` <span class="muted small">· winner: ${name(d, ans[d.key])}</span>` : ''}</h3>
+      ${rows.map(([v, cs]) => `<div class="pkrow${hit(v) ? ' hit' : ''}"><span>${hit(v) ? '✅ ' : ''}${name(d, v)}</span><span class="muted small">${cs.map(esc).join(', ')}</span></div>`).join('')}</div>`;
+  }).join('');
+  const board = ans ? `<div class="awcat"><h3>🎯 Who called it</h3>${Object.entries(score).sort((a, b) => b[1] - a[1]).map(([c, n], i) => `<div class="pkrow${i === 0 && n ? ' hit' : ''}"><span>${esc(c)}</span><b>${n} of ${PICK_DEFS.length}</b></div>`).join('')}</div>` : '';
+  return `<h2 id="picks">🔮 ${ps} Preseason Picks</h2><div class="card awballot"><p class="muted small" style="margin-top:0">${ans ? 'How everyone\'s preseason calls turned out.' : `Locked in before the first game. ${all.length} coach${all.length === 1 ? '' : 'es'} made picks; results come with the season awards.`}</p>${board}${cats}</div>`;
+}
+// Home: while picks are open, a card that takes coaches to them.
+function picksCard() {
+  if (!picksOpen()) return '';
+  const L = D.league, me = auth.profile, coach = me && me.teamId, mine = coach && D.picks.find(p => p.season === L.season && p.uid === me.id);
+  const msg = !me ? 'Coaches call the season before it starts: champion, best offense and defense, Coach of the Year. Log in to make yours.'
+    : !coach ? 'League coaches are making their preseason picks. They go public once the first game is in.'
+    : mine ? 'Your picks are in. You can change them until the first game of the season is in.' : "Call the season before it starts: champion, best offense and defense, special teams, Coach of the Year. Picks lock at the first game.";
+  const btn = !me ? '<a class="btn" href="#account">Log in to pick →</a>' : coach ? `<a class="btn${mine ? ' ghost' : ' gold'}" href="#vote/picks">${mine ? 'Review my picks →' : 'Make my picks →'}</a>` : '';
+  return `<div class="card gotw awvote"><span class="ribbon">🔮 Season ${seasonNum(L.season)} Preseason Picks · Open</span><p style="margin:6px 0 10px;text-align:center">${msg}</p><div style="text-align:center">${btn}</div></div>`;
+}
 // Match a typed name to a league coach (case-insensitive).
 const coachName = n => { const k = String(n || '').trim().toLowerCase(); return Object.values(coachStats()).map(c => c.name).find(c => c.toLowerCase() === k) || ''; };
 function teamProfile(tid, s, upto = Infinity) {
@@ -2268,6 +2313,8 @@ PAGES.game = function (id) {
     if (P.dog[0] + P.dog[1] >= 2) trends.push(`${t.name} ${is} <b>${P.dog[0]}-${P.dog[1]}</b> straight up as an underdog.`);
     const st = streak(recs0[t.id]); if (/^[WL]\d+$/.test(st) && +st.slice(1) >= 3) trends.push(`${t.name} ${has} ${st[0] === 'W' ? 'won' : 'lost'} <b>${st.slice(1)} straight</b>.`);
   });
+  // A preseason-picks tidbit on most games (same one each time the page opens), once picks are public.
+  if (s === L.season && rng() < 0.65) { const f = [...pickFacts(A.id, s), ...pickFacts(H.id, s)]; if (f.length) trends.splice(Math.min(2, trends.length), 0, '🔮 ' + esc(pick(f))); }
   if (meets.length >= 2) { const wa = mw[coachA] || 0, wh = mw[coachH] || 0; trends.push(`${coachA} ${is} <b>${wa}-${wh}</b> all-time against ${coachH}${done ? ' going in' : ''}.`); }
 
   // ----- render -----
@@ -2401,12 +2448,12 @@ function route() {
   // New page: start at the top, or at the row a storyline pointed to.
   if (route.last !== location.hash) {
     const first = route.last == null; route.last = location.hash;
-    const f = page === 'odds' && arg && document.getElementById('odds-' + arg) || page === 'vote' && arg === 'awards' && document.getElementById('awards-ballot');
+    const f = page === 'odds' && arg && document.getElementById('odds-' + arg) || page === 'vote' && arg === 'awards' && document.getElementById('awards-ballot') || page === 'vote' && arg === 'picks' && document.getElementById('picks');
     if (f) requestAnimationFrame(() => f.scrollIntoView({ block: page === 'vote' ? 'start' : 'center' }));
     else if (!first) window.scrollTo(0, 0);
   }
 }
-async function reload() { await loadAll(); refreshProfile(); if (D.league.awards?.open && auth.user) await loadBallots(false); route(); }
+async function reload() { await loadAll(); refreshProfile(); if (D.league.awards?.open && auth.user) await loadBallots(false); if (picksOpen() && auth.user) await loadPicks(); route(); }
 
 document.addEventListener('click', async e => {
   const vl = e.target.closest('[data-vidlist]'); if (vl) { e.preventDefault(); showVideoList(vl.dataset.vidlist); return; }
@@ -2504,6 +2551,13 @@ document.addEventListener('click', async e => {
     const v = $('input[name=gotw]:checked'); if (!v) return alert('Pick a game first.');
     const s = S(), w = D.league.week + 1, uid = auth.profile.id;
     try { await put('gotw', `${s}_${w}_${uid}`, { season: s, week: w, uid, gameId: v.value }, false); await reload(); } catch (err) { alert('Vote failed: ' + err.message); }
+  } else if (t.dataset.act === 'prepicks') {
+    if (!picksOpen()) return alert('Preseason picks are closed: the season has started.');
+    const picks = {}; PICK_DEFS.forEach(d => { const v = $(`[data-pk="${d.key}"]`)?.value; if (v) picks[d.key] = v; });
+    if (!Object.keys(picks).length) return alert('Make at least one pick.');
+    const s = S(), uid = auth.profile.id;
+    try { await put('picks', `${s}_${uid}`, { season: s, uid, coach: auth.profile.name, picks, ts: Date.now() }, false); await loadPicks(); route(); const m = $('#pkmsg'); if (m) m.textContent = 'Picks saved ✓'; }
+    catch (err) { alert('Could not save picks: ' + err.message); }
   } else if (t.dataset.act === 'ballot') {
     const picks = {};
     for (const d of AWARD_DEFS) {
@@ -2554,7 +2608,7 @@ document.addEventListener('submit', async e => {
     loadVideos().then(() => { if (VIDS && /^#(game|schedule|home|team)/.test(location.hash || '#home')) route(); });
     loadMoments();
     checkLive();
-    await watchAuth(async () => { if (D.league.awards?.open && auth.user) await loadBallots(false); try { await ensureFutures(); } catch (e) { console.warn('futures post failed', e); } route(); showResultsPopup(); });
+    await watchAuth(async () => { if (D.league.awards?.open && auth.user) await loadBallots(false); if (picksOpen() && auth.user) await loadPicks(); try { await ensureFutures(); } catch (e) { console.warn('futures post failed', e); } route(); showResultsPopup(); });
   } catch (e) {
     console.error(e);
     $('#view').innerHTML = `<div class="card"><b>Couldn't load league data.</b><p class="muted">${esc(e.message)}. If you opened index.html straight from your computer, publish it with GitHub Pages (or run a local server).</p></div>`;

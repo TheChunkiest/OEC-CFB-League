@@ -19,7 +19,7 @@ export const DEMO = !firebaseConfig || !firebaseConfig.apiKey || /PASTE|YOUR/i.t
 const FBV = '10.12.2';
 let fb = null;
 
-export const D = { league: {}, recruiting: { class: '', rows: [] }, teams: [], games: [], users: [], wagers: [], gotw: [], history: [], ballots: [], invites: [] };
+export const D = { league: {}, recruiting: { class: '', rows: [] }, teams: [], games: [], users: [], wagers: [], gotw: [], history: [], ballots: [], invites: [], picks: [] };
 const COLS = ['teams', 'games', 'users', 'wagers', 'gotw', 'history', 'invites'];
 
 export function defaultLeague() {
@@ -186,6 +186,10 @@ export const newId = () => Date.now().toString(36) + Math.random().toString(36).
 
 export async function batch(ops) {
   if (!ops.length) return;
+  // The season's first score closes preseason picks.
+  const pp = D.league.prePicks;
+  if (pp && pp.open && ops.some(o => o.col === 'games' && o.op !== 'del' && o.data && o.data.homeScore != null) && !ops.some(o => o.col === 'meta' && o.data && o.data.prePicks))
+    ops = [...ops, { op: 'set', col: 'meta', id: 'league', data: { prePicks: await closedPicks() } }];
   if (DEMO) { ops.forEach(demoApply); demoSave(); clearCache(); return; }
   const { fs, db } = await fbInit();
   for (let i = 0; i < ops.length; i += 400) {
@@ -225,6 +229,53 @@ export async function refreshWagers() {
 export const isSpectator = u => !!u && !u.teamId;
 export const bettors = (season = D.league.season) => D.users.filter(u => u.teamId || D.wagers.some(w => w.uid === u.id && w.season === season && !w.deleted));
 export const selKey = l => l.market === 'future' ? 'future|' + l.pick : l.market === 'wins' ? `wins|${l.team}|${l.pick}` : `${l.market}|${l.gameId}|${l.pick}`;
+// Preseason picks (doc id season_uid). While they're open each coach only sees their own; once the season's first
+// game is in they're public, so everyone can see who picked what.
+export async function loadPicks() {
+  if (DEMO) { D.picksLoaded = true; return D.picks; }
+  const { fs, db } = await fbInit();
+  try {
+    if (picksOpen()) {
+      if (!auth.user) return D.picks;
+      const s = await fs.getDoc(fs.doc(db, 'picks', D.league.season + '_' + auth.user.uid));
+      D.picks = s.exists() ? [{ ...s.data(), id: s.id }] : [];
+    } else { D.picksLoaded = true; const s = await fs.getDocs(fs.collection(db, 'picks')); D.picks = s.docs.map(d => ({ ...d.data(), id: d.id })); }
+  } catch (e) { console.warn('picks', e); }
+  return D.picks;
+}
+// Everyone's picks for the season, counted: { n, champ: { teamId: [coach, ...] }, offense: {...}, ..., coty: { coach: [...] } }.
+export async function pickTally(season = D.league.season) {
+  let all = D.picks.filter(p => p.season === season);
+  if (!DEMO) { const { fs, db } = await fbInit(); const q = await fs.getDocs(fs.query(fs.collection(db, 'picks'), fs.where('season', '==', season))); all = q.docs.map(d => d.data()); }
+  const t = { n: all.length };
+  PICK_DEFS.forEach(d => { t[d.key] = {}; all.forEach(p => { const v = p.picks && p.picks[d.key]; if (v) (t[d.key][v] = t[d.key][v] || []).push(p.coach || ''); }); });
+  return t;
+}
+export async function closedPicks() {
+  const pp = D.league.prePicks || { season: D.league.season };
+  let tally = pp.tally || null; try { tally = await pickTally(pp.season); } catch (e) { console.warn('pick tally', e); }
+  return { ...pp, open: false, closedAt: pp.closedAt || Date.now(), ...(tally ? { tally } : {}) };
+}
+// Little preseason-pick facts about a team (and its coach) for storylines and game pages, once picks are closed.
+export function pickFacts(id, season = D.league.season) {
+  const pp = D.league.prePicks, T = pp && pp.season === season && !pp.open && pp.tally; if (!T || !T.n) return [];
+  const t = team(id), N = T.n, out = [], cnt = (k, v) => ((T[k] || {})[v] || []).length;
+  const share = k => { const c = cnt(k, id); return c === N ? `all ${N} coaches` : c * 2 > N ? `${Math.round(100 * c / N)}% of coaches` : `${c} of ${N} coaches`; };
+  const R = records(season), gp = Object.values(R).filter(r => r.w + r.l), me = R[id], g = me ? me.w + me.l : 0;
+  const rankBy = f => g ? 1 + gp.filter(r => f(r) > f(me)).length : 0;
+  if (cnt('champ', id)) out.push(`In the preseason, ${share('champ')} picked ${t.name} to win the league${g ? `. They're ${me.w}-${me.l} so far` : ''}.`);
+  else if (g >= 3 && me.l === 0) out.push(`Nobody picked ${t.name} to win the league in the preseason, and they're still unbeaten at ${me.w}-0.`);
+  if (cnt('offense', id)) out.push(`${share('offense')[0].toUpperCase() + share('offense').slice(1)} picked ${t.name} for Best Offense before the season${g ? `. They're ${ordinal(rankBy(r => r.pf / (r.w + r.l)))} in scoring at ${(me.pf / g).toFixed(1)} a game` : ''}.`);
+  if (cnt('defense', id)) out.push(`${share('defense')[0].toUpperCase() + share('defense').slice(1)} picked ${t.name} for Best Defense before the season${g ? `. They're ${ordinal(rankBy(r => -r.pa / (r.w + r.l)))} in points allowed (${(me.pa / g).toFixed(1)} a game)` : ''}.`);
+  if (cnt('special', id) * 2 > N) out.push(`${share('special')[0].toUpperCase() + share('special').slice(1)} picked ${t.name} for Best Special Teams in the preseason.`);
+  const c = (t.coach || '').trim();
+  if (c && isUserTeam(t)) {
+    const k = Object.keys(T.coty || {}).find(x => x.toLowerCase() === c.toLowerCase()), n = k ? T.coty[k].length : 0;
+    if (n) out.push(`${n === 1 ? 'One coach' : `${n} coaches`} picked ${c} for Coach of the Year in the preseason${g ? ` (${me.w}-${me.l} so far)` : ''}.`);
+    if (Object.entries(T.champ || {}).some(([tid, cs]) => tid === id && cs.some(x => x.toLowerCase() === c.toLowerCase()))) out.push(`${c} picked ${t.name} to win the league. Confidence, at least.`);
+  }
+  return out;
+}
 export async function loadBallots(all) {
   if (DEMO) return D.ballots;
   const { fs, db } = await fbInit();
@@ -1097,6 +1148,10 @@ export async function fixPostWeek() {
 export async function ensureFutures() {
   const L = D.league;
   try { await fixPostWeek(); } catch (e) { console.warn('postseason week', e); }
+  // Close picks once the season has started, and keep a tally of them on the league doc (storylines and game pages
+  // quote it, at no extra reads).
+  if (isCommish() && L.prePicks && L.prePicks.season === L.season && ((L.prePicks.open && !picksOpen()) || (!L.prePicks.open && !L.prePicks.tally)))
+    try { await put('meta', 'league', { prePicks: await closedPicks() }); } catch (e) { console.warn('picks close', e); }
   if (DEMO || !isCommish() || (L.phase !== PHASES.REG && L.phase !== PHASES.CCG)) return false;
   if (L.phase === PHASES.REG && !(L.gotw && L.gotw.season === L.season && L.gotw.week === L.week)) await put('meta', 'league', { gotw: { season: L.season, week: L.week, gameId: gotwTally(L.season, L.week).game?.id || '' } });
   // Title game first, on its own, so nothing below can hold it up.
@@ -1597,6 +1652,18 @@ export function storylines() {
   if (hot) pool.push({ href: '#team/' + hot.t.id, tag: 'Hot Streak', title: pk([`${hot.t.name} has won ${hot.st.slice(1)} straight`, `${hot.t.name} is on a heater: ${hot.st.slice(1)} in a row`, `Can anyone stop ${hot.t.name}?`, `${hot.st.slice(1)} straight and counting for ${hot.t.name}`]), body: `${hot.t.coach} is ${rec(recs[hot.t.id])} and rolling into Week ${L.week}.${nextTxt(hot.t.id)}` });
   const cold = userTeams().map(t => ({ t, st: streak(recs[t.id]) })).filter(x => /^L\d+$/.test(x.st) && +x.st.slice(1) >= 3).sort((a, b) => b.st.slice(1) - a.st.slice(1))[0];
   if (cold) pool.push({ href: '#team/' + cold.t.id, tag: 'Cold Streak', title: pk([`${cold.t.name} needs a win, badly`, `${cold.st.slice(1)} straight losses for ${cold.t.name}`, `Can ${cold.t.coach} stop the slide?`]), body: `${poss(cold.t.coach)} ${cold.t.name} has dropped ${cold.st.slice(1)} in a row and sits at ${rec(recs[cold.t.id])}.${nextTxt(cold.t.id)}` });
+  // Preseason picks: only when a team the league picked has a coach-vs-coach game this week. The most-picked team in such a game gets the story.
+  const T = (L.prePicks && L.prePicks.season === s && !L.prePicks.open && L.prePicks.tally) || null;
+  if (T) {
+    const big = g => g.type === 'ccg' || (isUserTeam(team(g.home)) && isUserTeam(team(g.away)));   // coach vs coach (the title game included)
+    const weight = id => ['champ', 'offense', 'defense', 'special'].reduce((n, k) => n + ((T[k] || {})[id] || []).length, 0);
+    const cand = nextGames.filter(big).flatMap(g => [g.home, g.away].map(id => ({ g, id, w: weight(id), f: pickFacts(id, s) }))).filter(x => x.w && x.f.length).sort((a, b) => b.w - a.w)[0];
+    if (cand) {
+      const o = cand.g.home === cand.id ? cand.g.away : cand.g.home, ot = team(o);
+      out.push({ href: '#game/' + cand.g.id, tag: 'Preseason Picks', title: pk([`Preseason pick on the spot: ${team(cand.id).name}`, `Big test for a preseason pick: ${team(cand.id).name}`, `Did the league call it? ${team(cand.id).name} vs ${ot.name}`]),
+        body: `${pk(cand.f)} This week: ${cand.g.type === 'ccg' ? 'the title game against ' : cand.g.neutral ? 'vs ' : cand.g.home === cand.id ? 'hosting ' : 'at '}${rankName(o)}.` });
+    }
+  }
   const unbeaten = leagueTeams().filter(t => recs[t.id].l === 0 && recs[t.id].w >= 3);
   if (unbeaten.length && unbeaten.length <= 3) pool.push({ href: unbeaten.length === 1 ? '#team/' + unbeaten[0].id : '#standings', tag: 'Unbeaten Watch', title: unbeaten.length === 1 ? pk([`${unbeaten[0].name} is the last unbeaten team`, `Still perfect: ${unbeaten[0].name}`, `Who can beat ${unbeaten[0].name}?`]) : pk([`${unbeaten.length} teams still unbeaten`, `Perfect-season watch: ${unbeaten.length} teams left`]), body: unbeaten.map(t => `${name(t.id)} (${rec(recs[t.id])})`).join(', ') + '.' + (unbeaten.length === 1 ? nextTxt(unbeaten[0].id) + ' ' + pk(['Somebody has to be first.', 'The target keeps getting bigger.', '']) : '') });
   wk.filter(g => isUserTeam(team(g.home)) && isUserTeam(team(g.away)) && '#game/' + g.id !== gotwHref).forEach(g => {
@@ -1701,6 +1768,16 @@ export const AWARD_DEFS = [
   { key: 'coty', label: 'Coach of the Year', type: 'coach' },
 ];
 export const awardDefs = () => AWARD_DEFS;
+// Preseason picks: the team and coach awards (no player awards before a snap is played) plus the league champion.
+export const PICK_DEFS = [{ key: 'champ', label: 'League Champion', type: 'team' }, ...AWARD_DEFS.filter(d => d.type === 'team' || d.type === 'coach')];
+export const picksOpen = (L = D.league) => !!(L.prePicks && L.prePicks.open && L.prePicks.season === L.season) && !D.games.some(g => g.season === L.season && played(g));
+// What actually happened for each pick, once the season's awards are in: team id (team awards, champion) or coach name.
+export function pickAnswers(season) {
+  const h = D.history.find(x => x.season === season); if (!h) return null;
+  const out = {}; if (h.champTeam) out.champ = h.champTeam;
+  PICK_DEFS.forEach(d => { const a = (h.awards || []).find(x => x.award === d.label); if (a) out[d.key] = d.type === 'coach' ? a.winner : a.team; });
+  return out;
+}
 export const awardGames = s => D.games.filter(g => g.season === s && played(g) && (team(g.home).conf === D.league.conference || team(g.away).conf === D.league.conference))
   .sort((a, b) => b.week - a.week || String(a.id).localeCompare(String(b.id)));
 export const awardGameLabel = g => `${g.type === 'ccg' ? 'League Title' : g.type === 'bowl' ? (g.note || 'Bowl Season') : wkShort(g.week, g.season)} · ${team(g.away).abbr || team(g.away).name} ${g.awayScore} @ ${team(g.home).abbr || team(g.home).name} ${g.homeScore}`;

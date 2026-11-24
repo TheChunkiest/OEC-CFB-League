@@ -223,6 +223,20 @@ service cloud.firestore {
       allow delete: if isCommish();
     }
 
+    // Preseason picks: doc id = season_uid. Coaches make them from publishing until the first score of the season
+    // (the site closes league.prePicks then). While open each coach sees only their own; once closed they're public.
+    match /picks/{id} {
+      allow get, list: if isCommish() || !(league().get('prePicks', {}).get('open', false) == true)
+        || (signedIn() && id.matches('.*_' + request.auth.uid));
+      allow create, update: if isCoach()
+        && id == string(league().season) + '_' + request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.season == league().season
+        && league().get('prePicks', {}).get('open', false) == true
+        && league().prePicks.season == league().season;
+      allow delete: if isCommish();
+    }
+
     // Phone notification devices: each coach registers their own device's push token. Only the owner can see
     // or change it; the GitHub workflow reads them with the service account (which skips these rules).
     match /push/{id} {
