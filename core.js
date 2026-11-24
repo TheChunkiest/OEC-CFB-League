@@ -98,7 +98,8 @@ async function startListeners() {
   const merge = c => {
     if (!PAST.includes(c)) { D[c] = withMine(c, cur[c] || []); return; }
     const pl = pastLive[c], old = pl.size ? past[c].filter(d => !pl.has(d.id)).concat([...pl.values()].filter(live1)) : past[c];
-    D[c] = withMine(c, [...old, ...(cur[c] || [])]);
+    const now = cur[c] || [], ids = new Set(now.map(d => d.id)), next = c === 'games' && cur.next ? cur.next.filter(d => !ids.has(d.id)) : [];
+    D[c] = withMine(c, [...old, ...now, ...next]);
   };
   const first = [];
   const watch = (ref, apply, name) => first.push(new Promise((res, rej) => {
@@ -131,12 +132,14 @@ async function startListeners() {
         s.docs.forEach(d => m.set(d.id, { ...d.data(), id: d.id }));
         const all = [...m.values()].filter(live1);
         if (PAST.includes(c)) s.docs.forEach(d => { const x = { ...d.data(), id: d.id }; if (x.season < season) pastLive[c].set(d.id, x); });
-        if (SEASONAL.includes(c)) { cur[c] = all.filter(d => d.season === season); merge(c); } else D[c] = withMine(c, all);
+        // Next season's schedule (entered before it's published) rides along with this one, so it doesn't vanish.
+        if (SEASONAL.includes(c)) { cur[c] = all.filter(d => c === 'games' ? d.season >= season : d.season === season); merge(c); } else D[c] = withMine(c, all);
       }, c);
     });
   } else {   // no usable snapshot yet: read the current season directly
     ['teams', 'users', 'history'].forEach(c => watch(fs.collection(db, c), s => { D[c] = s.docs.map(d => ({ ...d.data(), id: d.id })).filter(live1); }, c));
     SEASONAL.forEach(c => watch(fs.query(fs.collection(db, c), fs.where('season', '==', season)), s => { cur[c] = s.docs.map(d => ({ ...d.data(), id: d.id })).filter(live1); merge(c); }, c));
+    watch(fs.query(fs.collection(db, 'games'), fs.where('season', '>', season)), s => { cur.next = s.docs.map(d => ({ ...d.data(), id: d.id })).filter(live1); merge('games'); }, 'nextGames');
   }
   // Past seasons: archive file first, then the database for anything it doesn't cover.
   first.push((async () => {

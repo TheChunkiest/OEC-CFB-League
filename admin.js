@@ -4,7 +4,7 @@ import {
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum, divOf, oneConference, playbookOf, pbSeason, pbOpen, pbLocked
 , loadAI, kickoffOf, fmtKick
 , reliefPatch, winTotalsSnapshot, winsLockedTeam, postEarlyCcg, earlyCcg, raceSim, AWARD_DEFS, tallyAwards, awardGames, awardGameLabel, awardCoaches, sameName, curWeek, wkName, wkShort, wkOf, phaseName
-} from './core.js?v=104';
+} from './core.js?v=105';
 // Broadcast scouting nudges the ratings a little, so load it before any lines get posted from here.
 loadAI();
 import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
@@ -61,6 +61,14 @@ function pollTeams() {
   const s = L().season, ids = new Set(leagueTeams().map(t => t.id));
   D.games.filter(g => g.season === s).forEach(g => { ids.add(g.home); ids.add(g.away); });
   return [...ids].map(team);
+}
+// Games entered more than once for the same week and matchup (keeps the first, and never a game with a score).
+function schedDupes(gs) {
+  const seen = new Map(), extra = [];
+  gs.slice().sort((a, b) => (b.homeScore != null) - (a.homeScore != null) || String(a.id).localeCompare(String(b.id))).forEach(g => {
+    const k = `${g.week}|${g.away}|${g.home}`; if (seen.has(k)) { if (g.homeScore == null) extra.push(g); } else seen.set(k, g);
+  });
+  return extra;
 }
 function pollEditor(week, override, season = L().season) {
   const cur = override ? Object.fromEntries(override.map(x => [x.id, x.r])) : pollFor(season, week);
@@ -352,7 +360,7 @@ const views = {
         <div class="tablewrap"><table id="teamTbl" class="stack-sm"><tr><th>Team</th><th>Abbr</th><th>Conf</th><th>Div</th><th>Coach</th><th>Account</th><th>Color</th><th>OVR</th><th>OFF</th><th>DEF</th><th></th></tr>
         ${ts.map(t => teamRow(t)).join('')}</table></div>
         <div class="row" style="margin-top:10px">${programSelect('id="newTeam" style="max-width:190px"', '', usedNames())}<button class="ghost sm" data-act="addTeam">+ Add team</button><button data-act="saveTeams">Save teams</button><button class="ghost sm" data-act="seedRatings">Apply ratings from league-data.json</button></div></div>
-      <div class="card"><h3 style="margin-top:0">${next} schedule (${sg.length} games)</h3><p class="muted small">Add user-vs-user games and each user team's games vs CPU teams.</p>
+      <div class="card"><h3 style="margin-top:0">${next} schedule (${sg.length} games)</h3><p class="muted small">Add user-vs-user games and each user team's games vs CPU teams.</p>${(() => { const n = schedDupes(sg).length; return n ? `<div class="notice">${n} duplicate game${n === 1 ? '' : 's'} (same week and matchup entered twice). <button class="sm" data-act="dedupeSched">Remove duplicates</button></div>` : ''; })()}
         <div class="row"><input id="sgW" type="number" value="0" style="width:70px" title="Week"><select id="sgA">${teamOpts('', 'Away')}</select> @ <select id="sgH">${teamOpts('', 'Home')}</select><label class="row" style="margin:0"><input type="checkbox" id="sgN" style="width:auto"> Neutral</label><button class="ghost" data-act="addSched">Add game</button></div>
         <label>Bulk add — one game per line: <code>week, away team, home team</code> (add <code>, neutral</code> if needed). Team name or abbreviation.</label><textarea id="bulk" rows="4" placeholder="0, Liberty, Kennesaw State&#10;1, KENN, Ohio"></textarea><button class="ghost sm" data-act="bulkSched" style="margin-top:6px">Add these games</button> <span id="bulkMsg" class="muted"></span>
         <div class="tablewrap" style="margin-top:10px"><table>${sg.map(g => `<tr><td>${wkShort(g.week, g.season)}</td><td class="wrap">${esc(team(g.away).name)} ${g.neutral ? 'vs' : '@'} ${esc(team(g.home).name)}${!isUserTeam(team(g.home)) || !isUserTeam(team(g.away)) ? ' <span class="h2h cputag">CPU GAME</span>' : ''}</td><td class="num">${played(g) ? g.awayScore + '-' + g.homeScore : ''}</td><td class="num"><button class="sm danger" data-delgame="${esc(g.id)}">✕</button></td></tr>`).join('')}</table></div></div>
@@ -769,6 +777,11 @@ const ACT = {
     await batch(ops);
     if (conf !== L().conference) await put('meta', 'league', { conference: conf });
     D.teams.forEach(t => delete t._new); await loadAll(); refreshProfile(); await refreshBooks(); flash('Teams saved. Books re-priced.');
+  },
+  async dedupeSched() {
+    const s = +$('#psSeason').value, extra = schedDupes(D.games.filter(g => g.season === s));
+    if (!extra.length || !confirm(`Remove ${extra.length} duplicate game${extra.length === 1 ? '' : 's'}? One copy of each matchup stays.`)) return;
+    await batch(extra.map(g => ({ op: 'del', col: 'games', id: g.id }))); flash(`Removed ${extra.length} duplicate game(s).`);
   },
   async addSched() {
     const s = +$('#psSeason').value, a = $('#sgA').value, h = $('#sgH').value;

@@ -6,7 +6,7 @@ import {
 , playbookOf, pbSeason, pbText
 , AWARD_DEFS, awardGames, awardGameLabel, awardCoaches
 , curWeek, wkShort, wkOf, phaseName
-} from './core.js?v=104';
+} from './core.js?v=105';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -367,7 +367,7 @@ const PAGES = {
     const leaders = bettors().map(u => ({ u, b: bankroll(u.id) })).sort((a, b) => b.b.net - a.b.net || b.b.balance - a.b.balance).slice(0, 5);
     let html = installTip();
     if (L.desk && L.desk.show && L.desk.text) html += `<div class="card banner"><h2>Commissioner's Desk</h2><div style="white-space:pre-wrap">${esc(L.desk.text)}</div></div>`;
-    html += offseasonAwardsCard();
+    html += awardsVoteCard() + offseasonAwardsCard();
     const ccgNow = games.find(g => g.type === 'ccg');
     if (ccgNow && !gt.game) html += featureCard(ccgNow, { ribbon: champRibbon(), note: played(ccgNow) ? 'League champion crowned' : '' });
     if (gt.game) html += featureCard(gt.game, { ribbon: '★ Game of the Week' });
@@ -611,7 +611,7 @@ const PAGES = {
       ${canVote ? `<button data-act="gotw" style="margin-top:8px">${mine ? 'Change vote' : 'Submit vote'}</button>` : ''}</div>`;
     // Season awards
     const A = L.awards || {};
-    html += `<h2>${s} Season Awards</h2>`;
+    html += `<h2 id="awards-ballot">${s} Season Awards</h2>`;
     if (!A.open) html += `<div class="card empty">Awards voting opens during conference championship week and closes after bowl season.${D.history.find(h => h.season === s) ? ' <a href="#history">See this season\'s winners →</a>' : ''}</div>`;
     else {
       const ballot = D.ballots.find(b => b.season === s && b.uid === me?.id) || { picks: {} }, P = ballot.picks || {}, dis = canVote ? '' : 'disabled';
@@ -1718,6 +1718,16 @@ function awardsPopup() {
     ${champ}${awardsTable(h)}
     <div class="row" style="margin-top:12px;justify-content:center"><button class="gold" data-close="1">Nice</button><a class="btn ghost" href="#history" data-close="1">See History →</a></div></div></div>`;
 }
+// Home: while awards voting is open, a card that takes coaches straight to their ballot.
+function awardsVoteCard() {
+  const L = D.league, A = L.awards || {}; if (!A.open) return '';
+  const me = auth.profile, coach = me && me.teamId;
+  const mine = coach && D.ballots.find(b => b.season === L.season && b.uid === me.id);
+  const msg = !me ? 'League coaches vote on the season awards. Log in to cast your ballot.' : !coach ? 'League coaches are voting on the season awards now. Winners are announced after bowl season.'
+    : mine ? 'Your ballot is in. You can change it until voting closes after bowl season.' : "You haven't voted yet. MVP, Coach of the Year, Game of the Year and more. Voting closes after bowl season.";
+  const btn = !me ? '<a class="btn" href="#account">Log in to vote →</a>' : coach ? `<a class="btn${mine ? ' ghost' : ' gold'}" href="#vote/awards">${mine ? 'Review my ballot →' : 'Cast my ballot →'}</a>` : '<a class="btn ghost" href="#vote/awards">See the ballot →</a>';
+  return `<div class="card gotw awvote"><span class="ribbon">🗳️ Season ${seasonNum(L.season)} Awards · Voting Open</span><p style="margin:6px 0 10px;text-align:center">${msg}</p><div style="text-align:center">${btn}</div></div>`;
+}
 // Match a typed name to a league coach (case-insensitive).
 const coachName = n => { const k = String(n || '').trim().toLowerCase(); return Object.values(coachStats()).map(c => c.name).find(c => c.toLowerCase() === k) || ''; };
 function teamProfile(tid, s, upto = Infinity) {
@@ -2388,8 +2398,8 @@ function route() {
   // New page: start at the top, or at the row a storyline pointed to.
   if (route.last !== location.hash) {
     const first = route.last == null; route.last = location.hash;
-    const f = page === 'odds' && arg && document.getElementById('odds-' + arg);
-    if (f) requestAnimationFrame(() => f.scrollIntoView({ block: 'center' }));
+    const f = page === 'odds' && arg && document.getElementById('odds-' + arg) || page === 'vote' && arg === 'awards' && document.getElementById('awards-ballot');
+    if (f) requestAnimationFrame(() => f.scrollIntoView({ block: page === 'vote' ? 'start' : 'center' }));
     else if (!first) window.scrollTo(0, 0);
   }
 }
