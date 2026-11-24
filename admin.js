@@ -4,7 +4,7 @@ import {
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum, divOf, oneConference, playbookOf, pbSeason, pbOpen, pbLocked
 , loadAI, kickoffOf, fmtKick
 , reliefPatch, winTotalsSnapshot, winsLockedTeam, postEarlyCcg, earlyCcg, raceSim, AWARD_DEFS, tallyAwards, awardGames, awardGameLabel, awardCoaches, sameName, curWeek, wkName, wkShort, wkOf, phaseName
-} from './core.js?v=105';
+} from './core.js?v=106';
 // Broadcast scouting nudges the ratings a little, so load it before any lines get posted from here.
 loadAI();
 import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
@@ -41,6 +41,7 @@ function advClock() {
   return `<div class="card advclock"><div class="row spread"><h3 style="margin:0">⏱️ Advance clock</h3>
       ${ext ? `<button class="ghost sm" data-act="advExt" data-h="0">Remove +${ext}h</button>` : `<button class="ghost sm" data-act="advExt" data-h="24">+24 hours</button>`}</div>
     <p style="margin:8px 0 0">${p ? `Next advance: <b>${esc(fmtAdvance(p))}</b>${ext ? ` <span class="muted small">(includes +${ext}h)</span>` : ''}` : '<span class="muted">Starts with your next advance.</span>'}</p>
+    <div class="row" style="margin-top:8px"><label class="muted small" style="margin:0">Set the next advance date</label><input type="date" id="advNext" value="${lg.advNext && lg.advNext > (lg.advancedAt || 0) ? toLocalInput(lg.advNext).slice(0, 10) : ''}" style="width:auto"><button class="sm" data-act="saveAdvNext">Save</button>${lg.advNext && lg.advNext > (lg.advancedAt || 0) ? '<button class="ghost sm" data-act="saveAdvNext" data-clear="1">Back to 3 days</button>' : ''}</div>
     <details class="small" style="margin-top:8px"><summary class="muted">Fix the last advance time</summary>
       <div class="row" style="margin-top:8px"><input type="datetime-local" id="advAt" value="${lg.advancedAt ? toLocalInput(lg.advancedAt) : ''}"><button class="sm" data-act="saveAdvAt">Save</button></div>
       <p class="muted small" style="margin:6px 0 0">Every advance records its own time and the next one is projected 3 days later, so you normally never touch this.</p></details></div>`;
@@ -63,6 +64,16 @@ function pollTeams() {
   return [...ids].map(team);
 }
 // Games entered more than once for the same week and matchup (keeps the first, and never a game with a score).
+// The program a team id was made from (ids come from the school name), and whether it has seasons behind it.
+const progOfId = id => programList().find(p => slug(p.name) === id);
+const hasPast = id => D.games.some(g => g.season < L().season && (g.home === id || g.away === id));
+// Teams whose name was switched to another school in the table: their past seasons now show the new name.
+const renamedTeams = () => D.teams.filter(t => { const o = progOfId(t.id); return o && t.name && o.name !== t.name && slug(t.name) !== t.id && hasPast(t.id); });
+function renamedCard() {
+  return renamedTeams().map(t => { const o = progOfId(t.id); return `<div class="card" style="border-color:var(--gold)"><b>⚠️ ${esc(o.name)} was renamed to ${esc(t.name)}</b>
+    <p class="small" style="margin:6px 0">So every past ${esc(o.name)} season now shows as ${esc(t.name)}. Split them: ${esc(o.name)} gets its name and history back (with its coaches still credited for those seasons), and ${esc(t.name)} becomes its own team${t.coach ? ` with ${esc(t.coach)}` : ''}, taking the ${L().season} schedule, playbook, bets and rankings.</p>
+    <button class="gold sm" data-act="splitTeam" data-id="${esc(t.id)}">Split into ${esc(o.name)} and ${esc(t.name)}</button></div>`; }).join('');
+}
 function schedDupes(gs) {
   const seen = new Map(), extra = [];
   gs.slice().sort((a, b) => (b.homeScore != null) - (a.homeScore != null) || String(a.id).localeCompare(String(b.id))).forEach(g => {
@@ -301,7 +312,7 @@ function broadcastCard() {
 const views = {
   advance() {
     const lg = L(), body = views.advanceBody();
-    return body + ((lg.phase === PHASES.REG || lg.phase === PHASES.CCG) && !ST.done ? advClock() : '');
+    return renamedCard() + body + ((lg.phase === PHASES.REG || lg.phase === PHASES.CCG) && !ST.done ? advClock() : '');
   },
   advanceBody() {
     const lg = L(), s = lg.season;
@@ -350,7 +361,7 @@ const views = {
     const lg = L(), done = !!D.history.find(h => h.season === lg.season), next = lg.phase === PHASES.PRE && done ? lg.season + 1 : lg.season;
     const ts = D.teams.slice().sort((a, b) => (b.conf === lg.conference) - (a.conf === lg.conference) || (a.div || '').localeCompare(b.div || '') || a.name.localeCompare(b.name));
     const sg = D.games.filter(g => g.season === next).sort((a, b) => a.week - b.week);
-    return `${lg.phase !== PHASES.PRE ? `<div class="notice">The ${lg.season} season is in progress (${esc(weekLabel())}). Team rating edits apply right away; only publish a new season once this one is finalized.</div>` : ''}
+    return `${renamedCard()}${lg.phase !== PHASES.PRE ? `<div class="notice">The ${lg.season} season is in progress (${esc(weekLabel())}). Team rating edits apply right away; only publish a new season once this one is finalized.</div>` : ''}
       <div class="card"><h2>Preseason Setup</h2><div class="row"><div><label>Season</label><input id="psSeason" type="number" value="${next}" style="width:100px"></div>
         <div><label>Final regular-season week</label><input id="psFinal" type="number" value="${lg.finalWeek || 14}" style="width:100px"></div>
         <div><label>League conference</label><input id="psConf" value="${esc(lg.conference)}" style="width:120px"></div>
@@ -385,7 +396,7 @@ const views = {
   },
 
   teams() {
-    return views.coaches() + views.ratings() + views.playbooks() + `<details class="card"><summary><b>Fix this week's Top 25</b> <span class="muted small">(normally set during the weekly advance)</span></summary>${views.top25()}</details>`;
+    return renamedCard() + views.coaches() + views.ratings() + views.playbooks() + `<details class="card"><summary><b>Fix this week's Top 25</b> <span class="muted small">(normally set during the weekly advance)</span></summary>${views.top25()}</details>`;
   },
   ratings() {
     const ts = leagueTeams().slice().sort((a, b) => a.name.localeCompare(b.name));
@@ -582,7 +593,7 @@ function titleCard() {
   if (c) return `<div class="card"><b>🏆 League Title game is posted:</b> ${nm(c.away)} vs ${nm(c.home)}. Betting on it is open; League Champion futures are closed.</div>`;
   const e = earlyCcg();
   if (e) return `<div class="card"><b>🏆 Both division winners have clinched:</b> ${nm(e.away)} vs ${nm(e.home)}. <button class="gold sm" data-act="postEarly">Post the League Title game now</button></div>`;
-  const alive = divisions(s).map(d => { const r = raceSim(d, {}, s); if (!r) return ''; const cl = r.teams.find(t => t.status === 'clinched'); return `${esc(d)}: ${cl ? nm(cl.id) + ' (clinched)' : r.teams.filter(t => t.status === 'alive').map(t => esc(team(t.id).abbr || team(t.id).name)).join(' or ') + ' still alive'}`; }).filter(Boolean);
+  const alive = divisions(s).map(d => { const r = raceSim(d, {}, s); if (!r || !r.teams) return ''; const cl = r.teams.find(t => t.status === 'clinched'); return `${esc(d)}: ${cl ? nm(cl.id) + ' (clinched)' : r.teams.filter(t => t.status === 'alive').map(t => esc(team(t.id).abbr || team(t.id).name)).join(' or ') + ' still alive'}`; }).filter(Boolean);
   return `<div class="card"><span class="muted small">🏆 The League Title game posts itself (with betting open) as soon as both division winners clinch. ${alive.join(' · ')}</span></div>`;
 }
 // Relief top-ups at an advance that opens betting. Waits a moment so the bets just graded are in D.wagers.
@@ -769,6 +780,8 @@ const ACT = {
       const uid = v('uid'), u = D.users.find(x => x.id === uid);
       const data = { name: v('name').trim(), abbr: v('abbr').trim().toUpperCase(), conf: v('conf') === 'Non-Conf' ? 'Non-Conf' : conf, div: v('div').trim(), coach: v('coach').trim() || (u ? u.name : ''), uid, color: v('color'), ovr: +v('ovr') || null, off: +v('off') || null, def: +v('def') || null };
       if (!data.name) return alert('Every team needs a name.');
+      const orig = progOfId(id);
+      if (orig && data.name !== orig.name && hasPast(id) && !confirm(`Rename ${orig.name} to ${data.name}?\n\nThis renames the team in every past season too, so ${orig.name}'s history would show as ${data.name}.\n\nMoving a coach to a new school? Tap Cancel, put ${orig.name}'s name back, and add ${data.name} as its own team.`)) return;
       const old = D.teams.find(x => x.id === id); if (old && old.pb) data.pb = old.pb;   // keep playbook history
       ops.push({ op: 'set', col: 'teams', id, data, merge: false });
       if (uid) userOps[uid] = id;
@@ -777,6 +790,35 @@ const ACT = {
     await batch(ops);
     if (conf !== L().conference) await put('meta', 'league', { conference: conf });
     D.teams.forEach(t => delete t._new); await loadAll(); refreshProfile(); await refreshBooks(); flash('Teams saved. Books re-priced.');
+  },
+  async splitTeam(t) {
+    const old = D.teams.find(x => x.id === t.dataset.id), o = old && progOfId(old.id); if (!old || !o) return;
+    const S = L().season, nid = slug(old.name), ex = D.teams.find(x => x.id === nid);
+    if (ex && D.games.some(g => g.home === nid || g.away === nid)) return alert(`${old.name} already exists as its own team with games. Fix this one by hand.`);
+    if (!confirm(`Split ${old.name} back out of ${o.name}?\n\n${o.name}: its name, colors and every season before ${S}.\n${old.name}: ${old.coach || 'the coach'}, the ${S} schedule, playbook, bets and rankings.`)) return;
+    const { id: _i, ...rest } = old, pbNew = {}, pbOld = {};
+    Object.entries(old.pb || {}).forEach(([k, v]) => ((+k >= S) ? pbNew : pbOld)[k] = v);
+    const swap = v => v === old.id ? nid : v, ops = [];
+    ops.push({ op: 'set', col: 'teams', id: nid, data: { ...rest, pb: pbNew }, merge: false });
+    ops.push({ op: 'set', col: 'teams', id: old.id, data: { ...rest, name: o.name, abbr: o.abbr || lookupAbbr(o.name) || rest.abbr, color: o.color || rest.color, coach: '', uid: '', conf: 'Former', div: '', pb: pbOld }, merge: false });
+    D.games.filter(g => g.season >= S && (g.home === old.id || g.away === old.id)).forEach(g => ops.push({ op: 'set', col: 'games', id: g.id, data: { home: swap(g.home), away: swap(g.away) } }));
+    D.wagers.filter(w => w.season >= S).forEach(w => {
+      const d = {};
+      if (w.team === old.id) d.team = nid;
+      if (w.market === 'future' && w.pick === old.id) d.pick = nid;
+      if ((w.legs || []).some(l => l.team === old.id || (l.market === 'future' && l.pick === old.id))) d.legs = w.legs.map(l => ({ ...l, ...(l.team === old.id ? { team: nid } : {}), ...(l.market === 'future' && l.pick === old.id ? { pick: nid } : {}) }));
+      if (Object.keys(d).length) ops.push({ op: 'set', col: 'wagers', id: w.id, data: d });
+    });
+    D.users.filter(u => u.teamId === old.id).forEach(u => ops.push({ op: 'set', col: 'users', id: u.id, data: { teamId: nid } }));
+    const lg = L(), polls = {}, ren = m => m && Object.fromEntries(Object.entries(m).map(([k, v]) => [swap(k), v]));
+    Object.entries(lg.polls || {}).forEach(([k, arr]) => { if (+k.split('_')[0] >= S && (arr || []).some(x => x.id === old.id)) polls[k] = arr.map(x => ({ ...x, id: swap(x.id) })); });
+    const lgData = { ...(Object.keys(polls).length ? { polls } : {}) };
+    if (lg.align && lg.align[S]) lgData.align = { ...lg.align, [S]: ren(lg.align[S]) };
+    if (lg.futures && lg.futures.odds) lgData.futures = { ...lg.futures, odds: ren(lg.futures.odds) };
+    if (lg.winTotals && lg.winTotals.odds) lgData.winTotals = { ...lg.winTotals, odds: ren(lg.winTotals.odds) };
+    if (Object.keys(lgData).length) ops.push({ op: 'set', col: 'meta', id: 'league', data: lgData });
+    await batch(ops); await loadAll(); refreshProfile(); await refreshBooks();
+    flash(`Done: ${o.name} has its history back and ${old.name} is its own team.`);
   },
   async dedupeSched() {
     const s = +$('#psSeason').value, extra = schedDupes(D.games.filter(g => g.season === s));
@@ -852,6 +894,13 @@ const ACT = {
   async saveAdvAt() {
     const v = $('#advAt').value; if (!v) return alert('Pick the date and time of the last advance.');
     await put('meta', 'league', { advancedAt: new Date(v).getTime() }); flash('Advance clock saved.');
+  },
+  async saveAdvNext(t) {
+    if (t && t.dataset && t.dataset.clear) { await put('meta', 'league', { advNext: 0 }); flash('Next advance is back to 3 days after the last one.'); return; }
+    const v = $('#advNext').value; if (!v) return alert('Pick a date.');
+    const [y, m, d] = v.split('-').map(Number), ts = new Date(y, m - 1, d, 12).getTime();
+    if (ts <= (L().advancedAt || 0)) return alert('Pick a date after the last advance.');
+    await put('meta', 'league', { advNext: ts }); flash(`Next advance set for ${fmtAdvance(ts)}.`);
   },
   async advExt(e) {
     const h = +(e?.dataset?.h || 0);

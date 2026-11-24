@@ -420,9 +420,31 @@ function american(p) {
   const q = clamp(p + 0.0225, 0.015, 0.985);
   return q >= 0.5 ? -Math.max(100, round5(100 * q / (1 - q))) : Math.max(100, round5(100 * (1 - q) / q));
 }
-function baseRating(t) {
-  const ovr = +t.ovr || 72;
-  return { o: ((+t.off || ovr) - BASE) * SCALE, d: ((+t.def || ovr) - BASE) * SCALE, perf: [], perfT: [] };
+function baseRating(t, season) {
+  const ovr = +t.ovr || 72, ce = coachEdge(seasonCoach(t, season), season) / 2;
+  return { o: ((+t.off || ovr) - BASE) * SCALE + ce, d: ((+t.def || ovr) - BASE) * SCALE + ce, perf: [], perfT: [] };
+}
+// Who ran a team in a season: its coach now for this season on, otherwise whoever the season's games were played by.
+function seasonCoach(t, season) {
+  if (season >= D.league.season) return t.coach || '';
+  const g = D.games.find(x => x.season === season && played(x) && (x.home === t.id || x.away === t.id) && x[(x.home === t.id ? 'home' : 'away') + 'Coach']);
+  return g ? g[(g.home === t.id ? 'home' : 'away') + 'Coach'] : (t.coach || '');
+}
+// Coach factor, in points of margin: how a coach has done head-to-head against other league coaches in earlier
+// seasons (average margin, pulled toward even until there's a real sample: 6 imaginary even games are mixed in),
+// half-weighted and capped at ±6. Ratings already cover the roster; this covers who's holding the controller.
+export function coachEdge(name, season = D.league.season) {
+  const key = canonCoach(name || '').toLowerCase(); if (!key || key === 'cpu') return 0;
+  return cached(`ce|${key}|${season}`, () => {
+    let sum = 0, n = 0;
+    D.games.forEach(g => {
+      if (g.season >= season || !played(g) || g.forfeit) return;
+      const hc = String(coachOf(g, 'home')).toLowerCase(), ac = String(coachOf(g, 'away')).toLowerCase();
+      if (hc === 'cpu' || ac === 'cpu' || (hc !== key && ac !== key)) return;
+      const m = +g.homeScore - +g.awayScore; sum += hc === key ? m : -m; n++;
+    });
+    return n ? clamp(0.5 * sum / (n + 6), -6, 6) : 0;
+  });
 }
 function expect(H, A, neutral) {
   const hf = neutral ? 0 : HFA;
@@ -433,7 +455,7 @@ function expect(H, A, neutral) {
 export function ratings(season, upto) {
   return cached(`r|${season}|${upto}`, () => {
     const R = {};
-    D.teams.forEach(t => R[t.id] = baseRating(t));
+    D.teams.forEach(t => R[t.id] = baseRating(t, season));
     D.games.filter(g => g.season === season && played(g) && !g.forfeit && g.week < upto).sort((a, b) => a.week - b.week).forEach(g => {
       const H = R[g.home], A = R[g.away]; if (!H || !A) return;
       const e = expect(H, A, g.neutral);
@@ -1022,6 +1044,7 @@ export function fmtKick(ts, short = false) {
 export const ADVANCE_DAYS = 3;
 export function projectedAdvance(L = D.league) {
   if (!L || !L.advancedAt || (L.phase !== PHASES.REG && L.phase !== PHASES.CCG)) return null;
+  if (L.advNext && L.advNext > L.advancedAt) return L.advNext;   // a date the commissioner set for this week (cleared by the next advance)
   return L.advancedAt + ADVANCE_DAYS * 864e5 + (L.advExt || 0) * 36e5;
 }
 // e.g. "Mon, Nov. 14th" (date only; advances don't happen at a set time).
@@ -1791,7 +1814,7 @@ export function earlyCcg() {
   if (L.phase !== PHASES.REG || D.games.some(g => g.season === s && g.type === 'ccg')) return null;
   const divs = divisions(s), K = divs.length > 1 ? 1 : 2;
   const sims = (divs.length > 1 ? divs : [null]).map(d => raceSim(d, {}, s));
-  if (sims.some(r => !r || r.teams.filter(t => t.status === 'clinched').length !== K)) return null;
+  if (sims.some(r => !r || !r.teams || r.teams.filter(t => t.status === 'clinched').length !== K)) return null;
   const champs = sims.flatMap(r => r.teams.filter(t => t.status === 'clinched').map(t => t.id));
   if (champs.length !== 2) return null;
   const [home, away] = orderGroup(champs, s);

@@ -6,7 +6,7 @@ import {
 , playbookOf, pbSeason, pbText
 , AWARD_DEFS, awardGames, awardGameLabel, awardCoaches
 , curWeek, wkShort, wkOf, phaseName
-} from './core.js?v=105';
+} from './core.js?v=106';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -258,7 +258,10 @@ function raceSection() {
   // Keep both division buttons even after one race is settled (it then shows who clinched); hide only when both are done.
   const sims = divisions(s).map(d => raceSim(d, racePicks, s)).filter(r => r);
   if (!sims.some(r => r.left.length)) return '';
-  if (sims.length < 2) return `<h2>Title Game Race</h2>` + sims.map(raceCard).join('');
+  // One race: a single button that drops the race open (closed by default, it's long).
+  if (sims.length < 2) { const r = sims[0], key = r.div || '_one', on = UI.raceDiv === key;
+    return `<h2>Title Game Race</h2><div class="racetabs"><button class="racetab${on ? ' on' : ''}" data-racediv="${esc(key)}">${on ? 'Hide the race' : 'Show the race'} <span>${on ? '▴' : '▾'}</span></button></div>`
+      + (on ? `<div class="racedrop">${raceCard(r)}</div>` : ''); }
   // Two divisions: one button per division; tapping one drops its race open below (tap again to close).
   const open = sims.find(r => r.div === UI.raceDiv);
   return `<h2>Division Race</h2><div class="racetabs">${sims.map(r => `<button class="racetab${open === r ? ' on' : ''}" data-racediv="${esc(r.div)}">${esc(r.div)} <span>${open === r ? '▴' : '▾'}</span></button>`).join('')}</div>`
