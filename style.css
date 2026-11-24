@@ -1708,3 +1708,24 @@ details.todolist>summary::before,details.todolist>summary::after{display:none!im
 details.todolist>summary .todo-prog{margin:10px 0 0}
 details.todolist>summary .go{top:28px;transform:none}
 details.todolist[open]>summary .go{transform:rotate(90deg)}
+/* Footer, option B: one slim floating pill (like the tab bar) with YouTube and TikTok chips */
+.ft-card{border-top:0;padding:8px 0 0}
+.fp{display:flex;align-items:center;gap:8px;max-width:340px;margin:0 auto;padding:6px 6px 6px 16px;border-radius:999px;border:1px solid rgba(255,255,255,.12);background:rgba(20,16,18,.85)}
+.fp-brand{flex:1;font:800 italic 16px var(--cond);letter-spacing:.6px;color:#f4f1f2;white-space:nowrap}
+.fp-brand em{font:600 12px var(--body);color:#a79a9c;letter-spacing:0;margin-left:2px}
+.fp-chip{display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:0 12px;border-radius:999px;font-size:13px;font-weight:700;white-space:nowrap}
+.fp-chip:hover{text-decoration:none;filter:brightness(1.2)}
+.fp-chip svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.fp-chip svg .fill{fill:currentColor;stroke:none}
+.fp-chip.yt{background:rgba(230,33,23,.18);color:#ffb3ae}
+.fp-chip.tt{background:rgba(37,244,238,.10);color:#9ff6f3}
+.ft-meta{margin-top:10px}
+/* Footer, option A: one row — logo, "Follow the OEC", round YouTube and TikTok buttons */
+.fa{display:flex;align-items:center;justify-content:center;gap:10px}
+.fa-logo{width:34px;height:34px;object-fit:contain}
+.fa-t{font:800 italic 16px var(--cond);letter-spacing:.6px;text-transform:uppercase;color:#d9d0d1;white-space:nowrap}
+.fa-ic{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.04)}
+.fa-ic:hover{text-decoration:none;border-color:rgba(255,255,255,.35)}
+.fa-ic svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.fa-ic svg .fill{fill:currentColor;stroke:none}
+.fa-ic.yt{color:#ff4f47}.fa-ic.tt{color:#25f4ee}
