@@ -1,5 +1,7 @@
 name: League notifications
-# Runs every 5 minutes (GitHub often stretches that to 10-15):
+# Runs every 5 minutes, at :03, :08, :13 … (off the :00/:05 marks, when GitHub is busiest and delays scheduled jobs
+# the most). GitHub can still run late; the commissioner can start it right away with "Run workflow" (Send now in
+# Commissioner Tools):
 #   - Sends free phone notifications through Firebase Cloud Messaging when the FIREBASE_SERVICE_ACCOUNT secret is
 #     set: league advances, commissioner news, kickoff reminders and kickoff invites. Device tokens are only read
 #     when there's something to send; what has been sent is remembered in push-state.json.
@@ -9,7 +11,7 @@ name: League notifications
 # A typical run reads about 4 documents; more only when something actually happened.
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '3-58/5 * * * *'
   workflow_dispatch:
 permissions:
   contents: write
