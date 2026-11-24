@@ -40,6 +40,37 @@ const toLocalInput = ts => { const d = new Date(ts - new Date(ts).getTimezoneOff
 const kOpen = (k, def = false) => ((ST.open && k in ST.open) ? ST.open[k] : def) ? 'open' : '';
 // League status strip at the top of every tab: where the league is, whether betting is open and when the next
 // advance is due, with the advance-date controls tucked into a dropdown.
+// ---------- "Send notifications now" ----------
+// Notifications go out from the GitHub job (league-notifications.yml). GitHub runs scheduled jobs late when it's busy,
+// so when something is waiting this card offers a shortcut to the job's page, where "Run workflow" sends it in about
+// a minute. Waiting = the league's advance or latest message isn't in push-state.json (what the job has already sent),
+// read from the site itself, not the database.
+const GH_REPO = (() => { const h = location.hostname, seg = location.pathname.split('/').filter(Boolean)[0];
+  return h.endsWith('.github.io') && seg && !/\.html?$/.test(seg) ? `${h.split('.')[0]}/${seg}` : 'TheChunkiest/OEC-CFB-League'; })();
+const RUN_URL = `https://github.com/${GH_REPO}/actions/workflows/league-notifications.yml`;
+let PS = null, psAt = 0;
+async function loadPushState(force) {
+  if (!force && Date.now() - psAt < 60000) return; psAt = Date.now();
+  try { const r = await fetch('push-state.json?t=' + Date.now(), { cache: 'no-store' }); if (r.ok) PS = await r.json(); } catch (e) { return; }
+  const el = $('#sendNow'); if (el) el.outerHTML = sendNowCard();
+}
+function pendingNotes() {
+  const lg = L(); if (!lg.pushKey || !PS) return [];
+  const out = [], key = `${lg.season}|${lg.week}|${lg.phase}` + (lg.pre ? '|pre' : '');
+  if (PS.adv !== key) out.push(lg.phase === PHASES.REG || lg.phase === PHASES.CCG || lg.phase === PHASES.POST ? `${wkName(lg.week)} advance` : `${phaseName(lg)} update`);
+  if (lg.announce?.id && lg.announce.id !== PS.ann) out.push('your message to the league');
+  return out;
+}
+function sendNowCard() {
+  const p = pendingNotes();
+  if (!p.length) return '<div id="sendNow"></div>';
+  const what = p.join(' and '), cap = what.charAt(0).toUpperCase() + what.slice(1);
+  return `<div id="sendNow" class="card sendnow"><span class="sn-ic" aria-hidden="true">📣</span><div class="sn-t"><b>Notification${p.length > 1 ? 's' : ''} waiting</b><span>${esc(cap)}</span></div>
+    <a class="btn gold sn-go" href="${RUN_URL}" target="_blank" rel="noopener">Send now ↗</a>
+    <p class="sn-help">GitHub sends ${p.length > 1 ? 'these' : 'it'} on its own, usually within 15 minutes. <b>Send now</b> opens GitHub: tap <b>Run workflow</b>, then the green <b>Run workflow</b>, and it goes out in about a minute. This card clears once it's sent.</p></div>`;
+}
+setInterval(() => { if (!document.hidden && ['advance', 'settings'].includes(ST.tab)) loadPushState(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) loadPushState(true); });
 function statusBar() {
   const lg = L(), p = projectedAdvance(), ext = lg.advExt || 0, clock = lg.phase === PHASES.REG || lg.phase === PHASES.CCG;
   return `<div class="card adminstatus">
@@ -343,7 +374,7 @@ function broadcastCard() {
 const views = {
   advance() {
     const lg = L(), body = views.advanceBody();
-    return renamedCard() + picksAdminCard() + openerAdminCard() + body;
+    return sendNowCard() + renamedCard() + picksAdminCard() + openerAdminCard() + body;
   },
   advanceBody() {
     const lg = L(), s = lg.season;
@@ -562,7 +593,8 @@ const views = {
         ${lg.pushKey ? `<input id="annText" maxlength="140" placeholder="e.g. Advancing tonight at 10, get your games in!" style="width:100%">
         <div class="row" style="margin-top:8px"><button data-act="announce">Send to everyone</button></div>
         ${lg.announce?.text ? `<p class="muted small" style="margin:8px 0 0">Last sent: “${esc(lg.announce.text)}”</p>` : ''}
-        <p class="muted small" style="margin:6px 0 0">Goes out within about 5 to 15 minutes. Advances notify everyone on their own, with your Commissioner's Desk note.</p>` : '<p class="muted small" style="margin:0">Finish the notification setup below first.</p>'}</div>
+        <p class="muted small" style="margin:6px 0 0">Advances notify everyone on their own, with your Commissioner's Desk note. GitHub sends notifications within about 15 minutes; use <b>Send now</b> when you want it out right away.</p>` : '<p class="muted small" style="margin:0">Finish the notification setup below first.</p>'}</div>
+      ${sendNowCard()}
       <details class="card" ${lg.pushKey ? '' : 'open'}><summary><b>Notification setup</b> ${lg.pushKey ? '<span class="muted small">✅ done</span>' : '<span class="muted small">one time, free</span>'}</summary>
         <ol class="steps small" style="margin-top:10px">
           <li>Firebase console → ⚙️ Project settings → <b>Cloud Messaging</b> → Web configuration → <b>Generate key pair</b>. Copy the key and paste it below.</li>
@@ -1092,7 +1124,7 @@ const ACT = {
   async announce() {
     const text = $('#annText').value.trim(); if (!text) return alert('Type a message first.');
     if (!confirm(`Send to every coach with notifications on?\n\n“${text}”`)) return;
-    await put('meta', 'league', { announce: { id: Date.now().toString(36), text, ts: Date.now() } }); flash('Queued. It goes out with the next workflow run.');
+    await put('meta', 'league', { announce: { id: Date.now().toString(36), text, ts: Date.now() } }); flash('Message saved. It goes out with the next GitHub run, or tap Send now below to send it right away.');
   },
   async saveSettings() {
     await put('meta', 'league', {
@@ -1247,7 +1279,7 @@ document.addEventListener('change', e => {
       if (L().awards?.open || L().phase === PHASES.CCG || L().phase === PHASES.POST) { try { await loadBallots(true); } catch (e) { console.warn('ballots', e); } }
       try { if (await ensureFutures()) ST.msg = 'Posted lines for upcoming games and League Champion futures odds.'; } catch (e) { ST.msg = 'Could not post futures odds: ' + e.message + ' — check the Firestore rules are the latest version.'; }
       try { await syncWinLocks(); } catch (e) { console.warn('win locks', e); }
-      render();
+      render(); loadPushState(true);
     });
   } catch (e) {
     console.error(e);

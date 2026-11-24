@@ -1729,3 +1729,12 @@ details.todolist[open]>summary .go{transform:rotate(90deg)}
 .fa-ic svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .fa-ic svg .fill{fill:currentColor;stroke:none}
 .fa-ic.yt{color:#ff4f47}.fa-ic.tt{color:#25f4ee}
+/* Commissioner Tools: "Notification waiting · Send now" */
+.card.sendnow{display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;padding:12px 14px;border:1px solid rgba(245,184,46,.55);background:rgba(245,184,46,.08)}
+.sn-ic{flex:none;width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font-size:19px;background:rgba(245,184,46,.16);border:1px solid rgba(245,184,46,.45)}
+.sn-t{flex:1;min-width:150px;display:flex;flex-direction:column;gap:2px}
+.sn-t b{font-size:15px}
+.sn-t span{font-size:12.5px;color:var(--muted)}
+.sn-go{flex:none;white-space:nowrap;padding:9px 16px;border-radius:10px;text-decoration:none}
+.sn-go:hover{text-decoration:none}
+.sn-help{flex-basis:100%;margin:0;font-size:12px;color:var(--muted)}
