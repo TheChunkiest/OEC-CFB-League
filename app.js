@@ -180,7 +180,7 @@ function featureCard(g, { ribbon, note = '' } = {}) {
   const recs = records(s, g.week), rk = t => rankOf(t.id, s, g.week);   // record and rank both as of kickoff
   const coach = side => done ? coachOf(g, side) : isUserTeam(side === 'home' ? H : A) ? (side === 'home' ? H : A).coach : 'CPU';
   const hw = +g.homeScore > +g.awayScore;
-  const sideHtml = (t, side, won) => `<div class="gp-team ${done && !won ? 'l' : ''}">${teamPlate(t, 'gp')}<div><div class="gp-name">${rk(t) ? `<span class="rk">#${rk(t)}</span>` : ''}${esc(t.name)}</div>
+  const sideHtml = (t, side, won) => `<div class="gp-team ${done && !won ? 'l' : ''}">${sideLbl(g, side)}${teamPlate(t, 'gp')}<div><div class="gp-name">${rk(t) ? `<span class="rk">#${rk(t)}</span>` : ''}${esc(t.name)}</div>
     <div class="muted small">${rec(recs[t.id])} · ${esc(coach(side))}</div></div>${done ? `<div class="gp-score">${g.forfeit ? (won ? 'FW' : 'FL') : g[side + 'Score']}</div>` : ''}</div>`;
   const ko = kickoffOf(g);
   return `<div class="card gp-head gotw feature" data-game="${esc(g.id)}"><span class="ribbon">${ribbon}</span>
@@ -193,6 +193,9 @@ function featureCard(g, { ribbon, note = '' } = {}) {
 }
 // Score bug: two team rows (plate, name, coach; score when final, line and win chance before), a win bar, and a
 // one-line footer. Used on Home, Schedule and team pages; the whole card opens the game.
+// Away/home label for a team in a matchup (left of the plate in score bugs, above the name on side-by-side layouts).
+// Neutral-site games get none.
+const sideLbl = (g, side) => g.neutral ? '' : `<span class="sidelbl ${side}">${side === 'home' ? 'HOME' : 'AWAY'}</span>`;
 const teamPlate = (t, cls = '') => `<i class="plate ${cls}" style="background:${esc(teamColor(t))};color:${plateInk(teamColor(t))}">${esc(t.abbr || (t.name || '').slice(0, 4).toUpperCase())}</i>`;
 function gameCard(g, opts = {}) {
   const h = team(g.home), a = team(g.away), done = played(g), l = lineOf(g), p = winPct(g, l);
@@ -209,7 +212,7 @@ function gameCard(g, opts = {}) {
     const rk = rankOf(t.id, g.season, g.week), line = l && l.spread != null ? (side === 'home' ? l.spread : -l.spread) : null;
     const right = done ? `<b class="bugsc">${g.forfeit ? (won ? 'FW' : 'FL') : g[side + 'Score']}</b>`
       : `<span class="bugln">${line != null ? esc(fmtLine(line)) : ''}${p ? `<small>${side === 'home' ? p.h : p.a}% to win</small>` : ''}</span>`;
-    return `<div class="bugrow${done ? (won ? ' w' : ' l') : ''}">${teamPlate(t)}<span class="bugteam"><b>${rk ? `<span class="rk">#${rk}</span> ` : ''}${esc(t.name)}${side === 'home' && !g.neutral ? ' <em>home</em>' : ''}</b><span>${coach && coach !== 'CPU' ? 'Coach ' + esc(coach) : 'CPU'}</span></span>${right}</div>`;
+    return `<div class="bugrow${done ? (won ? ' w' : ' l') : ''}">${sideLbl(g, side)}${teamPlate(t)}<span class="bugteam"><b>${rk ? `<span class="rk">#${rk}</span> ` : ''}${esc(t.name)}</b><span>${coach && coach !== 'CPU' ? 'Coach ' + esc(coach) : 'CPU'}</span></span>${right}</div>`;
   };
   let foot = '';
   if (done && g.forfeit) foot = `${esc(gWeek(g))} · Final · forfeit win`;
@@ -774,7 +777,7 @@ function betRows(g) {
   if (g.type === 'bowl') strip.push(`<span class="bugtag">${esc((g.note || 'Bowl Season').toUpperCase())}</span>`);
   const tags = gameTags(g);
   const row = (t, side) => { const rk = rankOf(t.id, g.season, g.week), c = isUserTeam(t) ? t.coach : 'CPU';
-    return `<div class="bgrow">${teamPlate(t)}<span class="bugteam"><b>${rk ? `<span class="rk">#${rk}</span> ` : ''}${esc(t.name)}${side === 'home' && !g.neutral ? ' <em>home</em>' : ''}</b><span>${c && c !== 'CPU' ? 'Coach ' + esc(c) : 'CPU'}</span></span>${p ? `<span class="bgpct"><b>${side === 'home' ? p.h : p.a}%</b><small>to win</small></span>` : ''}</div>`; };
+    return `<div class="bgrow">${sideLbl(g, side)}${teamPlate(t)}<span class="bugteam"><b>${rk ? `<span class="rk">#${rk}</span> ` : ''}${esc(t.name)}</b><span>${c && c !== 'CPU' ? 'Coach ' + esc(c) : 'CPU'}</span></span>${p ? `<span class="bgpct"><b>${side === 'home' ? p.h : p.a}%</b><small>to win</small></span>` : ''}</div>`; };
   const ko = kickoffOf(g);
   return `<div class="bgame card${isG || champ || op ? ' feat' : ''}${own ? ' own' : ''}">
     ${strip.length || tags ? `<div class="bugstrip">${strip.join('')}${tags}</div>` : ''}
@@ -1280,6 +1283,7 @@ async function drawCheat(C) {
   const side = (t, coach, rkN, recLine, X, al, score) => {
     let Y = tTop + 34;
     cvPlate(x, t, al === 'left' ? X : X - 110, Y - 8, 110, 62);
+    if (!g.neutral) { font(22, B, '800'); x.save(); x.letterSpacing = '3px'; text(al === 'left' ? 'AWAY' : 'HOME', al === 'left' ? X + 128 : X - 128, Y + 31, al === 'left' ? MUT : GOLD, al); x.restore(); }
     Y += 104; fit((rkN ? '#' + rkN + ' ' : '') + t.name, 46, colW); text((rkN ? '#' + rkN + ' ' : '') + t.name, X, Y, TXT, al);
     Y += 38; fit(recLine, 26, colW, B, '700'); text(recLine, X, Y, TXT, al);
     Y += 36; font(25, B, '600'); text((coach && coach !== 'CPU' ? 'Coach ' + coach : 'CPU') + (mascotOf(t) ? ' · ' + mascotOf(t) : ''), X, Y, GOLD, al);
@@ -2629,7 +2633,7 @@ PAGES.game = function (id) {
   const stv = r => { const x = streak(r); return /^[WL]\d+$/.test(x) ? (x[0] === 'W' ? 1 : -1) * +x.slice(1) : null; };
   const num = (P, k) => P.gp ? P[k] / P.gp : null, rkv = v => v || 999, nz = v => +v || null;
   const ppg = P => P.gp ? (P.pf / P.gp).toFixed(1) : '–', papg = P => P.gp ? (P.pa / P.gp).toFixed(1) : '–', rec3 = a => a[0] + a[1] + a[2] ? `${a[0]}-${a[1]}${a[2] ? '-' + a[2] : ''}` : '–';
-  const side = (t, coach, scr, won) => `<div class="gp-team ${done && !won ? 'l' : ''}">${teamPlate(t, 'gp')}<div><div class="gp-name">${rk(t) ? `<span class="rk">#${rk(t)}</span>` : ''}<a href="#team/${esc(t.id)}${s === L.season ? '' : '/' + s}">${esc(t.name)}</a></div>
+  const side = (t, coach, scr, won) => `<div class="gp-team ${done && !won ? 'l' : ''}">${sideLbl(g, t.id === g.home ? 'home' : 'away')}${teamPlate(t, 'gp')}<div><div class="gp-name">${rk(t) ? `<span class="rk">#${rk(t)}</span>` : ''}<a href="#team/${esc(t.id)}${s === L.season ? '' : '/' + s}">${esc(t.name)}</a></div>
     <div class="muted small">${rec(recs[t.id])}${coach && coach !== 'CPU' ? ` · <a href="#coach/${slug(coach)}">${esc(coach)}</a>` : ' · CPU'}</div></div>${done ? `<div class="gp-score">${g.forfeit ? (won ? 'FW' : 'FL') : scr}</div>` : ''}</div>`;
   const hw = +g.homeScore > +g.awayScore;
   const ko = kickoffCard(g);

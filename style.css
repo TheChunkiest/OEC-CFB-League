@@ -1796,3 +1796,10 @@ body:has(#modal .modal) .livepop{display:none}
 .h2hlist.compact .h2hg-w{font-size:12px}
 .h2hlist.compact .h2hg-r,.h2hlist.compact .h2hg-s{font-size:15px}
 @media(min-width:760px){.h2hlist.compact{grid-template-columns:1fr 1fr;column-gap:24px}.h2hlist.compact .h2h-games{grid-column:1/-1}.h2hlist.compact>.h2hr:nth-child(2){border-top:0}}
+/* Away / home side labels (score bugs, betting board, featured games, game pages) */
+.sidelbl{flex:none;width:34px;font-size:9.5px;font-weight:800;letter-spacing:1px;color:#8d8183;text-align:left}
+.sidelbl.home{color:var(--gold)}
+.bugrow .sidelbl,.bgrow .sidelbl{margin-right:-2px}
+.gp-team .sidelbl{width:auto}
+.gp-vs .gp-team .sidelbl{order:-1;margin-bottom:-2px}
+.gp-team:not(.gp-vs .gp-team) .sidelbl{width:34px}
