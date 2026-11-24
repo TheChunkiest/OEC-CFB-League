@@ -1633,3 +1633,40 @@ footer.hubfoot{border-top:0;padding:10px 14px calc(110px + env(safe-area-inset-b
 .sc-more>summary span::after{content:' ›'}
 .sc-more[open]>summary span::after{content:' ⌄'}
 @media(max-width:480px){.as-row{grid-template-columns:1fr 1fr}.as-it:nth-child(3){grid-column:1/-1}}
+/* Footer, quieter: no card fill, small heading, compact buttons */
+.ft-card{background:none;border:0;border-top:1px solid rgba(255,255,255,.08);border-radius:0;padding:18px 4px 0}
+.ft-head{justify-content:center;text-align:left;gap:10px}
+.ft-logo{width:34px;height:34px;filter:none;opacity:.9}
+.ft-head b{font-size:16px;letter-spacing:.8px;color:#d9d0d1}
+.ft-head span{font-size:12px;color:#8d8183;margin-top:1px}
+.ft-social{display:flex;justify-content:center;gap:8px;margin-top:12px}
+.soc{min-height:36px;padding:0 14px;border-radius:999px;font-size:13px;font-weight:700;gap:6px;background:rgba(255,255,255,.04)!important;border-color:rgba(255,255,255,.14)!important;color:#d9d0d1}
+.soc svg{width:17px;height:17px}
+.ft-app{max-width:340px;margin:10px auto 0;padding:7px 10px;gap:10px;background:none;border-color:transparent}
+.ft-app:hover{border-color:rgba(255,255,255,.12)}
+.ft-app-ic{width:28px;height:28px;border-radius:8px}
+.ft-app-ic svg{width:16px;height:16px}
+.ft-app-t b{font-size:13px;color:#d9d0d1}
+.ft-app-t small{font-size:11.5px}
+.ft-meta{margin-top:10px;font-size:11.5px}
+/* Safari doesn't lay out <summary> as a flex box, so these summaries use an inner row */
+.sc-more>summary,details.cpubox>summary{display:block}
+.sumrow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+details.cpubox>summary .sumrow{justify-content:flex-start;gap:12px}
+/* Commissioner status strip: make sure items keep their spacing */
+.adminstatus .as-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px 12px}
+.adminstatus .as-it{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.adminstatus .as-it>span{display:block}
+.adminstatus .as-it>b{display:block}
+.sc-more .sumrow em{font-style:normal;min-width:0}
+.sc-more>summary span::after{content:' ›'}
+.sc-more[open]>summary span::after{content:' ⌄'}
+details.cpubox>summary .go{margin-left:auto}
+details.cpubox[open]>summary .go{transform:rotate(90deg)}
+/* Overscroll (the bounce past the top or bottom of the page): no rubber-band on the main site, and whatever does
+   show past the edges is the same dark color as the page, so nothing pops in. */
+html.fieldbg{background-color:#0b0a0b;overscroll-behavior-y:none}
+html.fieldbg body{overscroll-behavior-y:none}
+/* The page already leaves room for the tab bar, so the footer doesn't need its own extra space */
+footer.hubfoot{padding-bottom:16px}
+html.fieldbg{background-repeat:no-repeat}

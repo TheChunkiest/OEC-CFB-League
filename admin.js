@@ -161,7 +161,7 @@ function scoreRows(games, dr) {
     const sum = [played(g) ? '' : ko ? '🕗 ' + esc(fmtKick(ko, true)) : '🕗 No kickoff set', played(g) ? '' : g.locked ? '🔒 Bets locked' : '🎟️ Bets open', ff ? '⚠️ Forfeit' : ''].filter(Boolean).join(' · ') || 'Forfeit';
     return `<div class="card scorecard">${row('away', av)}${row('home', hv)}
       <div class="meta sc-line">${g.week !== L().week ? `<b class="gstat">${wkOf(g)}</b> · ` : ''}${l ? `${g.lines ? 'Line' : 'Projected'}: ${esc(team(g.home).abbr)} ${fmtLine(l.spread)} · O/U ${l.total}` : ''} ${g.type && g.type !== 'reg' ? '· <span class="tag gold">' + esc(g.type.toUpperCase()) + '</span>' : ''}</div>
-      <details class="sc-more"${ff ? ' open' : ''}><summary>${sum}<span>Edit</span></summary>${kick}${lock}
+      <details class="sc-more"${ff ? ' open' : ''}><summary><div class="sumrow"><em>${sum}</em><span>Edit</span></div></summary>${kick}${lock}
       <div class="kickrow"><span class="muted small">Result</span><select data-ff="${esc(g.id)}" style="font-size:13px;padding:4px 8px;width:auto"><option value="">Played</option><option value="away" ${ff === 'away' ? 'selected' : ''}>Away forfeit win</option><option value="home" ${ff === 'home' ? 'selected' : ''}>Home forfeit win</option></select></div></details></div>`;
   }).join('');
 }

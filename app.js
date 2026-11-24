@@ -153,7 +153,7 @@ function cpuBroadcasts(tid, s = D.league.season) {
   const label = v => short(v.t).replace(/^S(?:eason)?\s*\d{1,2}\s*[,:·-]?\s*/i, '') || short(v.t);
   const by = {}; vs.slice(0, 30).forEach(v => (by[v.se || 0] = by[v.se || 0] || []).push(v));
   const groups = Object.keys(by).map(Number).sort((a, b) => b - a);
-  return `<details class="card cpubox"><summary><span class="cpu-ic" aria-hidden="true">▶</span><span class="cpu-t"><b>Broadcasts vs CPU teams</b><small>${vs.length} video${vs.length === 1 ? '' : 's'}${groups.length > 1 || groups[0] ? ` · ${groups.filter(Boolean).map(x => 'S' + seasonNum(x)).join(', ')}` : ''}</small></span><span class="go" aria-hidden="true">›</span></summary>
+  return `<details class="card cpubox"><summary><div class="sumrow"><span class="cpu-ic" aria-hidden="true">▶</span><span class="cpu-t"><b>Broadcasts vs CPU teams</b><small>${vs.length} video${vs.length === 1 ? '' : 's'}${groups.length > 1 || groups[0] ? ` · ${groups.filter(Boolean).map(x => 'S' + seasonNum(x)).join(', ')}` : ''}</small></span><span class="go" aria-hidden="true">›</span></div></summary>
     ${groups.map(se => `<div class="cpu-se"><h4>${se ? `Season ${seasonNum(se)} <span>${se}</span>` : 'Other'}</h4>${by[se].map(v => `<a class="cpu-v" href="https://youtu.be/${esc(v.id)}" target="_blank" rel="noopener"><i aria-hidden="true">▶</i><span>${esc(label(v))}</span></a>`).join('')}</div>`).join('')}</details>`;
 }
 // YouTube-style red play button (used instead of video thumbnails, which vary too much in look)
@@ -1007,12 +1007,12 @@ function slipRows(w) {
     const g = D.games.find(x => x.id === l.gameId), side = g ? (l.pick === 'home' ? g.home : g.away) : null;
     const rn = id => rankName(id, g.season, g.week);
     const match = g ? `${rn(g.away)} @ ${rn(g.home)} · ${gWeek(g)}` : '';
-    if (l.market === 'ml') return { t: `${rn(side)} Moneyline`, s: match, o: l.odds };
-    if (l.market === 'spread') return { t: `${rn(side)} ${fmtLine(l.pick === 'home' ? l.line : -l.line)}`, s: 'Spread · ' + match, o: l.odds };
+    if (l.market === 'ml') return { t: `${rn(side)} Moneyline`, s: match, o: l.odds, tm: side };
+    if (l.market === 'spread') return { t: `${rn(side)} ${fmtLine(l.pick === 'home' ? l.line : -l.line)}`, s: 'Spread · ' + match, o: l.odds, tm: side };
     if (l.market === 'total') return { t: `${l.pick === 'over' ? 'Over' : 'Under'} ${l.line} points`, s: 'Total · ' + match, o: l.odds };
-    if (l.market === 'tth' || l.market === 'tta') return { t: `${rn(l.market === 'tth' ? g.home : g.away)} ${l.pick === 'over' ? 'Over' : 'Under'} ${l.line} points`, s: 'Team total · ' + match, o: l.odds };
-    if (l.market === 'future') return { t: `${rankName(l.pick)} to win the title`, s: `League Champion · Season ${seasonNum(w.season)}`, o: l.odds };
-    if (l.market === 'wins') return { t: `${rankName(l.team)} ${l.pick === 'over' ? 'Over' : 'Under'} ${l.line} wins`, s: `Regular-season win total · Season ${seasonNum(w.season)}`, o: l.odds };
+    if (l.market === 'tth' || l.market === 'tta') return { t: `${rn(l.market === 'tth' ? g.home : g.away)} ${l.pick === 'over' ? 'Over' : 'Under'} ${l.line} points`, s: 'Team total · ' + match, o: l.odds, tm: l.market === 'tth' ? g.home : g.away };
+    if (l.market === 'future') return { t: `${rankName(l.pick)} to win the title`, s: `League Champion · Season ${seasonNum(w.season)}`, o: l.odds, tm: l.pick };
+    if (l.market === 'wins') return { t: `${rankName(l.team)} ${l.pick === 'over' ? 'Over' : 'Under'} ${l.line} wins`, s: `Regular-season win total · Season ${seasonNum(w.season)}`, o: l.odds, tm: l.team };
     return { t: wagerLabel(l), s: '', o: l.odds };
   });
 }
@@ -1022,46 +1022,83 @@ function wrapText(ctx, text, maxW) {
   words.forEach(wd => { const t = cur ? cur + ' ' + wd : wd; if (ctx.measureText(t).width > maxW && cur) { lines.push(cur); cur = wd; } else cur = t; });
   if (cur) lines.push(cur); return lines;
 }
+// ---------- Shared look for the images the site makes (bet slips, cheat sheets) ----------
+// Same broadcast style as the site: dark field with yard lines and stadium glow, condensed italic headlines, red
+// chyron tags, see-through cards and jersey plates.
+const CV = { F: '"Barlow Condensed","Arial Narrow",Impact,sans-serif', B: 'Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif',
+  RED: '#d3121c', GOLD: '#f5b82e', TXT: '#f4f1f2', MUT: '#a9a1a6', GRN: '#43c97e', BAD: '#ff8a8f', CARD: 'rgba(20,16,18,.86)', EDGE: 'rgba(255,255,255,.10)' };
+async function canvasFonts() {
+  try { await Promise.all(['italic 800 40px "Barlow Condensed"', '800 40px "Barlow Condensed"', '800 40px Inter', '700 40px Inter', '600 40px Inter'].map(f => document.fonts.load(f))); } catch (e) { }
+}
+function paintField(x, W, H) {
+  const g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, '#0f1d12'); g.addColorStop(Math.min(1, 700 / H), '#0a120c'); g.addColorStop(1, '#0b0a0b');
+  x.fillStyle = g; x.fillRect(0, 0, W, H);
+  const glow = (cx, cy, r, col) => { const q = x.createRadialGradient(cx, cy, 0, cx, cy, r); q.addColorStop(0, col); q.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = q; x.fillRect(0, 0, W, H); };
+  glow(W * 0.06, 0, 380, 'rgba(255,236,180,.22)'); glow(W * 0.94, 0, 380, 'rgba(255,236,180,.22)'); glow(W / 2, -160, 760, 'rgba(211,18,28,.24)');
+  x.fillStyle = 'rgba(255,255,255,.05)';
+  for (let y = 150; y < H; y += 150) x.fillRect(0, y, W, 3);                       // yard lines
+  for (let y = 0; y < H; y += 30) { x.fillRect(W * 0.33 - 10, y, 20, 3); x.fillRect(W * 0.67 - 10, y, 20, 3); x.fillRect(0, y, 14, 3); x.fillRect(W - 14, y, 14, 3); }   // hash marks
+}
+function cvRound(x, X, Y, w, h, r) { x.beginPath(); if (x.roundRect) x.roundRect(X, Y, w, h, r); else x.rect(X, Y, w, h); }
+function cvCard(x, X, Y, w, h, r = 22, fill = CV.CARD, edge = CV.EDGE) { cvRound(x, X, Y, w, h, r); x.fillStyle = fill; x.fill(); x.strokeStyle = edge; x.lineWidth = 2; x.stroke(); }
+// Red slanted chyron tag with condensed italic caps (returns its width).
+function cvChyron(x, t, X, Y, size = 30, align = 'left', col = CV.RED) {
+  x.font = `italic 800 ${size}px ${CV.F}`; x.textAlign = 'left';
+  const tw = x.measureText(t.toUpperCase()).width, padX = size * 0.55, h = size * 1.32, sk = h * 0.32, w = tw + padX * 2 + sk;
+  const L = align === 'right' ? X - w : align === 'center' ? X - w / 2 : X;
+  x.fillStyle = col; x.beginPath(); x.moveTo(L, Y); x.lineTo(L + w, Y); x.lineTo(L + w - sk, Y + h); x.lineTo(L, Y + h); x.closePath(); x.fill();
+  x.fillStyle = '#fff'; x.fillText(t.toUpperCase(), L + padX, Y + h * 0.76);
+  return w;
+}
+// Jersey plate: team color, abbreviation in its readable ink.
+function cvPlate(x, t, X, Y, w, h) {
+  const c = teamColor(t); cvRound(x, X, Y, w, h, h * 0.2); x.fillStyle = c; x.fill();
+  x.strokeStyle = 'rgba(255,255,255,.55)'; x.lineWidth = 3; cvRound(x, X + 1.5, Y + 1.5, w - 3, h - 3, h * 0.18); x.stroke();
+  const ab = String(t.abbr || t.name || '').slice(0, 5).toUpperCase(); let z = h * 0.56;
+  x.font = `800 ${z}px ${CV.F}`; while (x.measureText(ab).width > w - 14 && z > 12) { z -= 2; x.font = `800 ${z}px ${CV.F}`; }
+  x.fillStyle = plateInk(c); x.textAlign = 'center'; x.fillText(ab, X + w / 2, Y + h / 2 + z * 0.36); x.textAlign = 'left';
+}
 async function drawSlip(w) {
-  const rows = slipRows(w), W = 1080, P = 64, F = '"Arial Black","Segoe UI Black",Impact,system-ui,sans-serif', B = 'system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
+  await canvasFonts();
+  const rows = slipRows(w), W = 1080, P = 60, { F, B, GOLD, TXT, MUT } = CV;
   const st = w.status || 'open', settled = st !== 'open';
   const toWin = winProfit(w);
   const legRes = w.market === 'parlay' ? (w.legs || []).map(l => l.result || 'open') : [st];
-  const icons = settled || legRes.some(r => r !== 'open');
+  const icons = settled || legRes.some(r => r !== 'open'), plates = rows.some(r => r.tm);
   const band = { won: ['#1f9d55', `WINNER · +${(w.payout || 0).toLocaleString()} CRACKERS`], lost: ['#a3141c', 'LOST'], push: ['#4a4245', 'PUSH · STAKE REFUNDED'], void: ['#4a4245', 'VOID · STAKE REFUNDED'], cashed: ['#17708f', `CASHED OUT · +${(w.payout || 0).toLocaleString()} CRACKERS`] }[st];
   const c = document.createElement('canvas'), ctx = c.getContext('2d');
-  const tx = P + (icons ? 92 : 36);
-  ctx.font = `700 40px ${B}`;
-  const rowH = rows.map(r => 40 + wrapText(ctx, r.t, W - tx - P - 190).length * 50 + (r.s ? 44 : 0));
-  const H = 330 + (band ? 130 : 0) + 150 + (w.boost ? 70 : 0) + rowH.reduce((a, b) => a + b, 0) + 300 + (w.settledAt ? 210 : 170);
+  const tx = P + 28 + (icons ? 70 : 0) + (plates ? 116 : 0), oddsW = 170;
+  ctx.font = `700 38px ${B}`;
+  const rowH = rows.map(r => 44 + wrapText(ctx, r.t, W - tx - P - oddsW - 30).length * 48 + (r.s ? 42 : 0));
+  const H = 300 + (band ? 150 : 0) + 150 + (w.boost ? 70 : 0) + rowH.reduce((a, b) => a + b + 16, 0) + 290 + (w.settledAt ? 200 : 160);
   c.width = W; c.height = H;
-  const bg = ctx.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#1d0809'); bg.addColorStop(0.35, '#121011'); bg.addColorStop(1, '#09090a');
-  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-  ctx.fillStyle = '#d3121c'; ctx.fillRect(0, 300, W, 8); ctx.fillStyle = '#f5b82e'; ctx.fillRect(0, 314, W, 5);
+  paintField(ctx, W, H);
+  // Header: logo, chyron, season and coach
   const logo = await loadImg('logo.png');
-  if (logo) { const lh = 220, lw = lh * logo.width / logo.height; ctx.drawImage(logo, P - 10, 40, lw, lh); }
-  ctx.textAlign = 'right'; ctx.fillStyle = '#fff'; ctx.font = `900 54px ${F}`; ctx.fillText('OEC SPORTSBOOK', W - P, 130);
-  ctx.fillStyle = '#f5b82e'; ctx.font = `700 34px ${B}`; ctx.fillText(`Season ${seasonNum(w.season)} · Placed in ${wkName(w.week, w.season)}`, W - P, 185);
-  ctx.fillStyle = '#a69a9c'; ctx.font = `600 30px ${B}`; ctx.fillText(`Coach ${w.coach || ''}`, W - P, 235);
-  let y = 319;
+  if (logo) { const lh = 200, lw = lh * logo.width / logo.height; ctx.drawImage(logo, P - 14, 40, lw, lh); }
+  cvChyron(ctx, 'OEC Sportsbook', W - P, 70, 50, 'right');
+  ctx.textAlign = 'right'; ctx.fillStyle = GOLD; ctx.font = `600 32px ${B}`; ctx.fillText(`Season ${seasonNum(w.season)} · Placed in ${wkName(w.week, w.season)}`, W - P, 190);
+  ctx.fillStyle = MUT; ctx.font = `600 29px ${B}`; ctx.fillText(`Coach ${w.coach || ''}`, W - P, 236); ctx.textAlign = 'left';
+  let y = 280;
   if (band) {
-    ctx.fillStyle = band[0]; ctx.fillRect(0, y, W, 130);
-    ctx.fillStyle = 'rgba(255,255,255,.12)'; for (let k = -W; k < W * 2; k += 60) { ctx.beginPath(); ctx.moveTo(k, y); ctx.lineTo(k + 30, y); ctx.lineTo(k - 100, y + 130); ctx.lineTo(k - 130, y + 130); ctx.fill(); }
-    ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.font = `900 ${st === 'won' ? 58 : 52}px ${F}`; ctx.fillText(band[1], W / 2, y + 86); ctx.textAlign = 'left';
-    y += 130;
-  }
-  y += 81; ctx.textAlign = 'left';
-  const status = { open: ['#43c97e', '✓ BET PLACED'], won: ['#43c97e', '✓ SETTLED · WON'], lost: ['#ff5a5f', '✕ SETTLED · LOST'], push: ['#a69a9c', 'SETTLED · PUSH'], void: ['#a69a9c', 'SETTLED · VOID'] }[st] || ['#43c97e', ''];
-  ctx.fillStyle = status[0]; ctx.font = `800 30px ${B}`; ctx.fillText(status[1], P, y);
-  y += 70; ctx.fillStyle = '#fff'; ctx.font = `900 50px ${F}`;
+    cvRound(ctx, P, y, W - P * 2, 116, 22); ctx.fillStyle = band[0]; ctx.fill();
+    ctx.save(); cvRound(ctx, P, y, W - P * 2, 116, 22); ctx.clip(); ctx.fillStyle = 'rgba(255,255,255,.10)';
+    for (let k = 0; k < W * 2; k += 64) { ctx.beginPath(); ctx.moveTo(k, y); ctx.lineTo(k + 30, y); ctx.lineTo(k - 90, y + 116); ctx.lineTo(k - 120, y + 116); ctx.fill(); }
+    ctx.restore();
+    ctx.textAlign = 'center'; ctx.fillStyle = '#fff'; ctx.font = `italic 800 ${st === 'won' ? 62 : 56}px ${F}`; ctx.fillText(band[1], W / 2, y + 78); ctx.textAlign = 'left';
+    y += 150;
+  } else y += 20;
+  const status = { open: [CV.GRN, '✓ BET PLACED'], won: [CV.GRN, '✓ SETTLED · WON'], lost: ['#ff5a5f', '✕ SETTLED · LOST'], push: [MUT, 'SETTLED · PUSH'], void: [MUT, 'SETTLED · VOID'], cashed: ['#6fc6e6', '✓ CASHED OUT'] }[st] || [CV.GRN, ''];
+  y += 50; ctx.fillStyle = status[0]; ctx.font = `800 28px ${B}`; ctx.fillText(status[1], P, y);
+  y += 68; ctx.fillStyle = TXT; ctx.font = `italic 800 64px ${F}`;
   ctx.fillText(w.market === 'parlay' ? `${rows.length}-LEG PARLAY` : 'SINGLE BET', P, y);
-  ctx.textAlign = 'right'; ctx.fillStyle = '#f5b82e'; ctx.fillText(fmtOdds(w.odds), W - P, y); ctx.textAlign = 'left';
-  y += 40;
+  ctx.textAlign = 'right'; ctx.fillStyle = GOLD; ctx.fillText(fmtOdds(w.odds), W - P, y); ctx.textAlign = 'left';
+  y += 36;
   if (w.boost) {
     const txt = `⚡ ${boostName(w.boost).toUpperCase()} · +${Math.round((w.boost - 1) * 100)}% PROFIT BOOST`;
-    ctx.font = `900 28px ${B}`; const tw = ctx.measureText(txt).width + 40;
-    ctx.fillStyle = '#f5b82e'; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(P, y - 4, tw, 50, 25) : ctx.rect(P, y - 4, tw, 50); ctx.fill();
-    ctx.fillStyle = '#140b00'; ctx.fillText(txt, P + 20, y + 31); y += 70;
+    ctx.font = `800 26px ${B}`; const tw = ctx.measureText(txt).width + 44;
+    cvCard(ctx, P, y - 2, tw, 52, 26, 'rgba(245,184,46,.16)', 'rgba(245,184,46,.6)');
+    ctx.fillStyle = GOLD; ctx.fillText(txt, P + 22, y + 34); y += 70;
   }
   const drawIcon = (r, cx, cy) => {
     if (r === 'open') { ctx.strokeStyle = '#6b6264'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(cx, cy, 20, 0, Math.PI * 2); ctx.stroke(); return; }
@@ -1072,39 +1109,46 @@ async function drawSlip(w) {
     else { ctx.moveTo(cx - 9, cy); ctx.lineTo(cx + 9, cy); }
     ctx.stroke(); ctx.lineCap = 'butt';
   };
+  y += 10;
   rows.forEach((r, i) => {
-    const top = y, h = rowH[i], res = legRes[i] || 'open';
-    ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(P, top, W - P * 2, h - 16);
-    ctx.fillStyle = res === 'won' ? '#1f9d55' : res === 'lost' ? '#c4161c' : '#d3121c'; ctx.fillRect(P, top, 8, h - 16);
-    if (icons) drawIcon(res, P + 52, top + 48);
-    ctx.font = `700 40px ${B}`; ctx.fillStyle = res === 'lost' ? '#bdb3b5' : '#fff';
-    const lines = wrapText(ctx, r.t, W - tx - P - 190); let ly = top + 62;
-    lines.forEach(t => { ctx.fillText(t, tx, ly); ly += 50; });
-    if (r.s) { ctx.font = `500 28px ${B}`; ctx.fillStyle = '#a69a9c'; wrapText(ctx, r.s, W - tx - P - 40).slice(0, 1).forEach(t => ctx.fillText(t, tx, ly - 4)); }
-    ctx.textAlign = 'right'; ctx.font = `900 40px ${F}`; ctx.fillStyle = '#f5b82e'; ctx.fillText(fmtOdds(r.o), W - P - 30, top + 62); ctx.textAlign = 'left';
-    y += h;
+    const top = y, h = rowH[i], res = legRes[i] || 'open', tm = r.tm ? team(r.tm) : null;
+    cvCard(ctx, P, top, W - P * 2, h, 20);
+    ctx.save(); cvRound(ctx, P, top, W - P * 2, h, 20); ctx.clip();
+    ctx.fillStyle = res === 'won' ? '#1f9d55' : res === 'lost' ? '#c4161c' : tm ? teamColor(tm) : CV.RED; ctx.fillRect(P, top, 8, h); ctx.restore();
+    let lx = P + 28;
+    if (icons) { drawIcon(res, lx + 24, top + 50); lx += 70; }
+    if (plates && tm) cvPlate(ctx, tm, lx, top + 24, 100, 58);
+    ctx.font = `700 38px ${B}`; ctx.fillStyle = res === 'lost' ? '#bdb3b5' : TXT;
+    const lines = wrapText(ctx, r.t, W - tx - P - oddsW - 30); let ly = top + 64;
+    lines.forEach(t => { ctx.fillText(t, tx, ly); ly += 48; });
+    if (r.s) { ctx.font = `500 26px ${B}`; ctx.fillStyle = MUT; wrapText(ctx, r.s, W - tx - P - 40).slice(0, 1).forEach(t => ctx.fillText(t, tx, ly - 4)); }
+    // price tile
+    const ox = W - P - 24 - oddsW + 30, oy = top + 22;
+    cvCard(ctx, ox, oy, oddsW - 30, 60, 14, 'rgba(245,184,46,.12)', 'rgba(245,184,46,.45)');
+    ctx.textAlign = 'center'; ctx.font = `italic 800 40px ${F}`; ctx.fillStyle = GOLD; ctx.fillText(fmtOdds(r.o), ox + (oddsW - 30) / 2, oy + 44); ctx.textAlign = 'left';
+    y += h + 16;
   });
-  y += 30; const bw = (W - P * 2 - 40) / 3;
+  y += 20; const bw = (W - P * 2 - 32) / 3;
   const boxes = st === 'won' ? [['WAGER', w.stake], ['WON', w.payout || 0], ['TOTAL PAID', w.stake + (w.payout || 0)]]
     : st === 'cashed' ? [['WAGER', w.stake], ['CASHED OUT', w.payout || 0], ['TOTAL PAID', w.stake + (w.payout || 0)]]
     : st === 'lost' ? [['WAGER', w.stake], ['WOULD HAVE WON', toWin], ['PAID', 0]]
     : st === 'push' || st === 'void' ? [['WAGER', w.stake], ['RESULT', st.toUpperCase()], ['REFUNDED', w.stake]]
     : [['WAGER', w.stake], ['TO WIN', toWin], ['TOTAL PAYOUT', w.stake + toWin]];
-  const hiCol = st === 'won' || st === 'cashed' ? '#43c97e' : st === 'lost' ? '#3a2326' : '#f5b82e', hiText = st === 'lost' ? '#ffadb0' : '#140b00';
+  const hi = st === 'won' || st === 'cashed' ? ['rgba(67,201,126,.18)', 'rgba(67,201,126,.7)', '#7be3a6'] : st === 'lost' ? ['rgba(211,18,28,.18)', 'rgba(255,80,88,.6)', '#ffadb0'] : ['rgba(245,184,46,.16)', 'rgba(245,184,46,.65)', GOLD];
   boxes.forEach(([k, v], i) => {
-    const x = P + i * (bw + 20), hi = i === 2;
-    ctx.fillStyle = hi ? hiCol : 'rgba(255,255,255,0.07)'; ctx.fillRect(x, y, bw, 190);
-    ctx.fillStyle = hi ? hiText : '#a69a9c'; ctx.font = `800 ${k.length > 12 ? 21 : 26}px ${B}`; ctx.textAlign = 'center'; ctx.fillText(k, x + bw / 2, y + 62);
-    ctx.fillStyle = hi ? hiText : '#fff'; ctx.font = `900 ${typeof v === 'string' ? 44 : 58}px ${F}`; ctx.fillText(typeof v === 'string' ? v : Number(v).toLocaleString(), x + bw / 2, y + 140);
-    if (typeof v !== 'string') { ctx.font = `600 22px ${B}`; ctx.fillText('Crackers', x + bw / 2, y + 172); }
+    const x = P + i * (bw + 16), isHi = i === 2;
+    cvCard(ctx, x, y, bw, 180, 20, isHi ? hi[0] : CV.CARD, isHi ? hi[1] : CV.EDGE);
+    ctx.textAlign = 'center'; ctx.fillStyle = isHi ? hi[2] : MUT; ctx.font = `700 ${k.length > 12 ? 20 : 24}px ${B}`; ctx.fillText(k, x + bw / 2, y + 52);
+    ctx.fillStyle = isHi ? hi[2] : TXT; ctx.font = `italic 800 ${typeof v === 'string' ? 52 : 70}px ${F}`; ctx.fillText(typeof v === 'string' ? v : Number(v).toLocaleString(), x + bw / 2, y + 128);
+    if (typeof v !== 'string') { ctx.fillStyle = isHi ? hi[2] : MUT; ctx.font = `600 22px ${B}`; ctx.fillText('Crackers', x + bw / 2, y + 160); }
   });
-  ctx.textAlign = 'left'; y += 250;
-  ctx.strokeStyle = '#33242a'; ctx.lineWidth = 2; ctx.setLineDash([12, 10]); ctx.beginPath(); ctx.moveTo(P, y - 30); ctx.lineTo(W - P, y - 30); ctx.stroke(); ctx.setLineDash([]);
+  ctx.textAlign = 'left'; y += 240;
+  ctx.strokeStyle = 'rgba(255,255,255,.14)'; ctx.lineWidth = 2; ctx.setLineDash([12, 10]); ctx.beginPath(); ctx.moveTo(P, y - 30); ctx.lineTo(W - P, y - 30); ctx.stroke(); ctx.setLineDash([]);
   const when = ts => new Date(ts).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
-  ctx.fillStyle = '#d9d0d1'; ctx.font = `600 30px ${B}`; ctx.fillText('Placed ' + when(w.ts || Date.now()), P, y + 20);
-  if (w.settledAt) { ctx.fillText('Settled ' + when(w.settledAt), P, y + 62); y += 42; }
-  ctx.fillStyle = '#a69a9c'; ctx.font = `500 26px ${B}`; ctx.fillText('Bet ID ' + String(w.id || '').toUpperCase(), P, y + 70);
-  ctx.textAlign = 'right'; ctx.fillText('OEC CFB League Hub', W - P, y + 70); ctx.textAlign = 'left';
+  ctx.fillStyle = '#d9d0d1'; ctx.font = `600 28px ${B}`; ctx.fillText('Placed ' + when(w.ts || Date.now()), P, y + 20);
+  if (w.settledAt) { ctx.fillText('Settled ' + when(w.settledAt), P, y + 60); y += 40; }
+  ctx.fillStyle = MUT; ctx.font = `500 24px ${B}`; ctx.fillText('Bet ID ' + String(w.id || '').toUpperCase(), P, y + 68);
+  ctx.textAlign = 'right'; ctx.font = `italic 800 30px ${F}`; ctx.fillStyle = TXT; ctx.fillText('OEC CFB LEAGUE HUB', W - P, y + 68); ctx.textAlign = 'left';
   return c;
 }
 async function showSlipImage(w) {
@@ -1212,46 +1256,45 @@ function betAction(g) {
   return { n: legs.length, top: wagerLabel({ ...top[0], odds: undefined }).replace(/\s*\(.*\)$/, ''), topN: top.length };
 }
 async function drawCheat(C) {
-  // One phone screen (1080 x 2340, the shape of an iPhone screenshot).
-  const { g, A, H, l, p, fav, done } = C, s = g.season, W = 1080, HT = 2340, P = 52, IW = W - 2 * P;
-  const F = '"Arial Black","Segoe UI Black",Impact,system-ui,sans-serif', B = 'system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
-  const BG = '#0b0b0d', CARD = '#17141a', LINE = '#2c262b', TXT = '#f4f1f2', MUT = '#a9a1a6', GOLD = '#f5b82e', RED = '#c8102e', GRN = '#3ecf6e', BAD = '#ff8a8f';
-  const c = document.createElement('canvas'); c.width = W; c.height = HT;
+  const { g, A, H, l, p, fav, done } = C, s = g.season, W = 860, HT = 3400, P = 40, IW = W - 2 * P;
+  await canvasFonts();
+  const { F, B } = CV, LINE = 'rgba(255,255,255,.10)', TXT = CV.TXT, MUT = CV.MUT, GOLD = CV.GOLD, GRN = '#3ecf6e', BAD = CV.BAD;
+  const c = document.createElement('canvas'); c.width = W; c.height = HT;   // drawn tall, then trimmed to the content
   const x = c.getContext('2d');
-  x.fillStyle = BG; x.fillRect(0, 0, W, HT);
+  paintField(x, W, HT);
   const font = (sz, f = B, w = '600') => { x.font = `${w} ${sz}px ${f}`; };
   const text = (t, X, Y, col = TXT, align = 'left') => { x.fillStyle = col; x.textAlign = align; x.fillText(t, X, Y); };
-  const fit = (t, sz, maxW, f = F, w = '900') => { let z = sz; font(z, f, w); while (x.measureText(t).width > maxW && z > 16) { z -= 2; font(z, f, w); } return z; };
-  const card = (Y, h) => { x.fillStyle = CARD; x.beginPath(); x.roundRect(P - 14, Y, IW + 28, h, 20); x.fill(); };
-  const label = (t, Y) => { font(21, B, '800'); x.save(); x.letterSpacing = '3px'; text(t.toUpperCase(), P, Y, GOLD); x.restore(); };
+  const fit = (t, sz, maxW, f = F, w = 'italic 800') => { let z = sz; font(z, f, w); while (x.measureText(t).width > maxW && z > 16) { z -= 2; font(z, f, w); } return z; };
+  const card = (Y, h) => cvCard(x, P - 14, Y, IW + 28, h, 22);
+  // Section labels are small red chyron tags, like the headers on the site.
+  const label = (t, Y) => { cvChyron(x, t, P - 14, Y - 30, 26); };
   const pc = v => pctStr(v);
   let y;
   // Header
-  x.fillStyle = RED; x.fillRect(0, 0, W, 10);
   const logo = await loadImg('logo.png');
-  if (logo) { const h = 76, w = logo.width * h / logo.height; x.drawImage(logo, P, 34, w, h); }
-  font(22, B, '800'); x.save(); x.letterSpacing = '4px'; text('BROADCAST CHEAT SHEET', W - P, 64, GOLD, 'right'); x.restore();
+  if (logo) { const h = 96, w = logo.width * h / logo.height; x.drawImage(logo, P - 8, 26, w, h); }
+  cvChyron(x, 'Broadcast Cheat Sheet', W - P, 36, 30, 'right');
   font(24, B, '600'); text(`Season ${seasonNum(s)} · ${g.type === 'ccg' ? 'Championship' : g.type === 'bowl' ? (g.note || 'Bowl Season') : wkName(g.week, g.season)}${C.isGotw ? ' · ★ GOTW' : ''}`, W - P, 98, MUT, 'right');
   y = 168; fit(C.title, 40, IW); text(C.title, P, y);
   // Teams
   const pbA = playbookOf(A, s, C.coachA), pbH = playbookOf(H, s, C.coachH), pbRow = pbA || pbH ? 36 : 0;
-  y += 30; const tTop = y, tH = (done ? 300 : 230) + pbRow; card(tTop, tH);
+  y += 30; const tTop = y, tH = (done ? 342 : 272) + pbRow; card(tTop, tH);
   const colW = (IW - 90) / 2;
   const side = (t, coach, rkN, recLine, X, al, score) => {
     let Y = tTop + 34;
-    x.fillStyle = liftColor(teamColor(t)); x.beginPath(); x.roundRect(al === 'left' ? X : X - 120, Y, 120, 12, 6); x.fill();
-    Y += 62; fit((rkN ? '#' + rkN + ' ' : '') + t.name, 46, colW); text((rkN ? '#' + rkN + ' ' : '') + t.name, X, Y, TXT, al);
+    cvPlate(x, t, al === 'left' ? X : X - 110, Y - 8, 110, 62);
+    Y += 104; fit((rkN ? '#' + rkN + ' ' : '') + t.name, 46, colW); text((rkN ? '#' + rkN + ' ' : '') + t.name, X, Y, TXT, al);
     Y += 38; fit(recLine, 26, colW, B, '700'); text(recLine, X, Y, TXT, al);
     Y += 36; font(25, B, '600'); text((coach && coach !== 'CPU' ? 'Coach ' + coach : 'CPU') + (mascotOf(t) ? ' · ' + mascotOf(t) : ''), X, Y, GOLD, al);
     if (pbRow) { Y += 36; const pt = pbText(t === A ? pbA : pbH, ' / '); if (pt) { fit(pt, 24, colW, B, '600'); text(pt, X, Y, MUT, al); } }
-    if (done) { Y += 72; font(76, F, '900'); text(g.forfeit ? '' : String(score), X, Y, TXT, al); }
+    if (done) { Y += 72; font(84, F, 'italic 800'); text(g.forfeit ? '' : String(score), X, Y, TXT, al); }
   };
   // Overall record + division record (the conference record is left off; everyone is in the MAC)
   const divOnly = t => { t = String(t || ''); return t.includes(',') ? t.replace(/^[^,]+,\s*/, '') : /^\d+-\d+\s+\S/.test(t) ? '' : t; };
   const recL = (t, r) => [rec(records(s)[t.id]), divOnly(r)].filter(Boolean).join(' · ');
   side(A, C.coachA, C.rk.a, recL(A, C.rec.a), P + 6, 'left', g.awayScore);
   side(H, C.coachH, C.rk.h, recL(H, C.rec.h), W - P - 6, 'right', g.homeScore);
-  font(40, F, '900'); text(g.neutral ? 'VS' : '@', W / 2, tTop + 112, MUT, 'center');
+  font(46, F, 'italic 800'); text(g.neutral ? 'VS' : '@', W / 2, tTop + 150, MUT, 'center');
   y = tTop + tH;
   // Venue + kickoff on one line
   const v = venueOf(g), ko = kickoffOf(g);
@@ -1275,12 +1318,12 @@ async function drawCheat(C) {
   const pick = ['Record', 'Points / game', 'Allowed / game', 'Against the spread', 'Over-Under', 'Streak', 'Power rank', 'Title odds'].map(k => T[k]).filter(Boolean);
   if (T.Overall) pick.splice(pick.length - (T['Title odds'] ? 1 : 0), 0, { label: 'OVR / OFF / DEF', a: `${T.Overall.a} / ${T.Offense?.a ?? '–'} / ${T.Defense?.a ?? '–'}`, h: `${T.Overall.h} / ${T.Offense?.h ?? '–'} / ${T.Defense?.h ?? '–'}`, edge: T.Overall.edge });
   y += 52; label('Tale of the tape', y);
-  const rh = 46, tt = y + 16; card(tt, pick.length * rh + 62); let ty = tt + 46;
+  const rh = 50, tt = y + 16; card(tt, pick.length * rh + 62); let ty = tt + 46;
   font(28, B, '900'); text(A.abbr || A.name, P + 18, ty); text(H.abbr || H.name, W - P - 18, ty, TXT, 'right');
   pick.forEach(r => {
     ty += rh; x.fillStyle = LINE; x.fillRect(P, ty - 33, IW, 1);
-    font(22, B, '600'); text(r.label, W / 2, ty, MUT, 'center');
-    font(28, B, '800');
+    font(23, B, '600'); text(r.label, W / 2, ty, MUT, 'center');
+    font(30, B, '800');
     text((r.edge === 'a' ? '✓ ' : '') + r.a, P + 18, ty, r.edge === 'a' ? GRN : r.edge === 'h' ? BAD : TXT);
     text(r.h + (r.edge === 'h' ? ' ✓' : ''), W - P - 18, ty, r.edge === 'h' ? GRN : r.edge === 'a' ? BAD : TXT, 'right');
   });
@@ -1289,7 +1332,7 @@ async function drawCheat(C) {
   const la = lastResults(A.id, s, 3), lh = lastResults(H.id, s, 3);
   if (la.length || lh.length) {
     y += 52; label('Last 3 games', y); const n = Math.max(la.length, lh.length), top = y + 16; card(top, n * 42 + 26); let fy = top + 44;
-    for (let i = 0; i < n; i++) { font(27, B, '700'); if (la[i]) text(la[i].t, P + 18, fy, la[i].w ? GRN : BAD); if (lh[i]) text(lh[i].t, W - P - 18, fy, lh[i].w ? GRN : BAD, 'right'); fy += 42; }
+    for (let i = 0; i < n; i++) { font(29, B, '700'); if (la[i]) text(la[i].t, P + 18, fy, la[i].w ? GRN : BAD); if (lh[i]) text(lh[i].t, W - P - 18, fy, lh[i].w ? GRN : BAD, 'right'); fy += 42; }
     y = top + n * 42 + 26;
   }
   // Players to know: each team's top 3 from the AI's read of this season's broadcasts
@@ -1316,27 +1359,30 @@ async function drawCheat(C) {
   if (C.clinch) lines.push(C.clinch.replace(/<[^>]+>/g, ''));
   if (C.series) lines.push(C.series);
   if (lines.length) {
-    y += 52; label(done ? 'Context' : "What's at stake", y); y += 14;
-    font(26, B, '600'); lines.forEach(t => { wrapText(x, t, IW - 30).slice(0, 2).forEach((ln, i) => { y += 36; if (!i) text('•', P, y, GOLD); text(ln, P + 30, y); }); y += 6; });
+    y += 60; label(done ? 'Context' : "What's at stake", y); y += 14;
+    font(29, B, '600'); lines.forEach(t => { wrapText(x, t, IW - 30).slice(0, 3).forEach((ln, i) => { y += 40; if (!i) text('•', P, y, GOLD); text(ln, P + 30, y); }); y += 6; });
   }
   // Talking points (trends), as many as fit
   const ba = betAction(g), tp = C.trends.filter(t => !(C.series && / all-time against /.test(t)));
   if (ba) tp.push(`${ba.n} league bet${ba.n === 1 ? '' : 's'} on this game · most popular: ${ba.top} (${ba.topN})`);
-  if (tp.length && y < HT - 230) {
-    y += 46; label('Talking points', y); y += 14;
-    font(26, B, '600');
-    for (const t of tp) { const ln = wrapText(x, t, IW - 30); if (y + ln.length * 36 > HT - 90) break; ln.forEach((s2, i) => { y += 36; if (!i) text('•', P, y, GOLD); text(s2, P + 30, y); }); y += 4; }
+  if (tp.length && y < HT - 260) {
+    y += 64; label('Talking points', y); y += 14;
+    font(29, B, '600');
+    for (const t of tp) { const ln = wrapText(x, t, IW - 30); if (y + ln.length * 40 > HT - 120) break; ln.forEach((s2, i) => { y += 40; if (!i) text('•', P, y, GOLD); text(s2, P + 30, y); }); y += 4; }
   }
-  // Footer pinned to the bottom
-  x.fillStyle = LINE; x.fillRect(P, HT - 70, IW, 2);
-  font(21, B, '600'); text(`OEC CFB League Hub · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`, W / 2, HT - 32, MUT, 'center');
-  return c;
+  // Footer right under the content, then trim the image to fit (no empty space at the bottom)
+  const end = Math.min(HT, y + 110);
+  x.fillStyle = LINE; x.fillRect(P, end - 70, IW, 2);
+  font(21, B, '600'); text(`OEC CFB League Hub · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`, W / 2, end - 32, MUT, 'center');
+  const out = document.createElement('canvas'); out.width = W; out.height = end;
+  out.getContext('2d').drawImage(c, 0, 0);
+  return out;
 }
 async function showCheat() {
   const C = UI.cheat; if (!C) return;
   $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card"><h2>Broadcast cheat sheet</h2><p class="muted">Building…</p></div></div>`;
   const c = await drawCheat(C); UI.cheatCanvas = c;
-  $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card"><h2>Broadcast cheat sheet</h2>
+  $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card" style="max-width:560px;padding:12px"><h2>Broadcast cheat sheet</h2>
     <p class="muted small" style="margin-top:0">Save it to your phone or share it with whoever's on the call.</p>
     <img src="${c.toDataURL('image/png')}" alt="Broadcast cheat sheet" style="width:100%;border-radius:10px;display:block">
     <div class="row" style="margin-top:12px"><button class="gold" data-act="saveCheat">⬇ Save / share</button><button class="ghost" data-close="1">Done</button></div></div></div>`;
@@ -2011,6 +2057,11 @@ function teamStatLine(tid, s) {
     if (o) ha.opp.push(o.o + o.d);
     if (!g.forfeit && Math.abs(my - th) <= 8) won ? ha.close[0]++ : ha.close[1]++;
   });
+  // Schedule strength over the whole regular-season schedule (a baseline from the day the schedule is posted, before
+  // anyone plays) and over the games still to play. Opponents are rated with the current model, so it updates weekly.
+  const sched = D.games.filter(g => g.season === s && (g.type || 'reg') === 'reg' && (g.home === tid || g.away === tid));
+  const oppR = g => { const o = R[g.home === tid ? g.away : g.home]; return o ? o.o + o.d : null; };
+  const full = sched.map(oppR).filter(x => x != null), left = sched.filter(g => !played(g)).map(oppR).filter(x => x != null);
   const pct = (w, l) => w + l ? w / (w + l) : null, avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
   // Past seasons: final power rank = end-of-season model rating among that season's league members.
   const pr = s === D.league.season ? currentPower(s)?.find(x => x.id === tid) : (() => { const M = [...seasonMembers(s)].filter(id => R[id]); if (!R[tid] || !M.includes(tid)) return null;
@@ -2024,7 +2075,9 @@ function teamStatLine(tid, s) {
     ats: { v: pct(P.ats[0], P.ats[1]), f: `${P.ats[0]}-${P.ats[1]}${P.ats[2] ? '-' + P.ats[2] : ''}` },
     ou: { v: null, f: fmtOU(P.ou) },
     fav: { v: pct(P.fav[0], P.fav[1]), f: `${P.fav[0]}-${P.fav[1]}` }, dog: { v: pct(P.dog[0], P.dog[1]), f: `${P.dog[0]}-${P.dog[1]}` },
-    sos: { v: avg(ha.opp), f: ha.opp.length ? (avg(ha.opp) > 0 ? '+' : '') + avg(ha.opp).toFixed(1) : '–' },
+    sos: { v: avg(full), f: full.length ? (avg(full) > 0 ? '+' : '') + avg(full).toFixed(1) : '–' },
+    sosLeft: { v: left.length && left.length < full.length ? avg(left) : null, f: left.length && left.length < full.length ? (avg(left) > 0 ? '+' : '') + avg(left).toFixed(1) : '–' },
+    sosPlayed: { v: avg(ha.opp), f: ha.opp.length ? (avg(ha.opp) > 0 ? '+' : '') + avg(ha.opp).toFixed(1) : '–' },
     ovr: { v: t.ovr || null, f: t.ovr || '–' }, off: { v: t.off || null, f: t.off || '–' }, def: { v: t.def || null, f: t.def || '–' },
     power: { v: pr ? pr.rank : null, f: pr ? '#' + pr.rank : '–', isRank: true },
     expW: { v: sim ? sim.expW : null, f: sim ? sim.expW.toFixed(1) : '–' }, title: { v: sim ? sim.titlePct : null, f: sim ? pctStr(sim.titlePct) : '–' },
@@ -2032,7 +2085,7 @@ function teamStatLine(tid, s) {
 }
 const TEAM_STATS = [
   ['Results', [['rec', 'Record', 1], ['conf', 'Conference', 1], ['home', 'Home', 1], ['away', 'Away', 1], ['close', 'One-score games', 1]]],
-  ['Scoring', [['ppg', 'Points / game', 1], ['papg', 'Allowed / game', -1], ['diff', 'Point diff / game', 1], ['sos', 'Schedule strength', 1, 'Avg. model rating of opponents faced; 1st = toughest']]],
+  ['Scoring', [['ppg', 'Points / game', 1], ['papg', 'Allowed / game', -1], ['diff', 'Point diff / game', 1], ['sos', 'Schedule strength', 1, 'Avg. model rating of every regular-season opponent (played or not); 1st = toughest'], ['sosPlayed', 'Opponents faced so far', 1, 'Avg. model rating of opponents already played; 1st = toughest'], ['sosLeft', 'Schedule left', 1, 'Avg. model rating of the opponents still to play; 1st = toughest']]],
   ['Betting', [['ats', 'Against the spread', 1], ['ou', 'Over / under', 0], ['fav', 'As favorite', 1], ['dog', 'As underdog', 1]]],
   ['Team', [['ovr', 'Overall', 1], ['off', 'Offense', 1], ['def', 'Defense', 1], ['power', 'Power ranking', 0], ['expW', 'Projected wins', 1], ['title', 'Title odds', 1]]],
 ];
@@ -2071,10 +2124,10 @@ function teamStatsCard(tid, s) {
     if (k === 'power' && me.power.v) { const r = me.power.v; return `<span class="srk ${r <= Math.ceil(n / 4) ? 'top' : r > n - Math.ceil(n / 4) ? 'bot' : ''}">${ordinal(r)}</span>`; }
     const x = rankOfStat(k, dir); if (!x) return '<span class="muted small">–</span>';
     const q = Math.ceil(x.of / 4);
-    return `<span class="srk ${k === 'sos' ? '' : x.r <= q ? 'top' : x.r > x.of - q ? 'bot' : ''}">${x.tie ? 'T-' : ''}${ordinal(x.r)}</span>`;
+    return `<span class="srk ${/^sos/.test(k) ? '' : x.r <= q ? 'top' : x.r > x.of - q ? 'bot' : ''}">${x.tie ? 'T-' : ''}${ordinal(x.r)}</span>`;
   };
   return `<div class="card"><div class="row spread"><h3 style="margin:0">${s} Season Stats</h3>${inL ? `<span class="muted small">Rank among ${n} ${esc(D.league.conference)} teams${past ? ` that season` : ''}</span>` : ''}</div>
-    <div class="tstats">${TEAM_STATS.map(([grp, rows]) => [grp, past ? rows.filter(([k]) => !['ovr', 'off', 'def', 'expW', 'title'].includes(k)) : rows]).filter(([, rows]) => rows.length).map(([grp, rows]) => `<div class="tsg"><div class="tsh">${past && grp === 'Team' ? 'Final' : grp}</div><table>${rows.map(([k, label, dir, tip]) => `<tr${tip ? ` title="${esc(tip)}"` : ''}><td>${label}${tip ? ' <span class="muted small">ⓘ</span>' : ''}</td><td class="num"><b>${me[k].f}</b></td><td class="num">${pill(k, dir)}</td></tr>`).join('')}</table></div>`).join('')}</div>
+    <div class="tstats">${TEAM_STATS.map(([grp, rows]) => [grp, (past ? rows.filter(([k]) => !['ovr', 'off', 'def', 'expW', 'title', 'sosLeft', 'sosPlayed'].includes(k)) : rows).filter(([k]) => !/^sos(Left|Played)$/.test(k) || me[k].v != null)]).filter(([, rows]) => rows.length).map(([grp, rows]) => `<div class="tsg"><div class="tsh">${past && grp === 'Team' ? 'Final' : grp}</div><table>${rows.map(([k, label, dir, tip]) => `<tr${tip ? ` title="${esc(tip)}"` : ''}><td>${label}${tip ? ' <span class="muted small">ⓘ</span>' : ''}</td><td class="num"><b>${me[k].f}</b></td><td class="num">${pill(k, dir)}</td></tr>`).join('')}</table></div>`).join('')}</div>
     <p class="muted small" style="margin:8px 0 0"><span class="srk top">Green</span> = top quarter of the league, <span class="srk bot">red</span> = bottom quarter. One-score games are decided by 8 or fewer. Schedule strength is the average model rating of opponents played (1st = toughest).</p></div>`;
 }
 // Coach page: career stats across every team a coach has run (each game counts for whoever coached that side).
