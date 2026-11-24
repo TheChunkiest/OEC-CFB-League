@@ -1738,3 +1738,27 @@ details.todolist[open]>summary .go{transform:rotate(90deg)}
 .sn-go{flex:none;white-space:nowrap;padding:9px 16px;border-radius:10px;text-decoration:none}
 .sn-go:hover{text-decoration:none}
 .sn-help{flex-basis:100%;margin:0;font-size:12px;color:var(--muted)}
+
+/* ===== Pop-ups in the broadcast style: dark glass sheet, red chyron title; live pop-up sits above the tab bar ===== */
+.modal{background:rgba(6,4,5,.74);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+.modal .card{background:#161113;border:1px solid rgba(255,255,255,.12);border-top:3px solid var(--red);border-radius:20px;box-shadow:0 18px 50px rgba(0,0,0,.6);padding:18px 16px 16px}
+.modal .card>h2:first-child{display:block;width:max-content;max-width:100%;margin:0 0 12px;font-family:var(--cond);font-style:italic;font-weight:800;font-size:20px;letter-spacing:.8px;text-transform:uppercase;
+  background:var(--red);color:#fff;padding:3px 22px 3px 10px;clip-path:polygon(0 0,100% 0,calc(100% - 12px) 100%,0 100%);line-height:1.25}
+.modal h2::before{display:none}
+.modal .card>h2:first-child+p{margin-top:0}
+@media(max-width:640px){
+  .modal{padding:0;align-items:flex-end}
+  .modal .card{max-width:none;border-radius:22px 22px 0 0;border-left:0;border-right:0;border-bottom:0;padding:22px 16px calc(18px + env(safe-area-inset-bottom));max-height:88vh;position:relative}
+  .modal .card::before{content:'';position:absolute;top:8px;left:50%;width:40px;height:4px;margin-left:-20px;border-radius:2px;background:rgba(255,255,255,.22)}
+}
+.livepop{background:#161113;border:1px solid rgba(255,80,88,.6);border-radius:16px;padding:12px 14px;box-shadow:0 12px 34px rgba(0,0,0,.55)}
+.livepop .lp-badge{font-family:var(--cond);font-style:italic;font-size:14px;letter-spacing:1px;border-radius:0;padding:2px 16px 2px 9px;clip-path:polygon(0 0,100% 0,calc(100% - 8px) 100%,0 100%)}
+.livepop .lp-title{font-family:var(--cond);font-weight:800;font-size:19px;letter-spacing:.3px;margin:6px 28px 8px 0}
+.livepop .lp-go{background:rgba(230,33,23,.2);border:1px solid rgba(255,80,72,.6);color:#fff;border-radius:12px;font-weight:700}
+.livepop .lp-x{top:8px;right:8px;width:28px;height:28px;border-radius:50%;border:1px solid rgba(255,255,255,.14);padding:0;display:grid;place-items:center;font-size:12px}
+@media(max-width:899px){
+  .livepop,body:has(.parlaybar) .livepop{left:10px;right:10px;width:auto;bottom:calc(90px + env(safe-area-inset-bottom))}
+  body:has(.parlaybar) .livepop{bottom:calc(152px + env(safe-area-inset-bottom))}
+}
+/* a pop-up window takes the screen: the live banner waits behind it */
+body:has(#modal .modal) .livepop{display:none}
