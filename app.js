@@ -6,7 +6,7 @@ import {
 , playbookOf, pbSeason, pbText
 , AWARD_DEFS, awardGames, awardGameLabel, awardCoaches
 , curWeek, wkShort, wkOf, phaseName, PICK_DEFS, picksOpen, pickAnswers, loadPicks, pickFacts, OPENER_BOOST, isOpener, coachEdge, canonCoach, plateInk
-} from './core.js?v=114';
+} from './core.js?v=115';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -1882,10 +1882,21 @@ function awardsVoteCard() {
 }
 // ---- Preseason picks ----
 // Vote page: the ballot while picks are open; afterwards everyone's picks, and once the awards are in, who called it.
+// Preseason picks: until this coach's own pick has actually been read, nothing claims they still need to make it (no
+// to-do item, vote pill or "make your picks" button). That avoids the "your picks aren't in" flash when the app opens
+// before the read finishes. A read that hasn't happened yet is started here, and the page redraws when it lands.
+let pkTry = 0;
+function myPicksReady() {
+  const me = auth.user; if (!picksOpen() || !me) return true;
+  if (D.picksLoaded || D.picksFor === me.uid + '|' + D.league.season) return true;
+  if (Date.now() - pkTry > 5000) { pkTry = Date.now(); loadPicks().then(() => { if (D.picksFor) route(); }).catch(() => { }); }
+  return false;
+}
 function picksSection(s, me, canVote) {
   const L = D.league, open = picksOpen(), pp = L.prePicks;
   const mine = me && D.picks.find(p => p.season === s && p.uid === me.id), P = (mine && mine.picks) || {};
   const head = `<h2 id="picks">🔮 ${s} Preseason Picks</h2>`;
+  if (open && me && !myPicksReady()) return head + '<div class="card muted" style="text-align:center">Loading your picks…</div>';
   if (open) {
     const dis = canVote ? '' : 'disabled', teams = leagueTeams().slice().sort((a, b) => a.name.localeCompare(b.name)), coaches = awardCoaches();
     const field = d => d.type === 'coach'
@@ -1974,7 +1985,7 @@ function deskCard(dk) {
 function openBallots() {
   const me = auth.profile, L = D.league, s = S(); if (!me || !me.teamId) return [];
   const out = [], nw = L.week + 1;
-  if (picksOpen() && !D.picks.some(p => p.season === s && p.uid === me.id)) out.push({ k: 'picks', href: '#vote/picks', label: 'Preseason picks' });
+  if (picksOpen() && myPicksReady() && !D.picks.some(p => p.season === s && p.uid === me.id)) out.push({ k: 'picks', href: '#vote/picks', label: 'Preseason picks' });
   if (L.awards?.open && !D.ballots.some(b => b.season === s && b.uid === me.id)) out.push({ k: 'awards', href: '#vote/awards', label: 'Season awards' });
   const nextG = L.phase === PHASES.REG ? D.games.filter(x => x.season === s && x.week === nw && (x.type || 'reg') === 'reg') : [];
   if (nextG.length > 1 && !D.gotw.some(v => v.season === s && v.week === nw && v.uid === me.id)) out.push({ k: 'gotw', href: '#vote', label: `${wkName(nw)} Game of the Week`, n: nextG.length });
@@ -1992,7 +2003,7 @@ function todoCard(me, T) {
   if (g && canSchedule(g) && !inv.length) { const opp = team(g.home === T.id ? g.away : g.home), ko = kickoffOf(g);
     if (!ko) add(`#game/${g.id}`, I.clock, '#6fa8ff', `Set a kickoff time with Coach ${opp.coach}`, `Your ${wkOf(g)} game ${g.home === T.id ? 'vs' : 'at'} ${opp.name}`);
     else add(`#game/${g.id}`, I.clock, '#6fa8ff', `Kickoff set vs ${opp.name}`, `${wkOf(g)} · 🕗 ${fmtKick(ko, true)}`, true); }
-  if (picksOpen()) { const mine = D.picks.some(p => p.season === s && p.uid === me.id);
+  if (picksOpen() && myPicksReady()) { const mine = D.picks.some(p => p.season === s && p.uid === me.id);
     add('#vote/picks', I.star, '#f5b82e', mine ? 'Preseason picks are in' : 'Make your preseason picks', mine ? 'You can change them until the first game of the season is in' : 'Open until the first game of the season is in', mine); }
   if (L.awards?.open) { const v = D.ballots.some(b => b.season === s && b.uid === me.id);
     add('#vote/awards', I.trophy, '#f5b82e', v ? 'Awards ballot is in' : 'Vote for the season awards', v ? 'You can change it until voting closes after bowl season' : 'Voting closes after bowl season', v); }
@@ -2017,6 +2028,7 @@ function todoCard(me, T) {
 }
 function picksCard() {
   if (!picksOpen()) return '';
+  if (auth.profile && auth.profile.teamId && !myPicksReady()) return '';
   const L = D.league, me = auth.profile, coach = me && me.teamId, mine = coach && D.picks.find(p => p.season === L.season && p.uid === me.id);
   const msg = !me ? 'Coaches call the season before it starts: champion, best offense and defense, Coach of the Year. Log in to make yours.'
     : !coach ? 'League coaches are making their preseason picks. They go public once the first game is in.'

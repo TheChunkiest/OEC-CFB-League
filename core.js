@@ -237,8 +237,10 @@ export async function loadPicks() {
   try {
     if (picksOpen()) {
       if (!auth.user) return D.picks;
-      const s = await fs.getDoc(fs.doc(db, 'picks', D.league.season + '_' + auth.user.uid));
+      // One quick retry: right after the app wakes up, the first read can fail before the connection is back.
+      let s; try { s = await fs.getDoc(fs.doc(db, 'picks', D.league.season + '_' + auth.user.uid)); } catch (e) { await new Promise(r => setTimeout(r, 1500)); s = await fs.getDoc(fs.doc(db, 'picks', D.league.season + '_' + auth.user.uid)); }
       D.picks = s.exists() ? [{ ...s.data(), id: s.id }] : [];
+      D.picksFor = auth.user.uid + '|' + D.league.season;   // this coach's picks are known (made or not) for this season
     } else { D.picksLoaded = true; const s = await fs.getDocs(fs.collection(db, 'picks')); D.picks = s.docs.map(d => ({ ...d.data(), id: d.id })); }
   } catch (e) { console.warn('picks', e); }
   return D.picks;
