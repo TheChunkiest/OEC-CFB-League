@@ -424,13 +424,15 @@ const PAGES = {
       const h = team(g.home), a = team(g.away); if (!divOf(h, s) || divOf(h, s) !== divOf(a, s) || h.conf !== D.league.conference || a.conf !== D.league.conference) return;
       const hw = +g.homeScore > +g.awayScore; [[g.home, hw], [g.away, !hw]].forEach(([id, w]) => { const r = dv[id] || (dv[id] = { w: 0, l: 0 }); w ? r.w++ : r.l++; });
     });
-    return `<h2>${s} ${esc(D.league.conference)} Standings</h2>` + divisions(s).map(d => {
+    const dvs = divisions(s), multi = dvs.length > 1 || !!dvs[0];
+    const sub = multi ? `Each division winner plays in the League Title game. Tap a column to sort.` : `One conference, no divisions: the top two meet in the League Title game.${seasonGames().some(played) ? '' : ' Preseason order is by team rating.'} Tap a column to sort.`;
+    return `<h2>${s} ${esc(D.league.conference)} Standings</h2><p class="h2sub">${sub}</p>` + dvs.map(d => {
       const ids = leagueTeams().filter(t => !d || divOf(t, s) === d).map(t => t.id);
       const ordered = orderGroup(ids, s).map((id, i) => ({ id, place: i + 1, ...R[id], name: team(id).name, coach: team(id).coach || 'CPU', cpct: R[id].cw + R[id].cl ? R[id].cw / (R[id].cw + R[id].cl) : 0, opct: R[id].w + R[id].l ? R[id].w / (R[id].w + R[id].l) : 0, diff: R[id].pf - R[id].pa, stk: streak(R[id]), dw: (dv[id] || {}).w || 0, dl: (dv[id] || {}).l || 0, dpct: dv[id] && dv[id].w + dv[id].l ? dv[id].w / (dv[id].w + dv[id].l) : 0 }));
       const rows = sortRows(ordered, st, { stk: r => (r.stk[0] === 'W' ? 1 : -1) * (+r.stk.slice(1) || 0) });
-      return `<div class="card"><h3 style="margin-top:0">${esc(d ? D.league.conference + ' ' + d : D.league.conference)}</h3><div class="tablewrap"><table>
-        <tr>${sortTh(st, 'place', '#')}${sortTh(st, 'name', 'Team')}${sortTh(st, 'coach', 'Coach', 'hide-sm')}${sortTh(st, 'cpct', 'Conf', 'num')}${sortTh(st, 'dpct', 'Div', 'num')}${sortTh(st, 'pf', 'PF', 'num hide-sm')}${sortTh(st, 'pa', 'PA', 'num hide-sm')}${sortTh(st, 'diff', 'Diff', 'num')}${sortTh(st, 'stk', 'Strk', 'num hide-xs')}</tr>
-        ${rows.map(r => `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td class="rank">${r.place}</td><td>${chip(r.id)}${subSm(isUserTeam(team(r.id)) ? esc(r.coach) : 'CPU')}</td><td class="hide-sm">${isUserTeam(team(r.id)) ? `<a href="#coach/${slug(r.coach)}">${esc(r.coach)}</a>` : '<span class="muted">CPU</span>'}</td><td class="num">${r.cw}-${r.cl}</td><td class="num">${r.dw}-${r.dl}</td><td class="num hide-sm">${r.pf}</td><td class="num hide-sm">${r.pa}</td><td class="num">${r.diff > 0 ? '+' : ''}${r.diff}</td><td class="num hide-xs">${r.stk}</td></tr>`).join('')}
+      return `<div class="card stcard">${multi ? `<h3 style="margin-top:0">${esc(d ? D.league.conference + ' ' + d : D.league.conference)}</h3>` : ''}<div class="tablewrap"><table class="standings">
+        <tr>${sortTh(st, 'place', '#')}${sortTh(st, 'name', 'Team')}${sortTh(st, 'coach', 'Coach', 'hide-sm')}${sortTh(st, 'cpct', 'Conf', 'num')}${multi ? sortTh(st, 'dpct', 'Div', 'num') : ''}${sortTh(st, 'pf', 'PF', 'num hide-sm')}${sortTh(st, 'pa', 'PA', 'num hide-sm')}${sortTh(st, 'diff', 'Diff', 'num')}${sortTh(st, 'stk', 'Strk', 'num hide-xs')}</tr>
+        ${rows.map(r => `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td class="rank">${r.place}</td><td>${chip(r.id)}${subSm(isUserTeam(team(r.id)) ? esc(r.coach) : 'CPU')}</td><td class="hide-sm">${isUserTeam(team(r.id)) ? `<a href="#coach/${slug(r.coach)}">${esc(r.coach)}</a>` : '<span class="muted">CPU</span>'}</td><td class="num"><b>${r.cw}-${r.cl}</b></td>${multi ? `<td class="num">${r.dw}-${r.dl}</td>` : ''}<td class="num hide-sm">${r.pf}</td><td class="num hide-sm">${r.pa}</td><td class="num">${r.diff > 0 ? '+' : ''}${r.diff}</td><td class="num hide-xs">${r.stk}</td></tr>`).join('')}
       </table></div></div>`;
     }).join('') + `<div id="race">${raceSection()}</div>`;
   },
@@ -521,8 +523,8 @@ const PAGES = {
     let rows = currentPower().map(x => ({ ...x, name: team(x.id).name, coach: team(x.id).coach || 'CPU', wp: x.rec.w + x.rec.l ? x.rec.w / (x.rec.w + x.rec.l) : 0 }));
     rows = sortRows(rows, st, {});
     const lw = (() => { const w = seasonGames().filter(played).map(g => g.week); return w.length ? Math.max(...w) : null; })();
-    return `<h2>Power Rankings</h2><p class="muted small">${lw == null ? 'Preseason order from team ratings.' : `Through ${wkName(lw)}.`} Generated from team strength (adjusted every game by how each team performed versus expectations), recent form (last 3 games versus the spread) and record — not record alone. "Move" is the change since the previous week.</p>
-      <div class="row" style="margin-bottom:10px"><div class="seg"><button data-prsort="rank" class="${st.key === 'rank' ? 'on' : ''}">Sort by rank</button><button data-prsort="move" class="${st.key === 'move' ? 'on' : ''}">Sort by movement</button></div></div>
+    return `<h2>Power Rankings</h2><p class="h2sub">${lw == null ? 'Preseason order from team ratings.' : `Through ${wkName(lw)}.`} Generated from team strength (adjusted every game by how each team performed versus expectations), recent form (last 3 games versus the spread) and record — not record alone. "Move" is the change since the previous week.</p>
+      <div class="row" style="margin-bottom:12px"><div class="seg"><button data-prsort="rank" class="${st.key === 'rank' ? 'on' : ''}">Sort by rank</button><button data-prsort="move" class="${st.key === 'move' ? 'on' : ''}">Sort by movement</button></div></div>
       <div class="card"><div class="tablewrap"><table><tr>${sortTh(st, 'rank', '#')}${sortTh(st, 'name', 'Team')}${sortTh(st, 'coach', 'Coach', 'hide-sm')}${sortTh(st, 'wp', 'Rec', 'num')}${sortTh(st, 'hot', 'Form', 'num')}${sortTh(st, 'move', '+/−', 'num')}</tr>
       ${rows.map(r => `<tr class="${myTeam()?.id === r.id ? 'me' : ''}"><td class="rank">${r.rank}</td><td>${chip(r.id)}${subSm(isUserTeam(team(r.id)) ? esc(r.coach) : 'CPU')}</td><td class="hide-sm">${isUserTeam(team(r.id)) ? esc(r.coach) : '<span class="muted">CPU</span>'}</td><td class="num">${rec(r.rec)}</td>
         <td class="num">${r.hot >= 4 ? '🔥 ' : r.hot <= -4 ? '🧊 ' : ''}<span class="${r.hot > 0 ? 'up' : r.hot < 0 ? 'down' : 'muted'}">${r.hot > 0 ? '+' : ''}${r.hot.toFixed(1)}</span></td><td class="num">${mvHtml(r.move)}</td></tr>`).join('')}
@@ -533,9 +535,9 @@ const PAGES = {
     const s = S(), R = records(s), all = D.teams.filter(t => t.conf === D.league.conference), me = myTeam()?.id;
     const grids = divisions(s).map(d => {
       const ids = orderGroup(all.filter(t => !d || divOf(t, s) === d).map(t => t.id), s);
-      return `<h2>${esc(d ? D.league.conference + ' ' + d : D.league.conference)}</h2><div class="tgrid">${ids.map((id, i) => { const t = team(id); return `<a class="tcard${id === me ? ' me' : ''}" style="--tc:${esc(teamColor(t))}" href="#team/${esc(id)}">
-        <div class="tc-top"><span class="tc-pl">${i + 1}</span><b class="tc-name">${esc(t.name)}</b></div>
-        <div class="tc-rec">${rec(R[id])}${streak(R[id]) !== '–' ? `<span class="muted small"> · ${streak(R[id])}</span>` : ''}</div>
+      return `<h2>${esc(d ? D.league.conference + ' ' + d : D.league.conference + ' Teams')}</h2>${d && d !== divisions(s)[0] ? '' : '<p class="h2sub">In standings order. Tap a team for its schedule, roster grades and history.</p>'}<div class="tgrid">${ids.map((id, i) => { const t = team(id); return `<a class="tcard${id === me ? ' me' : ''}" style="--tc:${esc(teamColor(t))}" href="#team/${esc(id)}">
+        <div class="tc-top">${teamPlate(t)}<b class="tc-name">${esc(t.name)}</b></div>
+        <div class="tc-rec">${rec(R[id])}${streak(R[id]) !== '–' ? `<span class="muted small"> · ${streak(R[id])}</span>` : ''}<span class="tc-pl">${ordinal(i + 1)}</span></div>
         <div class="muted small tc-sub">${isUserTeam(t) ? esc(t.coach) : 'CPU'} · ${t.ovr || '–'} OVR</div></a>`; }).join('')}</div>`;
     }).join('');
     return grids + statsBoard(s);
@@ -692,14 +694,14 @@ const PAGES = {
     const carousel = C => {
       const seas = [...new Set(D.games.filter(played).map(g => g.season))].sort((a, b) => a - b); if (!seas.length) return '';
       const rows = C.map(c => ({ c, by: Object.fromEntries(coachSeasons(c.name).map(x => [x.season, x])) }));
-      return `<h2>Coaching Carousel</h2><div class="card"><div class="tablewrap"><table class="carousel"><tr><th>Coach</th>${seas.map(s => `<th class="num">S${seasonNum(s)}<div class="muted small" style="font-weight:600">${s}</div></th>`).join('')}</tr>
+      return `<h2>Coaching Carousel</h2><p class="h2sub">Where every coach has been, season by season.</p><div class="card"><div class="tablewrap"><table class="carousel"><tr><th>Coach</th>${seas.map(s => `<th class="num">S${seasonNum(s)}<div class="muted small" style="font-weight:600">${s}</div></th>`).join('')}</tr>
         ${rows.map(({ c, by }) => `<tr><td><a href="#coach/${slug(c.name)}">${esc(c.name)}</a></td>${seas.map(s => { const x = by[s]; return `<td class="num">${x ? `${x.teams.map(id => `<a class="ctm" href="#team/${esc(id)}${s === D.league.season ? '' : '/' + s}"><i class="sw" style="background:${esc(teamColor(team(id)))}"></i>${esc(team(id).abbr || team(id).name)}</a>`).join(' ')}<div class="small"><b>${x.w}-${x.l}</b>${x.finish === 'champ' ? ' 🏆' : (() => { const P = seasonPlaces(s), p = P.places[c.name.toLowerCase()]; return p ? ` <span class="muted">· ${ordinal(p)}</span>` : ''; })()}</div>` : '<span class="muted">–</span>'}</td>`; }).join('')}</tr>`).join('')}
       </table></div><p class="muted small" style="margin-bottom:0">Team, record and finish each season (🏆 = league champion; the current season shows the order so far). Finish after the title game is by regular-season record, then head-to-head, then point differential.</p></div>`;
     };
     // The title game counts as soon as it's final: this season's champion shows here before the season is finalized.
     const H = withLiveChamp().sort((a, b) => b.season - a.season), C = Object.values(coachStats()).sort((a, b) => b.titles - a.titles || (b.w / Math.max(1, b.w + b.l)) - (a.w / Math.max(1, a.w + a.l)));
     const champLine = h => h.champCoach ? `${esc(h.champCoach)} over ${esc(h.runnerCoach || 'CPU')} — ${esc(team(h.champTeam).name)} ${h.champScore ?? ''}, ${esc(team(h.runnerTeam).name)} ${h.runnerScore ?? ''}` : esc(h.summary || '');
-    return `<h2>League Champions</h2><div class="card">${H.length ? H.map(h => `<div class="champ"><div class="yr">S${seasonNum(h.season)}<div class="muted small" style="font-family:system-ui">${h.season}</div></div><div>${(() => { const g = D.games.find(x => x.season === h.season && x.type === 'ccg' && played(x)); return g ? `<a class="reclink" href="#game/${esc(g.id)}"><b>${champLine(h)}</b></a>` : `<b>${champLine(h)}</b>`; })()}${h.notes ? `<div class="muted small">${esc(h.notes)}</div>` : ''}</div></div>`).join('') : '<div class="muted">No completed seasons yet.</div>'}</div>
+    return `<h2>League Champions</h2><p class="h2sub">Every League Title game winner.</p><div class="card">${H.length ? H.map(h => `<div class="champ"><div class="yr">S${seasonNum(h.season)}<div class="muted small" style="font-family:system-ui">${h.season}</div></div><div>${(() => { const g = D.games.find(x => x.season === h.season && x.type === 'ccg' && played(x)); return g ? `<a class="reclink" href="#game/${esc(g.id)}"><b>${champLine(h)}</b></a>` : `<b>${champLine(h)}</b>`; })()}${h.notes ? `<div class="muted small">${esc(h.notes)}</div>` : ''}</div></div>`).join('') : '<div class="muted">No completed seasons yet.</div>'}</div>
       ${seasonAwardsCard(H)}
       ${coachBoard()}
       ${carousel(C)}`;
@@ -707,8 +709,8 @@ const PAGES = {
 
   rules() {
     const L = D.league;
-    return `<h2>League Rules</h2><div class="card"><ul class="clean">${((L.rules && L.rules.length) ? L.rules : DEFAULT_RULES).map(r => `<li>${esc(r)}</li>`).join('') || '<li class="muted">No rules posted.</li>'}</ul></div>
-      <h2>How Betting Works</h2><div class="card"><ul class="clean"><li>Every linked coach starts each season with ${START_CREDITS.toLocaleString()} Crackers. Crackers don't carry over.</li>
+    return `<h2>League Rules</h2><p class="h2sub">How the dynasty is set up and run.</p><div class="card"><ul class="clean">${((L.rules && L.rules.length) ? L.rules : DEFAULT_RULES).map(r => `<li>${esc(r)}</li>`).join('') || '<li class="muted">No rules posted.</li>'}</ul></div>
+      <h2>How Betting Works</h2><p class="h2sub">Crackers, lines, locks and the house rules.</p><div class="card"><ul class="clean"><li>Every linked coach starts each season with ${START_CREDITS.toLocaleString()} Crackers. Crackers don't carry over.</li>
       <li>Busted? If you're at 0 Crackers with nothing in play when the league advances, you get ${RELIEF}. It doesn't stack and it doesn't count as winnings.</li>
       <li>Lines are posted for every upcoming game, so you can bet future weeks early. Every bet pays the listed +/− odds. Spread and total payouts move around −110 based on the model's edge on the line, key numbers (3, 7, 10, 14) and each team's recent form.</li>
       <li>Each advance re-rates every team from the results, so lines for all later weeks move. Your bet keeps the line it was placed at.</li>
@@ -1776,7 +1778,7 @@ const awardsTable = h => `<div class="tablewrap"><table>${h.awards.map(a => `<tr
 function seasonAwardsCard(H) {
   const hs = H.filter(h => (h.awards || []).length); if (!hs.length) return '';
   const h = hs.find(x => x.season === +UI.awSeason) || hs[0];
-  return `<h2>Season Awards</h2><div class="card"><div class="row" style="justify-content:center;margin-bottom:6px"><select data-awseason aria-label="Season">${hs.map(x => `<option value="${x.season}" ${x === h ? 'selected' : ''}>Season ${seasonNum(x.season)} · ${x.season}</option>`).join('')}</select></div>
+  return `<h2>Season Awards</h2><p class="h2sub">Who the league voted best each season.</p><div class="card"><div class="row" style="justify-content:center;margin-bottom:6px"><select data-awseason aria-label="Season">${hs.map(x => `<option value="${x.season}" ${x === h ? 'selected' : ''}>Season ${seasonNum(x.season)} · ${x.season}</option>`).join('')}</select></div>
     ${awardsTable(h)}</div>`;
 }
 // Home page in the offseason: the season just finished, its champion and award winners, until the next season is published.
@@ -2088,7 +2090,7 @@ function coachBoard() {
     const w = l.x.v == null ? 0 : Math.max(4, Math.abs(l.x.v) / (top || 1) * 100);
     return `<tr class="${l.n.toLowerCase() === me ? 'me' : ''}"><td class="rank">${r ? (tie ? 'T-' : '') + r : '–'}</td><td><a href="#coach/${slug(l.n)}"><b>${esc(l.n)}</b></a>${(() => { const t = withLiveChamp().filter(h => (se == null || h.season === se) && String(h.champCoach || '').toLowerCase() === l.n.toLowerCase()).length; return t ? ` <span title="League titles">${'🏆'.repeat(Math.min(t, 5))}</span>` : ''; })()}<div class="small cbteams">${chips.map(([id, ss]) => chip(id, { abbr: true, rank: false, season: ss })).join(' ')}</div></td>
       <td class="num tsv"><b>${l.x.f}</b>${w ? `<i style="width:${w.toFixed(0)}%;background:${esc(liftColor(col))}"></i>` : ''}</td></tr>`; }).join('');
-  return `<h2>Coach Stats</h2><div class="card"><div class="row" style="gap:8px;flex-direction:column;align-items:center;text-align:center">
+  return `<h2>Coach Stats</h2><p class="h2sub">Every coach's numbers across the seasons. Tap a coach for their profile.</p><div class="card"><div class="row" style="gap:8px;flex-direction:column;align-items:center;text-align:center">
       <div class="seg segscroll" role="group" aria-label="Stats span"><button data-cbspan="all" class="${se == null ? 'on' : ''}">All-time</button>${seas.map(x => `<button data-cbspan="${x}" class="${se === x ? 'on' : ''}" aria-label="Season ${seasonNum(x)}, ${x}">S${seasonNum(x)}</button>`).join('')}</div>
       <select data-cbstat aria-label="Stat">${opts.map(([g, rows]) => `<optgroup label="${g}">${rows.map(([k, l]) => `<option value="${k}" ${k === key ? 'selected' : ''}>${l}</option>`).join('')}</optgroup>`).join('')}</select>
       <span class="muted small">${se == null ? 'Every season' : `Season ${seasonNum(se)} · ${se}`}${key === 'vsc' ? ' · only games against league coaches' : key === 'rec' ? ' · every game, same as the standings' : ''}</span></div>
