@@ -13,19 +13,19 @@ const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-
 // Main tabs (floating bar): five hubs, each holding the pages that belong to it as gold-underline sub-tabs.
 const HUBS = [
   ['home', 'Home', 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', []],
-  ['schedule', 'Schedule', 'M4 6h16M4 12h16M4 18h10', [['schedule', 'Schedule & scores']]],
-  ['betting', 'Betting', 'M4 7h16v10H4zM12 10v4M9 12h6', [['betting', 'Sportsbook'], ['mybets', 'My bets'], ['odds', 'Odds & trends']]],
-  ['league', 'League', 'M7 4h10v4a5 5 0 0 1-10 0zM12 13v4M8 20h8', [['standings', 'Standings'], ['rankings', 'Power rankings'], ['vote', 'Voting'], ['teams', 'Teams'], ['history', 'History'], ['rules', 'Rules']]],
+  ['schedule', 'Schedule', 'M4 6h16M4 12h16M4 18h10', [['schedule', 'Schedule & Scores']]],
+  ['betting', 'Betting', 'M4 7h16v10H4zM12 10v4M9 12h6', [['betting', 'Sportsbook'], ['mybets', 'My Bets'], ['odds', 'Odds & Trends']]],
+  ['league', 'League', 'M7 4h10v4a5 5 0 0 1-10 0zM12 13v4M8 20h8', [['standings', 'Standings'], ['rankings', 'Power Rankings'], ['stats', 'Stats'], ['vote', 'Voting'], ['history', 'History'], ['rules', 'Rules']]],
   ['account', 'Account', 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0', []]];
-const HUB_OF = { game: 'schedule', mybets: 'betting', odds: 'betting', standings: 'league', rankings: 'league', teams: 'league', team: 'league', coach: 'league', vote: 'league', history: 'league', rules: 'league' };
+const HUB_OF = { game: 'schedule', mybets: 'betting', odds: 'betting', standings: 'league', rankings: 'league', teams: 'league', stats: 'league', team: 'league', coach: 'league', vote: 'league', history: 'league', rules: 'league' };
 // Page title and one-line description under the header (Home has its own layout and skips this).
 const PAGE_META = {
   schedule: ['Schedule', 'Every game, line and result, week by week.'], game: ['Game Center', 'Preview, odds, bets and recap for this game.'],
   betting: ['Betting', "Bet with Crackers on this week's games and the season."], mybets: ['My Bets', "Every bet you've placed and how it turned out."],
   odds: ['Odds & Trends', 'Title odds, win totals and how they have moved.'], standings: ['Standings', 'Conference records and the race for the League Title game.'],
-  rankings: ['Power Rankings', "Who's playing best right now, by results and margin."], teams: ['Teams', 'Every team, its coach and ratings.'],
+  rankings: ['Power Rankings', "Who's playing best right now, by results and margin."], teams: ['History', 'Every team, champions, awards and every coach\'s career.'], stats: ['Stats', 'Season stat leaders: scoring, schedule strength, betting and ratings.'],
   team: ['Team', 'Record, schedule, stats and history.'], coach: ['Coach', 'Career record, stops and stats.'],
-  vote: ['Voting', 'Game of the Week, season awards and preseason picks.'], history: ['History', 'Champions, awards and every coach\'s career.'],
+  vote: ['Voting', 'Game of the Week, season awards and preseason picks.'], history: ['History', 'Every team, champions, awards and every coach\'s career.'],
   rules: ['Rules', 'How the league and the sportsbook work.'], account: ['Account', 'Your login, notifications and settings.'] };
 const NAV = HUBS.map(h => [h[0], h[1]]);
 const UI = { stSort: { key: 'place', dir: 1 }, prSort: { key: 'rank', dir: 1 }, prUsers: false, oddsSort: { key: 'titlePct', dir: -1 }, lbSort: { key: 'place', dir: 1 }, wkSort: { key: 'ts', dir: -1 }, metric: 'titlePct', acct: 'login', slip: null, msg: '', betWeek: null, mode: 'single', legs: [] };
@@ -448,7 +448,7 @@ const PAGES = {
     const s = S(), weeks = [...new Set(seasonGames().map(g => g.week))].sort((a, b) => a - b), me = myTeam();
     const view = arg === 'mine' ? 'mine' : arg === 'h2h' ? 'h2h' : 'week';
     // Page sections (gold underline) — separate from the week picker below them.
-    const tabs = [['week', 'This season', '#schedule'], ...(me ? [['mine', 'My games', '#schedule/mine'], ['h2h', 'Head-to-head', '#schedule/h2h']] : [])];
+    const tabs = [['week', 'This Season', '#schedule'], ...(me ? [['mine', 'My Games', '#schedule/mine'], ['h2h', 'Head-to-Head', '#schedule/h2h']] : [])];
     let html = tabs.length > 1 ? `<div class="subtabs inpage" role="tablist">${tabs.map(([k, l, h]) => `<a role="tab" href="${h}" class="${k === view ? 'on' : ''}" aria-selected="${k === view}">${l}</a>`).join('')}</div>` : '';
     if (view === 'mine') {
       const gs = D.games.filter(g => g.season === s && (g.home === me.id || g.away === me.id)).sort((a, b) => a.week - b.week);
@@ -538,7 +538,7 @@ const PAGES = {
       </table></div><p class="muted small">Form = average points per game better (+) or worse (−) than expected over the last 3 games.</p></div>`;
   },
 
-  teams() {
+  teamsGrid() {
     const s = S(), R = records(s), all = D.teams.filter(t => t.conf === D.league.conference), me = myTeam()?.id;
     const grids = divisions(s).map(d => {
       const ids = orderGroup(all.filter(t => !d || divOf(t, s) === d).map(t => t.id), s);
@@ -547,8 +547,10 @@ const PAGES = {
         <div class="tc-rec">${rec(R[id])}${streak(R[id]) !== '–' ? `<span class="muted small"> · ${streak(R[id])}</span>` : ''}<span class="tc-pl">${ordinal(i + 1)}</span></div>
         <div class="muted small tc-sub">${isUserTeam(t) ? esc(t.coach) : 'CPU'} · ${t.ovr || '–'} OVR</div></a>`; }).join('')}</div>`;
     }).join('');
-    return grids + statsBoard(s);
+    return grids;
   },
+  stats() { return statsBoard(S()); },
+  teams() { return PAGES.history(); },
 
   team(id) {
     // "#team/<id>" is this season; "#team/<id>/<season>" is that team as it was in an earlier season.
@@ -567,7 +569,7 @@ const PAGES = {
     const place = past && sc ? seasonPlaces(s).places[sc.toLowerCase()] : null;
     const coachLine = past ? (sc ? `Coach <a href="#coach/${slug(sc)}">${esc(sc)}</a>` : 'CPU') : isUserTeam(t) ? `Coach <a href="#coach/${slug(t.coach)}">${esc(t.coach)}</a>` : 'CPU';
     const tAw = (D.history.find(h => h.season === s)?.awards || []).filter(a => a.team === id);
-    return `<p><a href="${past ? '#history' : '#teams'}">← ${past ? 'History' : 'All teams'}</a></p>
+    return `<p><a href="#history">← History</a></p>
       ${seasonsOf.length > 1 ? `<div class="bfilters">${seasonsOf.map(x => `<a class="bfilter${x === s ? ' on' : ''}" href="#team/${esc(id)}${x === cur ? '' : '/' + x}">S${seasonNum(x)} <span>${x}</span></a>`).join('')}</div>` : ''}
       <div class="card" style="border-left:6px solid ${esc(teamColor(t))}"><h2>${pr ? '#' + pr.rank + ' ' : ''}${esc(t.name)}${past ? ` <span class="muted" style="font-size:.7em">· Season ${seasonNum(s)}</span>` : ''}</h2>
         <div class="muted">${esc(past ? (seasonMembers(s).has(t.id) ? D.league.conference : t.conf) : t.conf)}${divOf(t, s) && !past ? ' ' + esc(divOf(t, s)) : ''} · ${coachLine}${champ ? ' · <span class="tag gold">🏆 League champion</span>' : ccg ? ' · <span class="tag">Title game</span>' : ''}</div>
@@ -717,7 +719,7 @@ const PAGES = {
         <div class="cr-coach">🏆 ${h.champCoach && h.champCoach !== 'CPU' ? `Coach <b>${esc(h.champCoach)}</b>` : 'CPU'}${h.runnerCoach ? ` over ${esc(h.runnerCoach)}` : ''}</div>${h.notes ? `<small>${esc(h.notes)}</small>` : ''}</div>${g ? '<span class="go" aria-hidden="true">›</span>' : ''}`;
       return g ? `<a class="champrow" href="#game/${esc(g.id)}" style="--wc:${esc(teamColor(W))}">${inner}</a>` : `<div class="champrow" style="--wc:${esc(teamColor(W))}">${inner}</div>`;
     };
-    return `<h2>League Champions</h2><p class="h2sub">Every League Title game winner. Tap one for the game.</p><div class="champlist">${H.length ? H.map(champRow).join('') : '<div class="card muted">No completed seasons yet.</div>'}</div>
+    return PAGES.teamsGrid() + `<h2>League Champions</h2><p class="h2sub">Every League Title game winner. Tap one for the game.</p><div class="champlist">${H.length ? H.map(champRow).join('') : '<div class="card muted">No completed seasons yet.</div>'}</div>
       ${seasonAwardsCard(H)}
       ${coachBoard()}
       ${carousel(C)}`;
@@ -2717,7 +2719,7 @@ function route() {
   $('#pagehead').hidden = !meta;
   if (meta) {
     $('#pageTitle').textContent = meta[0]; $('#pageSub').textContent = meta[1];
-    const subOn = page === 'team' ? 'teams' : page === 'coach' ? 'history' : page === 'game' ? 'schedule' : page;
+    const subOn = page === 'team' || page === 'teams' ? 'history' : page === 'coach' ? 'history' : page === 'game' ? 'schedule' : page;
     $('#subnav').innerHTML = subs.length > 1 ? subs.map(([k, l]) => `<a role="tab" href="#${k}" class="${k === subOn ? 'on' : ''}" aria-selected="${k === subOn}">${l}${k === 'vote' && nBal ? '<i class="sdot" aria-hidden="true"></i>' : ''}</a>`).join('') : '';
     $('#subnav').hidden = subs.length <= 1;
   }
