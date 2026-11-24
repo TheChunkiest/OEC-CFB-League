@@ -10,7 +10,7 @@ loadAI();
 import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
 
 // Tabs: the weekly job lives on "This Week"; everything else is occasional. Awards only shows when it matters.
-const TABS = () => [['advance', 'This Week'], ['games', 'Scores & Schedule'], ['teams', 'Teams & Coaches'], ['betting', 'Sportsbook'],
+const TABS = () => [['advance', 'This Week'], ['games', 'Scores & Schedule'], ['betting', 'Sportsbook'], ['teams', 'Teams & Coaches'],
   ...(L().phase === PHASES.CCG || L().phase === PHASES.POST || L().awards?.open ? [['awards', 'Awards']] : []), ['preseason', 'New Season'], ['settings', 'Settings']];
 const ST = { tab: 'advance', desk: 'no', gamesWeek: null, msg: '', step: 1, draft: null, done: null };
 // A reload keeps you where you were: the tab, the week picked on Scores & Schedule, open sections and the scroll
@@ -476,12 +476,17 @@ const views = {
   // How the posted lines have held up: every finished game whose line was saved when it was posted.
   // Books Report (bottom of Sportsbook): how the posted lines have held up, for finished games whose line was saved.
   books() {
+    // Run on demand: a button builds the report from every finished game with a saved line, then a row of chips
+    // switches between four charts. The season picker narrows it to one season.
+    const head = `<div class="card booksrep"><div class="row spread"><div><b>📊 Books Report</b><div class="muted small">How accurate the lines have been</div></div>
+      <button class="${ST.booksAt ? 'ghost sm' : 'gold'}" data-act="runBooks">${ST.booksAt ? '↻ Run again' : 'Run report'}</button></div>`;
+    if (!ST.booksAt) return head + `<p class="muted small" style="margin:8px 0 0">Checks every finished game against the line it was posted with: spreads, totals, favorites' win chances and home field.</p></div>`;
     const all = D.games.filter(g => played(g) && !g.forfeit && g.lines && g.lines.spread != null && g.lines.pHome != null);
     const seasons = [...new Set(all.map(g => g.season))].sort((a, b) => b - a), pick = ST.booksSeason ?? '';
     const gs = all.filter(g => pick === '' || g.season === +pick), n = gs.length;
-    const head = `<details class="card" data-keepopen="books" ${ST.open?.books ? 'open' : ''}><summary><b>📊 Books Report</b> <span class="muted small">how accurate the lines have been</span></summary>`;
-    const sel = seasons.length > 1 ? `<select id="booksSel" style="width:auto;margin:8px 0"><option value="">All seasons</option>${seasons.map(x => `<option value="${x}" ${String(x) === String(pick) ? 'selected' : ''}>${x}</option>`).join('')}</select>` : '';
-    if (!n) return head + `<p class="muted small">Fills in as games are played: every line is saved on its game when it's posted.</p></details>`;
+    const when = `<span class="muted small">Run ${esc(new Date(ST.booksAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }))}</span>`;
+    const sel = seasons.length > 1 ? `<select id="booksSel" style="width:auto"><option value="">All seasons</option>${seasons.map(x => `<option value="${x}" ${String(x) === String(pick) ? 'selected' : ''}>${x}</option>`).join('')}</select>` : '';
+    if (!n) return head + `<p class="muted small">No finished games with a saved line yet. Every line is saved on its game when it's posted, so this fills in as games are played.</p></div>`;
     const mean = a => a.reduce((x, y) => x + y, 0) / (a.length || 1), f1 = x => (x > 0 ? '+' : '') + x.toFixed(1);
     const R = gs.map(g => { const l = g.lines, am = +g.homeScore - +g.awayScore, favH = l.spread <= 0;
       return { g, l, am, pm: -l.spread, T: +g.homeScore + +g.awayScore, favM: favH ? am : -am, sp: Math.abs(l.spread), favWon: favH ? am > 0 : am < 0, pFav: Math.max(l.pHome, 1 - l.pHome) }; });
@@ -489,32 +494,60 @@ const views = {
     const coverBias = mean(R.map(r => r.favM - r.sp)), covered = R.filter(r => r.favM > r.sp).length;
     const totBias = mean(R.map(r => r.T - r.l.total)), overs = R.filter(r => r.T > r.l.total).length, unders = R.filter(r => r.T < r.l.total).length;
     const mae = mean(R.map(r => Math.abs(r.am - r.pm))), homeR = R.filter(r => !r.g.neutral), homeM = mean(homeR.map(r => r.am));
-    // Plain-English takeaways; quiet unless something is clearly off.
     const tips = [];
     if (Math.abs(favWon - favExp) >= Math.max(2, Math.sqrt(n) * 0.8)) tips.push(`Favorites are winning ${favWon > favExp ? 'more' : 'less'} than the odds say: win % is ${favWon > favExp ? 'too cautious' : 'too confident'}.`);
     if (Math.abs(coverBias) >= 3) tips.push(`Spreads are ${coverBias > 0 ? 'too small' : 'too big'}: favorites ${coverBias > 0 ? 'win by' : 'fall short by'} ${Math.abs(coverBias).toFixed(1)} more than the spread on average.`);
     if (Math.abs(totBias) >= 3) tips.push(`Totals are ${totBias > 0 ? 'too low' : 'too high'}: games land ${Math.abs(totBias).toFixed(1)} points ${totBias > 0 ? 'over' : 'under'} on average.`);
     if (homeR.length >= 10 && Math.abs(homeM) >= 4) tips.push(`Home teams average ${f1(homeM)}: home field matters ${homeM > 0 ? 'more' : 'less'} than the model thinks.`);
     const verdict = tips.length ? `<ul class="clean" style="margin:6px 0">${tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '<p style="margin:6px 0">✅ The lines are landing where they should.</p>';
-    // Predicted vs actual margin, one dot per game; on the dashed line the spread was exactly right.
-    const lim = Math.max(20, ...R.map(r => Math.abs(r.am)), ...R.map(r => Math.abs(r.pm))), W = 260, P = 16, sx = v => P + (v + lim) / (2 * lim) * (W - 2 * P), sy = v => W - P - (v + lim) / (2 * lim) * (W - 2 * P);
-    const svg = `<svg viewBox="0 0 ${W} ${W}" style="width:100%;max-width:320px;display:block;margin:4px auto">
-      <line x1="${sx(-lim)}" y1="${sy(0)}" x2="${sx(lim)}" y2="${sy(0)}" stroke="var(--line)"/><line x1="${sx(0)}" y1="${sy(-lim)}" x2="${sx(0)}" y2="${sy(lim)}" stroke="var(--line)"/>
-      <line x1="${sx(-lim)}" y1="${sy(-lim)}" x2="${sx(lim)}" y2="${sy(lim)}" stroke="var(--gold)" stroke-dasharray="4 4"/>
-      ${R.map(r => `<circle cx="${sx(r.pm).toFixed(1)}" cy="${sy(r.am).toFixed(1)}" r="4.5" fill="var(--red)" fill-opacity=".85" stroke="var(--card)" stroke-width="1.5"><title>${esc(team(r.g.away).abbr || team(r.g.away).name)} @ ${esc(team(r.g.home).abbr || team(r.g.home).name)}: line ${f1(r.pm)}, final ${f1(r.am)}</title></circle>`).join('')}</svg>`;
     const stat = (k, v, sub) => `<div class="stat"><span>${k}</span><b>${v}</b><small class="muted">${sub}</small></div>`;
-    return head + `${sel}<p class="muted small" style="margin:6px 0">${n} finished game${n === 1 ? '' : 's'}${n < 30 ? ' (small sample: a hint, not a verdict)' : ''}.</p>${verdict}
+    const nm = g => `${esc(team(g.away).abbr || team(g.away).name)} @ ${esc(team(g.home).abbr || team(g.home).name)}`;
+    // ---- charts ----
+    const W = 300, H = 240, P = 30;
+    const axes = (xl, yl) => `<text x="${W / 2}" y="${H - 2}" text-anchor="middle" class="bk-ax">${xl}</text><text x="10" y="${H / 2}" text-anchor="middle" class="bk-ax" transform="rotate(-90 10 ${H / 2})">${yl}</text>`;
+    const scatter = (pts, lo, hi, xl, yl, zero) => {
+      const sx = v => P + (v - lo) / (hi - lo) * (W - P - 10), sy = v => H - P - (v - lo) / (hi - lo) * (H - P - 10);
+      return `${zero ? `<line x1="${sx(lo)}" y1="${sy(0)}" x2="${sx(hi)}" y2="${sy(0)}" class="bk-grid"/><line x1="${sx(0)}" y1="${sy(lo)}" x2="${sx(0)}" y2="${sy(hi)}" class="bk-grid"/>` : ''}
+        <line x1="${sx(lo)}" y1="${sy(lo)}" x2="${sx(hi)}" y2="${sy(hi)}" class="bk-ideal"/>
+        ${[lo, zero ? 0 : null, hi].filter(v => v != null).map(v => `<text x="${sx(v)}" y="${H - P + 12}" text-anchor="middle" class="bk-ax">${v > 0 && zero ? '+' : ''}${v}</text><text x="${P - 4}" y="${sy(v) + 3}" text-anchor="end" class="bk-ax">${v > 0 && zero ? '+' : ''}${v}</text>`).join('')}
+        ${pts.map(q => `<circle cx="${sx(q.x).toFixed(1)}" cy="${sy(q.y).toFixed(1)}" r="4.5" class="bk-dot"><title>${q.t}</title></circle>`).join('')}${axes(xl, yl)}`;
+    };
+    const C = {
+      margin: ['Spreads', 'Each dot is a game: the margin the line predicted (across) vs. what happened (up), from the home team\'s side. On the dashed line, the spread was exactly right; dots above it mean the home team did better than the line.',
+        () => { const lim = Math.max(20, ...R.map(r => Math.abs(r.am)), ...R.map(r => Math.abs(r.pm))); return scatter(R.map(r => ({ x: r.pm, y: r.am, t: `${nm(r.g)}: line ${f1(r.pm)}, final ${f1(r.am)}` })), -lim, lim, 'Predicted home margin', 'Actual home margin', true); }],
+      totals: ['Totals', 'The posted over/under (across) vs. the points actually scored (up). Dots above the dashed line went over.',
+        () => { const v = R.flatMap(r => [r.T, r.l.total]), lo = Math.floor(Math.min(...v) / 10) * 10, hi = Math.ceil(Math.max(...v) / 10) * 10; return scatter(R.map(r => ({ x: r.l.total, y: r.T, t: `${nm(r.g)}: O/U ${r.l.total}, scored ${r.T}` })), lo, hi, 'Posted total', 'Points scored', false); }],
+      favs: ['Win chances', 'Games grouped by how likely the favorite was to win. Gold outline = what the odds expected; red = how often the favorite actually won. Matching bars mean the win chances are right.',
+        () => { const B = [[.5, .6], [.6, .7], [.7, .8], [.8, .9], [.9, 1.01]], bw = (W - P - 10) / B.length, sy = v => H - P - v * (H - P - 14);
+          return `${[0, .5, 1].map(v => `<line x1="${P}" y1="${sy(v)}" x2="${W - 10}" y2="${sy(v)}" class="bk-grid"/><text x="${P - 4}" y="${sy(v) + 4}" text-anchor="end" class="bk-ax">${v * 100}%</text>`).join('')}
+            ${B.map(([a, b], k) => { const q = R.filter(r => r.pFav >= a && r.pFav < b), x = P + k * bw + 6, w = bw - 12; if (!q.length) return `<text x="${x + w / 2}" y="${H - P - 6}" text-anchor="middle" class="bk-ax">–</text><text x="${x + w / 2}" y="${H - 12}" text-anchor="middle" class="bk-ax">${Math.round(a * 100)}s</text>`;
+              const ex = mean(q.map(r => r.pFav)), ac = q.filter(r => r.favWon).length / q.length;
+              return `<rect x="${x}" y="${sy(ac)}" width="${w}" height="${sy(0) - sy(ac)}" rx="4" class="bk-bar"><title>${Math.round(a * 100)}–${Math.round(Math.min(b, 1) * 100)}% favorites: won ${q.filter(r => r.favWon).length} of ${q.length}</title></rect><rect x="${x - 2}" y="${sy(ex)}" width="${w + 4}" height="${sy(0) - sy(ex)}" rx="4" class="bk-exp"/><text x="${x + w / 2}" y="${sy(Math.max(ac, ex)) - 5}" text-anchor="middle" class="bk-ax">${q.length}</text><text x="${x + w / 2}" y="${H - 12}" text-anchor="middle" class="bk-ax">${Math.round(a * 100)}${b > 1 ? '+' : 's'}</text>`; }).join('')}`; }],
+      weeks: ['By week', 'How far off the spread was each week, on average (bars), with the number of games above each bar. Shorter bars mean sharper lines.',
+        () => { const by = {}; R.forEach(r => { const k = r.g.season * 100 + (r.g.type === 'ccg' ? 98 : r.g.type === 'bowl' ? 99 : r.g.week); (by[k] = by[k] || []).push(Math.abs(r.am - r.pm)); });
+          const ks = Object.keys(by).map(Number).sort((a, b) => a - b).slice(-14), mx = Math.max(10, ...ks.map(k => mean(by[k]))) * 1.15, bw = (W - P - 10) / ks.length, sy = v => H - P - v / mx * (H - P - 14);
+          return `${[0, Math.round(mx / 2.3), Math.round(mx / 1.15)].map(v => `<line x1="${P}" y1="${sy(v)}" x2="${W - 10}" y2="${sy(v)}" class="bk-grid"/><text x="${P - 4}" y="${sy(v) + 4}" text-anchor="end" class="bk-ax">${v}</text>`).join('')}
+            ${ks.map((k, i) => { const v = mean(by[k]), x = P + i * bw + 3, w = Math.max(4, bw - 6), wk = k % 100, se = Math.floor(k / 100);
+              return `<rect x="${x}" y="${sy(v)}" width="${w}" height="${sy(0) - sy(v)}" rx="3" class="bk-bar"><title>${wkName(wk === 98 ? curWeek(L()) : wk, se)} ${se}: off by ${v.toFixed(1)} on average (${by[k].length} games)</title></rect><text x="${x + w / 2}" y="${sy(v) - 4}" text-anchor="middle" class="bk-ax">${by[k].length}</text><text x="${x + w / 2}" y="${H - P + 12}" text-anchor="middle" class="bk-ax">${wk === 98 ? 'T' : wk === 99 ? 'B' : wk}</text>`; }).join('')}
+            ${axes('Week', 'Points off the spread')}`; }],
+    };
+    const ck = C[ST.booksChart] ? ST.booksChart : 'margin', [, cap, draw] = C[ck];
+    return head + `<div class="row" style="margin:10px 0 0;gap:8px">${sel}${when}</div>
+      <p class="muted small" style="margin:8px 0 4px">${n} finished game${n === 1 ? '' : 's'}${n < 30 ? ' (small sample: a hint, not a verdict)' : ''}.</p>${verdict}
       <div class="statgrid">${stat('Favorites won', `${favWon} of ${n}`, `${favExp.toFixed(1)} expected`)}${stat('Favorites covered', `${covered} of ${n}`, `${f1(coverBias)} pts vs spread`)}${stat('Overs–unders', `${overs}–${unders}`, `${f1(totBias)} pts vs total`)}${stat('Avg line miss', `${mae.toFixed(1)} pts`, 'predicted vs final margin')}</div>
-      <p class="muted small" style="margin:10px 0 0;text-align:center">Predicted (across) vs. actual (up) home margin. Dashed line = spread was exactly right.</p>${svg}</details>`;
+      <div class="fchips bk-chips" role="group" aria-label="Chart">${Object.entries(C).map(([k, [l]]) => `<button class="fchip${k === ck ? ' on' : ''}" data-act="booksChart" data-c="${k}">${l}</button>`).join('')}</div>
+      <svg viewBox="0 0 ${W} ${H}" class="bk-chart" role="img" aria-label="${esc(C[ck][0])} chart">${draw()}</svg>
+      <p class="muted small" style="margin:4px 0 0;text-align:center">${esc(cap)}</p></div>`;
   },
   betting() {
     const lg = L(), s = lg.season, wk = D.wagers.filter(w => w.season === s).sort((a, b) => b.week - a.week || (b.ts || 0) - (a.ts || 0));
     return `<div class="card"><h2>Sportsbook Controls</h2><div class="row">
       <button class="ghost" data-act="repost">Re-post lines for ${esc(weekLabel())}</button></div><p class="muted small">Re-posting recalculates lines for this week's unplayed games (use after adding games mid-week or fixing ratings). Existing wagers keep the line they were placed at.</p></div>
+      ${views.books()}
       <div class="card"><h3 style="margin-top:0">${s} wagers (${wk.length})</h3>${(() => { const grp = w => w.status === 'void' ? 'push' : w.status, FL = [['open', 'Open'], ['all', 'All'], ['won', 'Won'], ['lost', 'Lost'], ['cashed', 'Cashed out'], ['push', 'Push / void']], cnt = k => k === 'all' ? wk.length : wk.filter(w => grp(w) === k).length, cur = ST.wf || 'open';
           ST.wfList = cur === 'all' ? wk : wk.filter(w => grp(w) === cur);
           return `<div class="bfilters">${FL.filter(([k]) => k === 'open' || k === 'all' || cnt(k)).map(([k, l]) => `<button class="bfilter${k === cur ? ' on' : ''}" data-act="wfilter" data-f="${k}">${l} <span>${cnt(k)}</span></button>`).join('')}</div>`; })()}${ST.wfList.length ? `<div class="tablewrap"><table><tr><th>Wk</th><th>Coach</th><th>Bet</th><th>Placed</th><th class="num">Stake</th><th class="num">Status</th><th></th></tr>
-        ${ST.wfList.map(w => `<tr><td>${esc(wkShort(w.week, w.season))}</td><td>${esc(w.coach)}</td><td style="white-space:normal">${esc(wagerLabel(w))}${legsHtml(w)}</td><td class="muted small">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num"><span class="pill ${w.status}">${w.status}${w.payout ? ' ' + (w.payout > 0 ? '+' : '') + w.payout : ''}</span></td><td>${w.status !== 'void' ? `<button class="sm danger" data-void="${esc(w.id)}">Void</button>` : ''}</td></tr>`).join('')}</table></div>` : `<p class="muted">${wk.length ? 'No bets in this group.' : 'No wagers yet.'}</p>`}</div>${views.books()}`;
+        ${ST.wfList.map(w => `<tr><td>${esc(wkShort(w.week, w.season))}</td><td>${esc(w.coach)}</td><td style="white-space:normal">${esc(wagerLabel(w))}${legsHtml(w)}</td><td class="muted small">${fmtTime(w.ts)}</td><td class="num">${w.stake}</td><td class="num"><span class="pill ${w.status}">${w.status}${w.payout ? ' ' + (w.payout > 0 ? '+' : '') + w.payout : ''}</span></td><td>${w.status !== 'void' ? `<button class="sm danger" data-void="${esc(w.id)}">Void</button>` : ''}</td></tr>`).join('')}</table></div>` : `<p class="muted">${wk.length ? 'No bets in this group.' : 'No wagers yet.'}</p>`}</div>`;
   },
 
   awards() {
@@ -671,6 +704,8 @@ async function giveRelief() {
   return `${R.given.join(', ')} ${R.given.length === 1 ? 'was' : 'were'} out of Crackers and got 25 relief Crackers.`;
 }
 const ACT = {
+  runBooks() { ST.booksAt = Date.now(); stay(); },
+  booksChart(t) { ST.booksChart = t.dataset.c; stay(); },
   async gameLock(t) { const g = D.games.find(x => x.id === t.dataset.g); if (!g) return; await batch([{ op: 'set', col: 'games', id: g.id, data: { locked: !g.locked } }]); await syncWinLocks(); flash(`${team(g.away).abbr} @ ${team(g.home).abbr}: bets ${g.locked ? 'locked' : 'unlocked'}.`); },
   async lockWeek() { const lg = L(), gs = D.games.filter(g => g.season === lg.season && g.week === lg.week && !played(g) && !g.locked); if (!gs.length) return flash('Every game this week is already locked or final.');
     await batch(gs.map(g => ({ op: 'set', col: 'games', id: g.id, data: { locked: true } }))); await syncWinLocks(); flash(`Locked bets on ${gs.length} ${wkName(lg.week)} game${gs.length === 1 ? '' : 's'} (and those teams' win totals). Other weeks stay open.`); },

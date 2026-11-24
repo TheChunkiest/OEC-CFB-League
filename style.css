@@ -1695,3 +1695,16 @@ details.todolist[open]>summary{margin-bottom:8px}
 }
 details.todolist>summary::before,details.todolist>summary::after{display:none!important;content:none!important}
 @media(max-width:760px){.lbpair>.card>h2{font-size:19px!important;margin-bottom:6px;white-space:nowrap}}
+/* Books Report charts */
+.booksrep .statgrid{margin-top:10px}
+.bk-chips{margin:14px 0 6px}
+.bk-chart{width:100%;max-width:460px;display:block;margin:4px auto 0}
+.bk-chart .bk-grid{stroke:rgba(255,255,255,.12);stroke-width:1}
+.bk-chart .bk-ideal{stroke:var(--gold);stroke-width:1.5;stroke-dasharray:4 4}
+.bk-chart .bk-dot{fill:#e8343c;fill-opacity:.85;stroke:#111;stroke-width:1.2}
+.bk-chart .bk-bar{fill:#e8343c;fill-opacity:.85}
+.bk-chart .bk-exp{fill:none;stroke:var(--gold);stroke-width:1.6}
+.bk-chart .bk-ax{fill:#a79a9c;font:600 9px var(--body)}
+details.todolist>summary .todo-prog{margin:10px 0 0}
+details.todolist>summary .go{top:28px;transform:none}
+details.todolist[open]>summary .go{transform:rotate(90deg)}

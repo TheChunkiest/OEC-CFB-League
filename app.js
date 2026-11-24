@@ -401,19 +401,22 @@ const PAGES = {
     html += offseasonAwardsCard();
     if (coachHome) html += myTeamCard(me, myT) + todoCard(me, myT);
     else html += picksCard() + awardsVoteCard();
+    // The featured game (title game or Game of the Week) leads this week's games list.
     const ccgNow = games.find(g => g.type === 'ccg');
-    if (ccgNow && !gt.game) html += featureCard(ccgNow, { ribbon: champRibbon(), note: played(ccgNow) ? 'League champion crowned' : '' });
-    if (gt.game) html += featureCard(gt.game, { ribbon: '★ Game of the Week' });
+    let feat = '';
+    if (ccgNow && !gt.game) feat += featureCard(ccgNow, { ribbon: champRibbon(), note: played(ccgNow) ? 'League champion crowned' : '' });
+    if (gt.game) feat += featureCard(gt.game, { ribbon: '★ Game of the Week' });
     else if (L.phase === PHASES.REG && games.length) {
       // Opening week has nothing to vote on beforehand: the season just started. Otherwise nobody voted.
       const firstWk = Math.min(...D.games.filter(g => g.season === s && (g.type || 'reg') === 'reg').map(g => g.week)), nxt = wkName(wk + 1);
-      html += `<div class="card gotw"><span class="ribbon">★ Game of the Week</span><div class="muted">${wk === firstWk
+      feat += `<div class="card gotw"><span class="ribbon">★ Game of the Week</span><div class="muted">${wk === firstWk
         ? `The season just kicked off, so there's no Game of the Week for ${esc(weekLabel())}. Voting is open for ${esc(nxt)}.`
         : `No Game of the Week votes were cast for ${esc(weekLabel())}.`} <a href="#vote">${wk === firstWk ? 'Vote now' : `Vote for ${esc(nxt)}'s game`} →</a></div></div>`;
     }
     const userWk = games.some(g => isUserTeam(team(g.home)) || isUserTeam(team(g.away)));
     // This week's games first (matchups), then storylines; side by side on wide screens.
-    html += `<div class="${offseason ? '' : 'grid2'}">${offseason ? '' : `<div><h2>${bowls ? 'Bowl Season Games' : `${esc(weekLabel())} Games`}</h2><div class="card matchbox">${bowls ? (games.length ? games.slice().sort((a, b) => played(a) - played(b) || a.week - b.week).map(g => gameCard(g)).join('') : '<div class="empty">No bowl or playoff games posted yet.</div>') : userWk ? weekOrder(games.filter(g => g.id !== gt.game?.id && g.id !== ccgNow?.id)).map(g => gameCard(g)).join('') || `<div class="empty">Only the ${ccgNow && !gt.game ? 'championship game' : 'Game of the Week'} is on the slate.</div>` : '<div class="empty">No user games this week.</div>'}</div></div>`}
+    if (offseason) html += feat;
+    html += `<div class="${offseason ? '' : 'grid2'}">${offseason ? '' : `<div><h2>${bowls ? 'Bowl Season Games' : `${esc(weekLabel())} Games`}</h2>${feat}<div class="card matchbox">${bowls ? (games.length ? games.slice().sort((a, b) => played(a) - played(b) || a.week - b.week).map(g => gameCard(g)).join('') : '<div class="empty">No bowl or playoff games posted yet.</div>') : userWk ? weekOrder(games.filter(g => g.id !== gt.game?.id && g.id !== ccgNow?.id)).map(g => gameCard(g)).join('') || `<div class="empty">Only the ${ccgNow && !gt.game ? 'championship game' : 'Game of the Week'} is on the slate.</div>` : '<div class="empty">No user games this week.</div>'}</div></div>`}
       <div><h2>${recap ? `Season ${seasonNum(L.season)} in Review` : bowls ? 'Bowl Season Storylines' : "This Week's Storylines"}</h2><div class="card">${stories.length ? stories.map(st => `<${st.href ? `a href="${esc(st.href)}"` : 'div'} class="story${st.href ? ' link' : ''}"><span class="tag">${esc(st.tag)}</span><h3>${esc(st.title)}</h3><p>${esc((() => { const vs = {}; vary(st.title, vs); return vary(st.body, vs); })())}</p>${st.href ? '<span class="go" aria-hidden="true">›</span>' : ''}</${st.href ? 'a' : 'div'}>`).join('') : '<div class="empty">Storylines appear once games are played.</div>'}</div></div></div>
       <div class="grid home2 lbpair"><div class="card"><h2>Power Rankings</h2><table class="minilb">${pr.map(x => `<tr><td class="rank">${x.rank}</td><td><span class="lb-full">${chip(x.id)}</span><span class="lb-short">${chip(x.id, { abbr: true })}</span></td><td class="num">${rec(x.rec)}</td><td class="num hide-sm">${mvHtml(x.move)}</td></tr>`).join('')}</table><p><a href="#rankings">Full rankings →</a></p></div>
       <div class="card"><h2>Betting Leaders</h2>${leaders.length ? `<table class="minilb">${leaders.map((x, i) => `<tr><td class="rank">${i + 1}</td><td class="lb-nm">${esc(x.u.name)}</td><td class="num hide-sm">${x.b.w}-${x.b.l}${x.b.p ? '-' + x.b.p : ''}</td><td class="num"><b class="${x.b.net >= 0 ? 'win' : 'loss'}">${x.b.net >= 0 ? '+' : ''}${x.b.net.toLocaleString()}</b></td></tr>`).join('')}</table>` : '<div class="muted">No coaches linked yet.</div>'}<p><a href="#betting">Place bets →</a></p></div></div>`;
@@ -498,7 +501,7 @@ const PAGES = {
     if (!me) html += `<div class="notice">Everyone with an account gets <b>${START_CREDITS.toLocaleString()} Crackers</b> per season. <a href="#account">Log in or sign up</a> to place wagers.</div>`;
     else if (!me.teamId) html += `<div class="notice">You're a spectator: you can bet with your ${START_CREDITS.toLocaleString()} Crackers like everyone else. If you join the league, the commissioner will link you to your team.</div>`;
     html += !open ? `<div class="card empty">Betting is ${L.phase === PHASES.PRE ? 'closed until the season is published' : 'locked right now'}.</div>` :
-      games.length ? `${bwks.length > 1 ? `<div class="weekpick"><span class="wp-lbl">BET ON</span><div class="wp-row">${bwks.map(w => `<button class="wp${w === bw ? ' on' : ''}${w === L.week ? ' now' : ''}" data-betwk="${w}" aria-label="${esc(wkName(w, s))}"${w === bw ? ' aria-current="true"' : ''}>${esc(((n) => n === 'League Title' ? 'Title' : n === 'Bowl Season' ? 'Bowls' : String(w))(wkName(w, s)))}</button>`).join('')}</div></div>` : ''}
+      games.length ? `${bwks.length > 1 ? `<div class="weekpick"><span class="wp-lbl">WEEK</span><div class="wp-row">${bwks.map(w => `<button class="wp${w === bw ? ' on' : ''}${w === L.week ? ' now' : ''}" data-betwk="${w}" aria-label="${esc(wkName(w, s))}"${w === bw ? ' aria-current="true"' : ''}>${esc(((n) => n === 'League Title' ? 'Title' : n === 'Bowl Season' ? 'Bowls' : String(w))(wkName(w, s)))}</button>`).join('')}</div></div>` : ''}
         <h2>${esc(wkName(bw, s))} Board</h2><p class="h2sub">${games.length} game${games.length === 1 ? '' : 's'} · ${bw === L.week ? 'tap a price to bet it' : 'early lines: they move after every advance, but your bet keeps the line you took'}</p>
         <div class="betmode"><div class="fchips" role="group" aria-label="Bet type"><button data-mode="single" class="fchip${UI.mode === 'single' ? ' on' : ''}">Single bets</button><button data-mode="parlay" class="fchip${UI.mode === 'parlay' ? ' on' : ''}">Parlay</button></div>
         ${UI.mode === 'parlay' ? `<details class="parlayhelp"><summary>How parlays work</summary><p class="muted small">Tap 2–${MAX_LEGS} picks from any upcoming week, plus League Champion and Win Total picks below. Per game: one side (spread or moneyline) and one points pick (game total or a team total). Tapping another in the same group swaps it in. All must hit; payouts multiply. Once more than half the legs have won, you can cash out early for your stake plus ${Math.round(CASHOUT_SHARE * 100)}% of what the winning legs would pay.</p></details>` : ''}</div>
@@ -1799,7 +1802,8 @@ function showLive() {
       : `<div class="lp-badge"><i></i>LIVE NOW</div><div class="lp-title">${esc(info.title)}</div>
     <a class="btn lp-go" href="${esc(info.url)}" target="_blank" rel="noopener">▶ Watch on YouTube</a>`}`;
 }
-setInterval(() => checkLive(), 60000);   // re-checks live.json / expiry; no database reads
+setInterval(() => { if (!document.hidden) checkLive(); }, 60000);   // re-checks live.json / expiry while the page is on screen; no database reads
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkLive(); });
 
 /* ---------- Game preview / recap page ---------- */
 const pct0 = p => Math.round(p * 100) + '%';
@@ -2022,7 +2026,7 @@ function todoCard(me, T) {
   // Collapsible: open while something is waiting on you, folded once everything is done (tap to open either way;
   // your choice sticks until the list changes).
   const sig = `${s}|${L.week}|${todo.length}`, open = UI.todoOpen && UI.todoOpen.sig === sig ? UI.todoOpen.open : todo.length > 0;
-  return `<details class="card todolist" data-todo="${esc(sig)}" ${open ? 'open' : ''}><summary><div class="mt-title"><h2>Your To-Do List</h2><span>${esc(stage)}${items.length ? ` · ${todo.length ? `${todo.length} to do · ` : ''}${done.length} of ${items.length} done` : ''}</span></div><span class="go" aria-hidden="true">›</span></summary>${items.length ? `<div class="todo-prog" aria-hidden="true"><i style="width:${Math.round(done.length / items.length * 100)}%"></i></div>` : ''}${body}</details>`;
+  return `<details class="card todolist" data-todo="${esc(sig)}" ${open ? 'open' : ''}><summary><div class="mt-title"><h2>Your To-Do List</h2><span>${esc(stage)}${items.length ? ` · ${todo.length ? `${todo.length} to do · ` : ''}${done.length} of ${items.length} done` : ''}</span></div><span class="go" aria-hidden="true">›</span>${items.length ? `<div class="todo-prog" aria-hidden="true"><i style="width:${Math.round(done.length / items.length * 100)}%"></i></div>` : ''}</summary>${body}</details>`;
 }
 function picksCard() {
   if (!picksOpen()) return '';
@@ -2906,7 +2910,8 @@ document.addEventListener('submit', async e => {
   };
   build(); move();
   if (!still) addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(move); } }, { passive: true });
-  let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { build(); move(); }, 200); });
+  // Phones fire a resize whenever the address bar slides in or out; only rebuild when the screen got taller than the field.
+  let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (Math.ceil(innerHeight / TEN) + 2 > slots.length / 2) { build(); move(); } }, 200); });
 })();
 // Loading screen: the play clock runs while data loads, then a "tunnel run-out" clears it (a plain fade for people
 // who turn off motion). It stays at least a moment so it never just flickers.
