@@ -1905,3 +1905,7 @@ nav.tabbar a.mid.on svg{box-shadow:0 0 0 2px rgba(245,184,46,.6),0 6px 18px rgba
 .ae-row .ae-st{grid-column:2/-1;font-size:13px}
 .ae-at{display:flex;flex-direction:column;line-height:1.15}
 .ae-at b{font-size:11px;color:#a79a9c;font-weight:700}
+/* Accolade lists: keep each row inside the card (a long one-line description was stretching the grid) */
+.acc-list,.acc-how{grid-template-columns:minmax(0,1fr)}
+.acc-it{min-width:0;padding-right:4px}
+.acc-t small{white-space:normal}
