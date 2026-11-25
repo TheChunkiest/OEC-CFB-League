@@ -198,7 +198,7 @@ function scoreRows(games, dr) {
     const lock = played(g) ? '' : `<div class="kickrow"><span class="muted small">${g.locked ? '🔒 Bets on this game are locked' : '🎟️ Bets on this game are open'}</span><button class="sm ${g.locked ? '' : 'ghost'}" data-act="gameLock" data-g="${esc(g.id)}">${g.locked ? 'Unlock' : 'Lock bets'}</button></div>`;
     // Kickoff, the per-game bet lock and the forfeit pick are occasional, so they sit in a dropdown under the scores
     // with a one-line summary of where they stand.
-    const sum = [played(g) ? '' : ko ? '🕗 ' + esc(fmtKick(ko, true)) : '🕗 No kickoff set', played(g) ? '' : g.locked ? '🔒 Bets locked' : '🎟️ Bets open', ff ? '⚠️ Forfeit' : ''].filter(Boolean).join(' · ') || 'Forfeit';
+    const sum = [played(g) ? '' : ko ? '🕗 ' + esc(fmtKick(ko, true)) : '🕗 No kickoff set', played(g) ? '' : g.locked ? '🔒 Bets locked' : '🎟️ Bets open', ff ? '⚠️ Forfeit win' : ''].filter(Boolean).join(' · ') || 'Final · mark a forfeit';
     return `<div class="card scorecard">${row('away', av)}${row('home', hv)}
       <div class="meta sc-line">${g.week !== L().week ? `<b class="gstat">${wkOf(g)}</b> · ` : ''}${l ? `${g.lines ? 'Line' : 'Projected'}: ${esc(team(g.home).abbr)} ${fmtLine(l.spread)} · O/U ${l.total}` : ''} ${g.type && g.type !== 'reg' ? '· <span class="tag gold">' + esc(g.type.toUpperCase()) + '</span>' : ''}</div>
       <details class="sc-more"${ff ? ' open' : ''}><summary><div class="sumrow"><em>${sum}</em><span>Edit</span></div></summary>${kick}${lock}

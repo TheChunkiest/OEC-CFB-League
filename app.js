@@ -13,9 +13,9 @@ const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-
 // Main tabs (floating bar): five hubs, each holding the pages that belong to it as gold-underline sub-tabs.
 const HUBS = [
   ['home', 'Home', 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', []],
-  ['betting', 'Betting', 'M4 7h16v10H4zM12 10v4M9 12h6', [['betting', 'Sportsbook'], ['mybets', 'My Bets'], ['odds', 'Odds & Trends']]],
-  ['pass', 'Pass', 'M12 2l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 15.4 6.7 18.4l1.2-6L3.4 8.3l6-.7z', []],
   ['league', 'League', 'M7 4h10v4a5 5 0 0 1-10 0zM12 13v4M8 20h8', [['schedule', 'Schedule'], ['standings', 'Standings'], ['rankings', 'Power Rankings'], ['stats', 'Stats'], ['vote', 'Voting'], ['history', 'History'], ['rules', 'Rules']]],
+  ['pass', 'Pass', 'M12 2l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 15.4 6.7 18.4l1.2-6L3.4 8.3l6-.7z', []],
+  ['betting', 'Betting', 'M4 7h16v10H4zM12 10v4M9 12h6', [['betting', 'Sportsbook'], ['mybets', 'My Bets'], ['odds', 'Odds & Trends']]],
   ['account', 'Account', 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0', []]];
 const HUB_OF = { schedule: 'league', game: 'league', mybets: 'betting', odds: 'betting', standings: 'league', rankings: 'league', teams: 'league', stats: 'league', team: 'league', coach: 'league', vote: 'league', history: 'league', rules: 'league' };
 // Page title and one-line description under the header (Home has its own layout and skips this).
