@@ -5,21 +5,22 @@ import {
   gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, wkName, gWeek, champOpen, titleSet, DIAG, storylines, seasonStorylines, RELIEF, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory, legLabel
 , playbookOf, pbSeason, pbText
 , AWARD_DEFS, awardGames, awardGameLabel, awardCoaches
-, curWeek, wkShort, wkOf, phaseName, PICK_DEFS, picksOpen, pickAnswers, loadPicks, pickFacts, OPENER_BOOST, isOpener, coachEdge, canonCoach, plateInk
-} from './core.js?v=115';
+, curWeek, wkShort, wkOf, phaseName, PICK_DEFS, picksOpen, pickAnswers, loadPicks, pickFacts, OPENER_BOOST, isOpener, coachEdge, canonCoach, plateInk, artifactPath, artifactSet, ARTIFACT_TIERS, accolades, ACCOLADES, accVal
+} from './core.js?v=118';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
 // Main tabs (floating bar): five hubs, each holding the pages that belong to it as gold-underline sub-tabs.
 const HUBS = [
   ['home', 'Home', 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', []],
-  ['schedule', 'Schedule', 'M4 6h16M4 12h16M4 18h10', [['schedule', 'Schedule & Scores']]],
   ['betting', 'Betting', 'M4 7h16v10H4zM12 10v4M9 12h6', [['betting', 'Sportsbook'], ['mybets', 'My Bets'], ['odds', 'Odds & Trends']]],
-  ['league', 'League', 'M7 4h10v4a5 5 0 0 1-10 0zM12 13v4M8 20h8', [['standings', 'Standings'], ['rankings', 'Power Rankings'], ['stats', 'Stats'], ['vote', 'Voting'], ['history', 'History'], ['rules', 'Rules']]],
+  ['pass', 'Pass', 'M12 2l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 15.4 6.7 18.4l1.2-6L3.4 8.3l6-.7z', []],
+  ['league', 'League', 'M7 4h10v4a5 5 0 0 1-10 0zM12 13v4M8 20h8', [['schedule', 'Schedule'], ['standings', 'Standings'], ['rankings', 'Power Rankings'], ['stats', 'Stats'], ['vote', 'Voting'], ['history', 'History'], ['rules', 'Rules']]],
   ['account', 'Account', 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0', []]];
-const HUB_OF = { game: 'schedule', mybets: 'betting', odds: 'betting', standings: 'league', rankings: 'league', teams: 'league', stats: 'league', team: 'league', coach: 'league', vote: 'league', history: 'league', rules: 'league' };
+const HUB_OF = { schedule: 'league', game: 'league', mybets: 'betting', odds: 'betting', standings: 'league', rankings: 'league', teams: 'league', stats: 'league', team: 'league', coach: 'league', vote: 'league', history: 'league', rules: 'league' };
 // Page title and one-line description under the header (Home has its own layout and skips this).
 const PAGE_META = {
+  pass: ['Cracker Pass', "Earn accolades from games and bets to unlock this season's artifacts."],
   schedule: ['Schedule', 'Every game, line and result, week by week.'], game: ['Game Center', 'Preview, odds, bets and recap for this game.'],
   betting: ['Betting', "Bet with Crackers on this week's games and the season."], mybets: ['My Bets', "Every bet you've placed and how it turned out."],
   odds: ['Odds & Trends', 'Title odds, win totals and how they have moved.'], standings: ['Standings', 'Conference records and the race for the League Title game.'],
@@ -500,7 +501,7 @@ const PAGES = {
     const games = D.games.filter(g => g.season === s && g.week === bw && !played(g) && !g.locked);
     const open = L.bettingOpen && L.phase !== PHASES.PRE && (L.phase !== PHASES.POST || D.games.some(g => g.season === L.season && g.type === 'bowl' && !played(g) && g.lines));
     const bk = me ? bankroll(me.id) : null;
-    let html = bk ? bankStrip(me, s, bk) : '';
+    let html = bk ? bankStrip(me, s, bk) + artifactStrip(me.id, s) : '';
     UI.mb = '';
     if (!me) html += `<div class="notice">Everyone with an account gets <b>${START_CREDITS.toLocaleString()} Crackers</b> per season. <a href="#account">Log in or sign up</a> to place wagers.</div>`;
     else if (!me.teamId) html += `<div class="notice">You're a spectator: you can bet with your ${START_CREDITS.toLocaleString()} Crackers like everyone else. If you join the league, the commissioner will link you to your team.</div>`;
@@ -517,7 +518,7 @@ const PAGES = {
       .map((x, i) => ({ ...x, place: i + 1, name: x.u.name, rec: x.b.w + x.b.l ? x.b.w / (x.b.w + x.b.l) : 0, net: x.b.net, roi: x.b.risked ? x.b.net / x.b.risked : -Infinity, balance: x.b.balance }));
     const board = sortRows(board0, lb, { rec: r => r.rec * 1000 + r.b.w });
     html += `<h2>Season ${seasonNum()} Leaderboard</h2><p class="h2sub">Ranked by net profit. Tap a column to sort.</p><div class="card"><div class="tablewrap"><table><tr>${sortTh(lb, 'place', '#', '', 'lbSort')}${sortTh(lb, 'name', 'Coach', '', 'lbSort')}${sortTh(lb, 'rec', 'W-L-P', 'num', 'lbSort')}${sortTh(lb, 'net', 'Net', 'num hide-xs', 'lbSort')}${sortTh(lb, 'roi', 'ROI', 'num hide-sm', 'lbSort')}${sortTh(lb, 'balance', 'Balance', 'num', 'lbSort')}</tr>
-      ${board.map(x => `<tr class="${me && me.id === x.u.id ? 'me' : ''}"><td class="rank">${x.place}</td><td>${x.u.teamId ? `<a href="#coach/${slug(x.u.name)}">${esc(x.u.name)}</a>` : esc(x.u.name)} <span class="muted small hide-sm">${x.u.teamId ? esc(team(x.u.teamId).name) : 'Spectator'}</span>${subSm(x.u.teamId ? esc(team(x.u.teamId).name) : 'Spectator')}</td><td class="num">${x.b.w}-${x.b.l}-${x.b.p}</td><td class="num hide-xs ${x.b.net >= 0 ? 'win' : 'loss'}">${x.b.net >= 0 ? '+' : ''}${x.b.net}</td><td class="num hide-sm">${x.b.risked ? Math.round(x.b.net / x.b.risked * 100) + '%' : '–'}</td><td class="num"><b>${x.b.balance.toLocaleString()}</b></td></tr>`).join('')}
+      ${board.map(x => `<tr class="${me && me.id === x.u.id ? 'me' : ''}"><td class="rank">${x.place}</td><td>${x.u.teamId ? `<a href="#coach/${slug(x.u.name)}">${esc(x.u.name)}</a>` : esc(x.u.name)} ${artifactIcons(x.u.id, s, 3)} <span class="muted small hide-sm">${x.u.teamId ? esc(team(x.u.teamId).name) : 'Spectator'}</span>${subSm(x.u.teamId ? esc(team(x.u.teamId).name) : 'Spectator')}</td><td class="num">${x.b.w}-${x.b.l}-${x.b.p}</td><td class="num hide-xs ${x.b.net >= 0 ? 'win' : 'loss'}">${x.b.net >= 0 ? '+' : ''}${x.b.net}</td><td class="num hide-sm">${x.b.risked ? Math.round(x.b.net / x.b.risked * 100) + '%' : '–'}</td><td class="num"><b>${x.b.balance.toLocaleString()}</b></td></tr>`).join('')}
     </table></div></div>`;
     // Potential payout = stake back + profit (boost included). Pushes and voids just return the stake.
     const payOf = w => w.status === 'push' || w.status === 'void' ? w.stake : w.status === 'cashed' ? w.stake + (w.payout || 0) : w.stake + winProfit(w);
@@ -634,17 +635,34 @@ const PAGES = {
         ${bs.map(({ se, b, n }) => `<tr><td><b>S${seasonNum(se)}</b></td><td class="num">${n}</td><td class="num">${b.w}-${b.l}-${b.p}</td><td class="num ${b.net >= 0 ? 'win' : 'loss'}">${b.net >= 0 ? '+' : ''}${b.net.toLocaleString()}</td><td class="num hide-xs">${b.risked ? Math.round(b.net / b.risked * 100) + '%' : '–'}</td><td class="num"><b>${b.balance.toLocaleString()}</b></td></tr>`).join('')}</table></div>
         ${bs.filter(x => x.best).sort((p, q) => q.best.payout - p.best.payout).slice(0, 1).map(x => `<p class="small" style="margin-bottom:0"><span class="muted">Biggest hit (S${seasonNum(x.se)}):</span> <b>${esc(wagerLabel(x.best))}</b> · +${x.best.payout.toLocaleString()} Crackers <button class="sm ghost" data-slip="${esc(x.best.id)}">🧾</button></p>`).join('')}`
         : '<div class="muted">No bets yet.</div>'}</div>`;
+      // Cracker Pass: this season's pass in full, then the level reached in every earlier season.
+      const passSe = [...new Set(D.games.map(g => g.season))].filter(se => se < cur && artifactPath(u.id, se).acc.n).sort((a, b) => b - a);
+      html += `<h2>Cracker Pass</h2><p class="h2sub">Accolades from games and bets unlock each season's artifacts.</p>${artifactCard(u.id, cur, !!auth.profile && auth.profile.id === u.id)}`;
+      if (passSe.length) html += `<div class="card"><h3 style="margin-top:0">Past seasons</h3><div class="artlv">${passSe.map(se => { const A = artifactPath(u.id, se), top = A.got[A.got.length - 1];
+          return `<div class="artlv-r"><b class="artlv-s">S${seasonNum(se)}</b>${top ? `<span class="art-ics">${A.got.map(x => `<span title="${esc(x.n)}">${x.i}</span>`).join('')}</span><span class="artlv-t"><span><b>Level ${A.got.length}</b> of ${A.set.list.length} · ${esc(top.n)}</span><small>${A.won.toLocaleString()} pass Crackers from ${A.acc.n} accolade${A.acc.n === 1 ? '' : 's'} · ${esc(A.set.title)}</small></span>` : `<span class="artlv-t muted">🔒 No artifacts unlocked<small>${A.won.toLocaleString()} pass Crackers</small></span>`}</div>`; }).join('')}</div></div>`;
     }
     return html;
   },
 
+  pass() {
+    // The season's pass: your own progress first, then where everyone in the league stands.
+    const L = D.league, s = L.season, me = auth.profile, set = artifactSet(s);
+    let html = me ? artifactCard(me.id, s) : `<section class="card artpath"><div class="ap-head"><div><b class="ap-title">${esc(set.title)}</b><span class="ap-set">Season ${seasonNum(s)} Cracker Pass${set.tag ? ' · ' + esc(set.tag) : ''}</span></div></div>
+      <div class="ap-row">${set.list.map(x => `<div class="ap-it"><span class="ap-ic" aria-hidden="true">${x.i}</span><span class="ap-nm">${esc(x.n)}</span><span class="ap-at">${x.at >= 1000 ? x.at / 1000 + 'K' : x.at}</span></div>`).join('')}</div>
+      <p class="ap-note"><a href="#account">Log in</a> to earn accolades and unlock artifacts.</p></section>`;
+    const ids = new Set([...D.users.filter(u => u.teamId).map(u => u.id), ...D.wagers.filter(w => w.season === s).map(w => w.uid)]);
+    const rows = [...ids].map(id => ({ u: D.users.find(x => x.id === id), A: artifactPath(id, s) })).filter(r => r.u && (r.A.won || r.u.teamId)).sort((a, b) => b.A.won - a.A.won || a.u.name.localeCompare(b.u.name));
+    html += `<h2>Pass Leaders</h2><p class="h2sub">Everyone's pass this season. Tap a coach for their accolades.</p><div class="card"><div class="passlb">${rows.map((r, i) => { const top = r.A.got[r.A.got.length - 1];
+      return `<a class="plb-r${me && me.id === r.u.id ? ' me' : ''}" href="${r.u.teamId ? '#coach/' + esc(slug(r.u.name)) : '#pass'}"><b class="plb-n">${i + 1}</b><span class="plb-t"><b>${esc(r.u.name)}</b><small>${top ? `Level ${r.A.got.length} · ${esc(top.n)}` : 'No artifacts yet'} · ${r.A.acc.n} accolade${r.A.acc.n === 1 ? '' : 's'}</small></span><span class="art-ics">${r.A.got.slice(-4).map(x => x.i).join('')}</span><b class="plb-v">${r.A.won.toLocaleString()}</b></a>`; }).join('') || '<p class="muted">No accolades yet this season.</p>'}</div></div>`;
+    return html;
+  },
   mybets() {
     const L = D.league, s = S(), me = auth.profile;
     const open = L.bettingOpen && L.phase !== PHASES.PRE && (L.phase !== PHASES.POST || D.games.some(g => g.season === L.season && g.type === 'bowl' && !played(g) && g.lines));
     let html = '';
     if (!me) return html + `<div class="card empty"><a href="#account">Log in</a> to see your bets.</div>`;
     const bk = bankroll(me.id);
-    html += bankStrip(me, s, bk) + `<h2>Season ${seasonNum()} Bets</h2><p class="h2sub">${open ? 'Open bets can be cashed out early from here when the cash-out shows.' : 'Every bet you made this season.'}</p>`;
+    html += bankStrip(me, s, bk) + artifactStrip(me.id, s) + `<h2>Season ${seasonNum()} Bets</h2><p class="h2sub">${open ? 'Open bets can be cashed out early from here when the cash-out shows.' : 'Every bet you made this season.'}</p>`;
     if (bk.relief) html += `<p class="muted small" style="margin:-4px 0 10px">🪙 Your balance includes ${bk.relief} relief Crackers (${bk.reliefN} advance${bk.reliefN === 1 ? '' : 's'}). Relief isn't winnings, so it's not in your Net.</p>`;
     return html + myWagersHtml(me, s, open);
   },
@@ -751,11 +769,58 @@ const PAGES = {
 
 /* ---------- betting rows + slip ---------- */
 // Bankroll strip at the top of the Sportsbook and My Bets: what you can bet, what's riding, how the season is going.
+// ---------- Cracker Pass (My Bets, Sportsbook, coach pages, leaderboard) ----------
+// Full pass: every artifact for the season in order, lit once unlocked, progress toward the next, the accolades
+// earned so far, and what every accolade pays.
+function accWhere(a) {
+  if (!a.ref) return a.note ? esc(a.note) : '';
+  const g = D.games.find(x => x.id === a.ref);
+  if (g) return `<a href="#game/${esc(g.id)}">${esc(g.type === 'ccg' ? 'League Title' : g.type === 'bowl' ? (g.note || 'Bowl') : wkShort(g.week, g.season))} · ${esc(team(g.away).abbr)} ${g.awayScore}–${g.homeScore} ${esc(team(g.home).abbr)}</a>${a.note ? ' · ' + esc(a.note) : ''}`;
+  const w = D.wagers.find(x => x.id === a.ref); return w ? esc(wagerLabel(w)) : '';
+}
+function artifactCard(uid, s = D.league.season, own = true) {
+  const A = artifactPath(uid, s), last = A.got[A.got.length - 1], prev = last ? last.at : 0;
+  const pct = A.next ? Math.round((A.won - prev) / (A.next.at - prev) * 100) : 100, coach = !!(D.users.find(u => u.id === uid) || {}).teamId;
+  const byK = {}; A.acc.list.forEach(a => { (byK[a.k] = byK[a.k] || { a, n: 0, v: 0 }); byK[a.k].n++; byK[a.k].v += a.v; });
+  const recent = A.acc.list.slice().reverse().slice(0, 12);
+  return `<section class="card artpath"><div class="ap-head"><div><b class="ap-title">${esc(A.set.title)}</b><span class="ap-set">Season ${seasonNum(s)} Cracker Pass${A.set.tag ? ' · ' + esc(A.set.tag) : ''}</span></div>
+      <div class="ap-won"><b>${A.won.toLocaleString()}</b><small>pass Crackers</small></div></div>
+    <div class="ap-row">${A.set.list.map(x => { const on = A.won >= x.at, nx = A.next === x;
+      return `<div class="ap-it${on ? ' on' : ''}${nx ? ' next' : ''}" title="${esc(x.n)}${x.d ? ' — ' + esc(x.d) : ''}: ${x.at.toLocaleString()} pass Crackers"><span class="ap-ic" aria-hidden="true">${on || nx ? x.i : '🔒'}</span><span class="ap-nm">${on || nx ? esc(x.n) : '???'}</span><span class="ap-at">${x.at >= 1000 ? x.at / 1000 + 'K' : x.at}</span></div>`; }).join('')}</div>
+    <div class="ap-bar" aria-hidden="true"><i style="width:${pct}%"></i></div>
+    <p class="ap-note">${A.next ? `${own ? 'Earn' : 'Needs'} <b>${A.toNext.toLocaleString()}</b> more to unlock <b>${esc(A.next.i)} ${esc(A.next.n)}</b>.` : `🏆 Every artifact unlocked this season.`} <span class="muted">Accolades fill the pass and add the same Crackers to ${own ? 'your' : 'the'} balance. Losing bets never take pass progress away.</span></p>
+    ${A.acc.n ? `<details class="ap-acc"${own ? '' : ' open'}><summary><b>${A.acc.n} accolade${A.acc.n === 1 ? '' : 's'}</b> <span class="muted">· +${A.won.toLocaleString()} Crackers</span></summary>
+      <div class="acc-sum">${Object.values(byK).sort((x, y) => y.v - x.v).map(x => `<span class="acc-chip">${x.a.i} ${esc(x.a.n)}${x.n > 1 ? ` ×${x.n}` : ''} <b>+${x.v.toLocaleString()}</b></span>`).join('')}</div>
+      <div class="acc-list">${recent.map(a => `<div class="acc-it"><span class="acc-ic" aria-hidden="true">${a.i}</span><span class="acc-t"><b>${esc(a.n)}</b><small>${accWhere(a)}</small></span><b class="acc-v">+${a.v}</b></div>`).join('')}${A.acc.n > recent.length ? `<p class="muted small" style="margin:4px 0 0">Showing the latest ${recent.length}.</p>` : ''}</div></details>` : ''}
+    ${own ? `<details class="ap-acc"><summary><b>How to earn</b> <span class="muted">· every accolade and what it pays</span></summary><div class="acc-how">${ACCOLADES.filter(a => accVal(a.k) && (coach || a.who === 'all')).map(a => `<div class="acc-it"><span class="acc-ic" aria-hidden="true">${a.i}</span><span class="acc-t"><b>${esc(a.n)}</b><small>${esc(a.d)}</small></span><b class="acc-v">+${accVal(a.k)}</b></div>`).join('')}${coach ? '' : '<p class="muted small" style="margin:6px 0 0">Game accolades are for league coaches.</p>'}</div></details>` : ''}</section>`;
+}
+// Slim version for the Sportsbook: what's next, with a link to the full path.
+function artifactStrip(uid, s = D.league.season) {
+  const A = artifactPath(uid, s), last = A.got[A.got.length - 1], prev = last ? last.at : 0, pct = A.next ? Math.round((A.won - prev) / (A.next.at - prev) * 100) : 100;
+  return `<a class="card artstrip" href="#pass"><span class="as-ics">${A.got.length ? A.got.map(x => `<span title="${esc(x.n)}">${x.i}</span>`).join('') : '<span class="muted">🔒</span>'}</span>
+    <span class="as-t"><b>${A.next ? `Next artifact: ${esc(A.next.n)}` : 'Cracker Pass complete'}</b><span class="as-bar"><i style="width:${pct}%"></i></span><small>${A.next ? `${A.toNext.toLocaleString()} more pass Crackers · ${A.got.length} of ${A.set.list.length} unlocked` : `All ${A.set.list.length} artifacts unlocked`}</small></span><span class="go" aria-hidden="true">›</span></a>`;
+}
+// Unlocked artifacts as a row of icons (coach pages, leaderboard).
+const artifactIcons = (uid, s, max = 7) => { const g = artifactPath(uid, s).got; return g.length ? `<span class="art-ics" title="${esc(g.map(x => x.n).join(', '))}">${g.slice(-max).map(x => x.i).join('')}</span>` : ''; };
+// Pop-up the first time this device sees a new artifact unlocked for the signed-in coach.
+function artifactPopup() {
+  const me = auth.profile, L = D.league; if (!me || !D.wagers.length || $('#modal').innerHTML.trim()) return;
+  const A = artifactPath(me.id, L.season), k = `oecArt_${me.id}_${L.season}`;
+  let seen = 0; try { seen = +(localStorage.getItem(k) || 0); } catch (e) { }
+  if (A.got.length <= seen) return;
+  try { localStorage.setItem(k, String(A.got.length)); } catch (e) { }
+  const fresh = A.got.slice(seen), top = fresh[fresh.length - 1];
+  $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card artpop"><h2>Artifact unlocked</h2>
+    <div class="artpop-ic" aria-hidden="true">${top.i}</div><div class="artpop-nm">${esc(top.n)}</div>${top.d ? `<p style="text-align:center;margin:2px 0 0;font-style:italic">${esc(top.d)}</p>` : ''}
+    <p class="muted" style="text-align:center;margin:4px 0 10px">${top.at.toLocaleString()} pass Crackers · ${esc(A.set.title)}${fresh.length > 1 ? `<br>Also unlocked: ${fresh.slice(0, -1).map(x => `${x.i} ${esc(x.n)}`).join(', ')}` : ''}</p>
+    ${A.next ? `<p style="text-align:center;margin:0 0 12px">Next up: <b>${esc(A.next.n)}</b> at ${A.next.at.toLocaleString()}</p>` : '<p style="text-align:center;margin:0 0 12px">🏆 That\'s every artifact this season.</p>'}
+    <div class="row" style="justify-content:center"><button class="gold" data-close="1">Nice</button><a class="btn ghost" href="#pass" data-close="1">See my pass →</a></div></div></div>`;
+}
 function bankStrip(me, s, bk = bankroll(me.id)) {
   const nOpen = D.wagers.filter(w => w.uid === me.id && w.season === s && w.status === 'open' && !w.deleted).length;
   const onMine = (location.hash.slice(1) || '').split('/')[0] === 'mybets';
   return `<div class="bankstrip card">
-    <div class="bk"><span>Crackers to bet</span><b>${bk.balance.toLocaleString()}</b><small>${(START_CREDITS + (bk.relief || 0)).toLocaleString()} to start</small></div>
+    <div class="bk"><span>Crackers to bet</span><b>${bk.balance.toLocaleString()}</b><small>${bk.acc ? `incl. +${bk.acc.toLocaleString()} from accolades` : `${(START_CREDITS + (bk.relief || 0)).toLocaleString()} to start`}</small></div>
     <${onMine ? 'div' : 'a href="#mybets"'} class="bk"><span>Open bets</span><b>${nOpen}</b><small>${bk.open ? bk.open.toLocaleString() + ' riding' : 'nothing riding'}${onMine ? '' : ' ›'}</small></${onMine ? 'div' : 'a'}>
     <div class="bk"><span>Season profit</span><b class="${bk.net > 0 ? 'win' : bk.net < 0 ? 'loss' : ''}">${bk.net > 0 ? '+' : ''}${bk.net.toLocaleString()}</b><small>${bk.w}-${bk.l}${bk.p ? '-' + bk.p : ''} record</small></div></div>`;
 }
@@ -2740,10 +2805,10 @@ function route() {
     route(); showTailModal(id); return;
   }
   let [page, arg] = (location.hash.slice(1) || 'home').split('/');
-  if (page === 'league') page = 'standings';   // the League tab opens on Standings
+  if (page === 'league') page = 'schedule';   // the League tab opens on its first page, the Schedule
   const hub = HUB_OF[page] || (HUBS.some(h => h[0] === page) ? page : 'home');
   const nBal = openBallots().length, dot = k => k === 'league' && nBal ? `<i class="tdot" aria-label="${nBal} vote${nBal > 1 ? 's' : ''} waiting on you">${nBal}</i>` : '';
-  $('#nav').innerHTML = HUBS.map(([k, label, icon]) => `<a href="#${k}" class="${k === hub ? 'on' : ''}"${k === hub ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${icon}"/></svg><span>${label}</span>${dot(k)}</a>`).join('');
+  $('#nav').innerHTML = HUBS.map(([k, label, icon]) => `<a href="#${k}" class="${k === hub ? 'on' : ''}${k === 'pass' ? ' mid' : ''}"${k === hub ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${icon}"/></svg><span>${label}</span>${dot(k)}</a>`).join('');
   // Page title, description and the hub's sub-tabs (gold underline). Home skips this: it has its own top section.
   const meta = PAGE_META[page], subs = (HUBS.find(h => h[0] === hub) || [])[3] || [];
   $('#pagehead').hidden = !meta;
@@ -2754,12 +2819,13 @@ function route() {
     $('#subnav').hidden = subs.length <= 1;
   }
   // Keep the selected tab in view when the tab bar scrolls sideways (phones).
+  requestAnimationFrame(() => { const n = $('.ap-row .ap-it.next'), r = $('.ap-row'); if (n && r && r.scrollWidth > r.clientWidth) r.scrollLeft = Math.max(0, n.offsetLeft - r.clientWidth + n.offsetWidth + 8); });
   requestAnimationFrame(() => { const wp = $('.wp-row .wp.on'), wr = $('.wp-row'); if (wp && wr && wr.scrollWidth > wr.clientWidth) wr.scrollLeft = Math.max(0, wp.offsetLeft - (wr.clientWidth - wp.offsetWidth) / 2); });
   requestAnimationFrame(() => { const on = $('#subnav a.on'), n = $('#subnav'); if (on && n.scrollWidth > n.clientWidth) n.scrollLeft = Math.max(0, on.offsetLeft - (n.clientWidth - on.offsetWidth) / 2); });
   header();
   try { $('#view').innerHTML = (PAGES[page] || PAGES.home)(decodeURIComponent(arg || '')); parlayBar(); nameFields($('#view')); }
   catch (e) { console.error(e); $('#view').innerHTML = `<div class="card err">Something went wrong rendering this page: ${esc(e.message)}</div>`; }
-  awardsPopup();
+  awardsPopup(); artifactPopup();
   // New page: start at the top, or at the row a storyline pointed to.
   if (route.last !== location.hash) {
     const first = route.last == null; route.last = location.hash;

@@ -1045,9 +1045,120 @@ export function parlayOps(regrade = false) {
 // advance. It isn't winnings, so it adds to the balance but never to net / P&L. Resets with the season.
 export const RELIEF = 25;
 export const reliefOf = (uid, season = D.league.season) => { const R = D.league.relief; return R && R.season === season && R.u && R.u[uid] ? R.u[uid] : { amt: 0, n: 0 }; };
+// ---------- Accolades and the Cracker Pass ----------
+// Accolades are earned from games and bets. Each pays Crackers twice over: into the betting balance (spendable, can be
+// lost) and onto the season's Cracker Pass (progress that only goes up). The pass unlocks the season's artifacts
+// automatically at each level. Everything is worked out from scores, lines, polls, votes, bets, picks and awards the
+// site already loads: nothing is stored, so it can't drift. The commissioner can change any value
+// (league.accVals[key]) and names each season's artifacts (league.artifacts[season] = { title, list: [{ n, i }] }).
+export const ACCOLADES = [
+  { k: 'win', i: '🏈', n: 'League win', d: 'Beat another league coach', v: 100, who: 'coach' },
+  { k: 'upset', i: '🐶', n: 'Upset', d: 'Won as the underdog on the line', v: 100, who: 'coach' },
+  { k: 'ranked', i: '🎯', n: 'Giant slayer', d: "Beat a team in that week's Top 25", v: 100, who: 'coach' },
+  { k: 'blowout', i: '💥', n: 'Blowout', d: 'Won by 28 or more', v: 50, who: 'coach' },
+  { k: 'shutout', i: '🧱', n: 'Shutout', d: 'Held the opponent to 0', v: 150, who: 'coach' },
+  { k: 'hang50', i: '🔥', n: 'Hang 50', d: 'Scored 50 or more', v: 50, who: 'coach' },
+  { k: 'streak', i: '📈', n: 'Hot streak', d: 'Every 3 wins in a row', v: 150, who: 'coach' },
+  { k: 'gotw', i: '⭐', n: 'Game of the Week win', d: 'Won the voted Game of the Week', v: 150, who: 'coach' },
+  { k: 'bowl', i: '🥣', n: 'Bowl win', d: 'Won a bowl game', v: 250, who: 'coach' },
+  { k: 'title', i: '🏟️', n: 'Title game', d: 'Played in the League Title game', v: 400, who: 'coach' },
+  { k: 'champ', i: '🏆', n: 'League Champion', d: 'Won the League Title game', v: 1000, who: 'coach' },
+  { k: 'coty', i: '🏅', n: 'Coach of the Year', d: 'Voted Coach of the Year', v: 500, who: 'coach' },
+  { k: 'teamaward', i: '🎖️', n: 'Team award', d: 'Best offense, defense or special teams', v: 250, who: 'coach' },
+  { k: 'mvp', i: '🌟', n: 'MVP', d: 'Your player was voted MVP', v: 400, who: 'coach' },
+  { k: 'poy', i: '🦾', n: 'Player of the Year', d: 'Your player won Offensive or Defensive Player of the Year', v: 300, who: 'coach' },
+  { k: 'bet', i: '✅', n: 'Winning bet', d: 'Won a single bet', v: 25, who: 'all' },
+  { k: 'longshot', i: '🚀', n: 'Long shot', d: 'Won a single bet at +200 or longer', v: 75, who: 'all' },
+  { k: 'parlay', i: '🧩', n: 'Parlay hit', d: 'Won a parlay', v: 100, who: 'all' },
+  { k: 'bigparlay', i: '🎰', n: 'Big parlay', d: 'Won a parlay of 4+ legs (on top of Parlay hit)', v: 150, who: 'all' },
+  { k: 'perfect', i: '💯', n: 'Perfect week', d: 'Won every bet in a week (3 or more)', v: 150, who: 'all' },
+  { k: 'future', i: '🔮', n: 'Season bet cashed', d: 'Won a League Champion or win-total bet', v: 150, who: 'all' },
+  { k: 'calledit', i: '📣', n: 'Called it', d: 'A preseason pick came true', v: 100, who: 'all' },
+];
+export const accVal = k => { const o = (D.league.accVals || {})[k], d = ACCOLADES.find(a => a.k === k); return o != null && o !== '' && !isNaN(+o) ? Math.max(0, Math.round(+o)) : d ? d.v : 0; };
+let accCache = { key: '', out: {} };
+// Every accolade one account earned in a season: { total, n, list: [{ k, i, n, v, at, ref, week }] }, oldest first.
+export function accolades(uid, season = D.league.season) {
+  const key = [D.games.length, D.wagers.length, D.history.length, D.picks.length, D.gotw.length, D.users.length, JSON.stringify(D.league.accVals || {}), D.league.week, D.league.polls ? Object.keys(D.league.polls).length : 0,
+    D.games.reduce((t, g) => t + (g.playedAt || 0), 0), D.wagers.reduce((t, w) => t + (w.settledAt || 0), 0)].join('|');
+  if (accCache.key !== key) accCache = { key, out: {} };
+  const ck = uid + '|' + season; if (accCache.out[ck]) return accCache.out[ck];
+  const u = D.users.find(x => x.id === uid), list = [], add = (k, at, ref, week, note) => { const a = ACCOLADES.find(x => x.k === k), v = accVal(k); if (a && v) list.push({ k, i: a.i, n: a.n, v, at: at || 0, ref, week, note }); };
+  const names = new Set([u && u.name, u && u.teamId && team(u.teamId).coach].filter(Boolean).map(x => canonCoach(x).toLowerCase()));
+  const isMe = n => names.has(String(n || '').toLowerCase());
+  // Games: only as a league coach
+  if (u && u.teamId) {
+    const order = g => g.week * 10 + (g.type === 'ccg' ? 8 : g.type === 'bowl' ? 9 : 0);
+    let run = 0;
+    D.games.filter(g => g.season === season && played(g) && (isMe(coachOf(g, 'home')) || isMe(coachOf(g, 'away')))).sort((a, b) => order(a) - order(b)).forEach(g => {
+      const side = isMe(coachOf(g, 'home')) ? 'home' : 'away', op = side === 'home' ? 'away' : 'home', my = +g[side + 'Score'], th = +g[op + 'Score'], at = g.playedAt || 0, wk = g.week;
+      if (g.type === 'ccg') add('title', at, g.id, wk);
+      if (!(my > th)) { run = 0; return; }
+      const oc = coachOf(g, op);
+      if (oc && oc !== 'CPU') add('win', at, g.id, wk);
+      if (!g.forfeit) {
+        const l = g.lines; if (l && l.spread != null && (side === 'home' ? l.spread > 0 : l.spread < 0)) add('upset', at, g.id, wk);
+        if (rankOf(g[op], season, g.week)) add('ranked', at, g.id, wk);
+        if (my - th >= 28) add('blowout', at, g.id, wk);
+        if (th === 0) add('shutout', at, g.id, wk);
+        if (my >= 50) add('hang50', at, g.id, wk);
+        const gt = (g.type || 'reg') === 'reg' ? gotwTally(season, g.week).game : null; if (gt && gt.id === g.id) add('gotw', at, g.id, wk);
+      }
+      if (g.type === 'bowl') add('bowl', at, g.id, wk);
+      if (g.type === 'ccg') add('champ', at, g.id, wk);
+      run++; if (run % 3 === 0) add('streak', at, g.id, wk, `${run} straight`);
+    });
+    const h = D.history.find(x => x.season === season);
+    if (h) (h.awards || []).forEach(a => {
+      const def = AWARD_DEFS.find(d => d.label === a.award); if (!def) return;
+      if (def.type === 'coach' && isMe(canonCoach(a.winner))) add('coty', 0, null, null);
+      const mineTeam = a.team && D.games.some(g => g.season === season && ((g.home === a.team && isMe(coachOf(g, 'home'))) || (g.away === a.team && isMe(coachOf(g, 'away')))));
+      if (def.type === 'team' && mineTeam) add('teamaward', 0, null, null, a.award);
+      if (def.type === 'player' && mineTeam) add(def.key === 'mvp' ? 'mvp' : 'poy', 0, null, null, `${a.award}: ${String(a.winner || '').replace(/,.*$/, '')}`);
+    });
+  }
+  // Bets: anyone with an account
+  const mine = D.wagers.filter(w => w.uid === uid && w.season === season && !w.deleted);
+  mine.filter(w => w.status === 'won').forEach(w => {
+    const at = w.settledAt || 0;
+    if (w.market === 'parlay') { add('parlay', at, w.id, w.week); if ((w.legs || []).length >= 4) add('bigparlay', at, w.id, w.week); }
+    else if (w.market === 'future' || w.market === 'wins') add('future', at, w.id, w.week);
+    else { add('bet', at, w.id, w.week); if (+w.odds >= 200) add('longshot', at, w.id, w.week); }
+  });
+  const byWk = {}; mine.filter(w => ['won', 'lost', 'push', 'cashed'].includes(w.status) && w.market !== 'future' && w.market !== 'wins').forEach(w => (byWk[w.week] = byWk[w.week] || []).push(w));
+  Object.entries(byWk).forEach(([wk, ws]) => { if (ws.length >= 3 && ws.every(w => w.status === 'won')) add('perfect', Math.max(...ws.map(w => w.settledAt || 0)), null, +wk); });
+  // Preseason picks that came true
+  const ans = pickAnswers(season), pk = D.picks.find(p => p.season === season && p.uid === uid);
+  if (ans && pk && pk.picks) PICK_DEFS.forEach(d => { const a = ans[d.key], m = pk.picks[d.key]; if (a && m && (d.type === 'coach' ? String(a).toLowerCase() === String(m).toLowerCase() : a === m)) add('calledit', 0, null, null, d.label); });
+  list.sort((a, b) => (a.at || 9e15) - (b.at || 9e15));
+  return (accCache.out[ck] = { total: list.reduce((t, x) => t + x.v, 0), n: list.length, list });
+}
+// Cracker Pass levels. A season with no names saved uses the default set.
+export const ARTIFACT_TIERS = [500, 1000, 1500, 2000, 3000, 4000, 5000, 6000, 8000, 10000];
+export const DEFAULT_ARTIFACTS = { title: 'Relics of the Cracker Vault', tag: '', list: [
+  { i: '🪙', n: 'The Saltine Token' }, { i: '⛓️', n: 'The First Down Chain' }, { i: '🎟️', n: 'The Golden Ticket' }, { i: '📒', n: "The Bookie's Ledger" },
+  { i: '🏈', n: 'The Game Ball' }, { i: '💍', n: 'The Crackerjack Ring' }, { i: '🔥', n: 'The Bowl Season Torch' }, { i: '🛡️', n: 'The Conference Crest' },
+  { i: '👑', n: 'The Saltine Crown' }, { i: '✨', n: 'The Original Cracker' }] };
+// A season's pass: its theme (title + optional tagline) and its 10 artifacts (emoji, name, optional one-line story).
+export function artifactSet(season = D.league.season) {
+  const a = (D.league.artifacts || {})[season], d = DEFAULT_ARTIFACTS, li = k => (a && a.list && a.list[k]) || {};
+  return { title: (a && a.title) || d.title, tag: (a && a.tag) || '', custom: !!a,
+    list: ARTIFACT_TIERS.map((at, k) => ({ at, i: li(k).i || d.list[k].i, n: li(k).n || d.list[k].n, d: li(k).d || '' })) };
+}
+// { won: pass Crackers earned, acc: accolades, set, got: unlocked artifacts, next, toNext }
+export function artifactPath(uid, season = D.league.season) {
+  const acc = accolades(uid, season), won = acc.total, set = artifactSet(season), got = set.list.filter(x => won >= x.at), next = set.list.find(x => won < x.at) || null;
+  return { won, acc, set, got, next, toNext: next ? next.at - won : 0 };
+}
+// Compact copy for the notification job: per account, accolade count, pass Crackers, level and that level's artifact.
+export function accSnapshot(season = D.league.season) {
+  const ids = new Set([...D.users.filter(u => u.teamId).map(u => u.id), ...D.wagers.filter(w => w.season === season).map(w => w.uid)]);
+  const u = {}; ids.forEach(id => { const A = artifactPath(id, season); if (A.acc.n) u[id] = { n: A.acc.n, p: A.won, l: A.got.length, a: A.got.length ? A.got[A.got.length - 1].i + ' ' + A.got[A.got.length - 1].n : '' }; });
+  return { season, u };
+}
 export function bankroll(uid, season = D.league.season) {
-  const rl = reliefOf(uid, season);
-  const b = { balance: START_CREDITS + (rl.amt || 0), w: 0, l: 0, p: 0, net: 0, open: 0, risked: 0, n: 0, relief: rl.amt || 0, reliefN: rl.n || 0 };
+  const rl = reliefOf(uid, season), acc = accolades(uid, season).total;   // accolade Crackers are added to the balance, not to Net
+  const b = { balance: START_CREDITS + (rl.amt || 0) + acc, w: 0, l: 0, p: 0, net: 0, open: 0, risked: 0, n: 0, relief: rl.amt || 0, reliefN: rl.n || 0, acc };
   D.wagers.filter(x => x.uid === uid && x.season === season).forEach(x => {
     b.n++;
     if (x.status === 'open') { b.open += x.stake; b.balance -= x.stake; return; }
@@ -1742,8 +1853,8 @@ function shuffle(a, r) { for (let i = a.length - 1; i > 0; i--) { const j = Math
 /* ---------------- Phone notifications ----------------
    The site only registers this device's push token in the `push` collection. Sending happens in the
    GitHub workflow (free Firebase Cloud Messaging), so there is no server to pay for. */
-export const PUSH_PREFS = [['advance', 'League advances & commissioner news'], ['live', 'OEC goes live on YouTube'], ['mygame', 'My game is about to kick off'], ['invites', 'Kickoff invites & replies'], ['bets', 'One of my bets went final'], ['finals', 'Final scores'], ['league', 'Every league kickoff (reminder to watch)']];
-export const pushDefaults = () => ({ advance: true, live: true, mygame: true, invites: true, bets: true, finals: true, finalTeams: [], league: false });
+export const PUSH_PREFS = [['advance', 'League advances & commissioner news'], ['live', 'OEC goes live on YouTube'], ['mygame', 'My game is about to kick off'], ['invites', 'Kickoff invites & replies'], ['bets', 'One of my bets went final'], ['accolades', 'Accolades & artifacts I earn'], ['finals', 'Final scores'], ['league', 'Every league kickoff (reminder to watch)']];
+export const pushDefaults = () => ({ advance: true, live: true, mygame: true, invites: true, bets: true, accolades: true, finals: true, finalTeams: [], league: false });
 export const pushLocal = () => { try { return JSON.parse(localStorage.getItem('oecPush') || 'null'); } catch (e) { return null; } };
 const pushSave = v => { try { v ? localStorage.setItem('oecPush', JSON.stringify(v)) : localStorage.removeItem('oecPush'); } catch (e) { } };
 export const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;

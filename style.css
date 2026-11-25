@@ -1803,3 +1803,105 @@ body:has(#modal .modal) .livepop{display:none}
 .gp-team .sidelbl{width:auto}
 .gp-vs .gp-team .sidelbl{order:-1;margin-bottom:-2px}
 .gp-team:not(.gp-vs .gp-team) .sidelbl{width:34px}
+
+/* ===== Artifact Path ===== */
+.artpath{padding:14px}
+.ap-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.ap-title{display:block;font:800 italic 20px var(--cond);letter-spacing:.6px;text-transform:uppercase}
+.ap-set{display:block;font-size:12.5px;color:var(--gold)}
+.ap-won{display:flex;flex-direction:column;align-items:flex-end;line-height:1}
+.ap-won b{font:800 26px var(--cond);font-variant-numeric:tabular-nums}
+.ap-won small{font-size:11px;color:#a79a9c;margin-top:3px}
+.ap-row{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(84px,1fr);gap:8px;overflow-x:auto;margin:12px -2px 0;padding:2px 2px 4px;scrollbar-width:none}
+.ap-row::-webkit-scrollbar{display:none}
+.ap-it{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px 8px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);text-align:center;opacity:.55}
+.ap-it.on{opacity:1;background:rgba(245,184,46,.12);border-color:rgba(245,184,46,.55)}
+.ap-it.next{opacity:1;border-style:dashed;border-color:rgba(255,255,255,.3)}
+.ap-it.next .ap-ic{filter:grayscale(1);opacity:.6}
+.ap-ic{font-size:26px;line-height:1}
+.ap-nm{font-size:11.5px;font-weight:700;line-height:1.2;min-height:28px;display:flex;align-items:center}
+.ap-at{font:800 14px var(--cond);color:#a79a9c}
+.ap-it.on .ap-at{color:var(--gold)}
+.ap-bar,.as-bar{display:block;height:5px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:10px}
+.ap-bar i,.as-bar i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#c9921c,var(--gold))}
+.ap-note{margin:8px 0 0;font-size:13px}
+.ap-note .muted{font-size:11.5px}
+.artstrip{display:flex;align-items:center;gap:12px;padding:10px 14px;margin:-8px 0 18px;color:var(--text)}
+.artstrip:hover{text-decoration:none;border-color:rgba(245,184,46,.5)}
+.as-ics{flex:none;font-size:20px;letter-spacing:2px;max-width:120px;overflow:hidden;white-space:nowrap}
+.as-t{flex:1;min-width:0;display:flex;flex-direction:column}
+.as-t b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.as-t .as-bar{margin:6px 0 4px}
+.as-t small{font-size:11.5px;color:#a79a9c}
+.artstrip .go{color:#8d8183;font-size:20px}
+.art-ics{font-size:14px;letter-spacing:1px;white-space:nowrap}
+tr.artrow td{padding-top:0;font-size:12.5px;border-top:0}
+.card.artpop{max-width:380px;text-align:center}
+.artpop-ic{font-size:64px;line-height:1.1;margin:6px 0 2px;filter:drop-shadow(0 4px 14px rgba(245,184,46,.45))}
+.artpop-nm{font:800 italic 26px var(--cond);letter-spacing:.5px;text-transform:uppercase;color:var(--gold)}
+.modal .card.artpop>h2:first-child{margin-left:auto;margin-right:auto}
+/* Commissioner editor */
+.artedit{display:grid;gap:6px}
+.ae-row{display:grid;grid-template-columns:52px 54px 1fr auto;gap:6px;align-items:center}
+.ae-at{font-weight:800;font-size:13px;text-align:right;color:var(--gold)}
+.ae-ic{text-align:center;font-size:18px;padding:6px 4px}
+.artlv{display:grid;gap:6px;margin-top:10px}
+.artlv-r{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:rgba(245,184,46,.07);border:1px solid rgba(245,184,46,.25);font-size:13.5px}
+.artlv-s{flex:none;font:800 italic 18px var(--cond);color:var(--gold);width:30px}
+.artlv-r .art-ics{flex:none;font-size:16px}
+.artlv-r .artlv-t{min-width:0;display:flex;flex-direction:column}
+.artlv-r small{font-size:11.5px;color:#a79a9c}
+.ae-row input{width:100%;min-width:0;box-sizing:border-box}
+.ae-n{white-space:nowrap}
+/* Cracker Pass: accolades */
+.ap-acc{margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.07)}
+.ap-acc>summary{cursor:pointer;font-size:14px;list-style:none}
+.ap-acc>summary::-webkit-details-marker{display:none}
+.ap-acc>summary::after{content:' ›';color:#8d8183}
+.ap-acc[open]>summary::after{content:' ⌄'}
+.acc-sum{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 8px}
+.acc-chip{font-size:12.5px;padding:4px 9px;border-radius:999px;background:rgba(245,184,46,.1);border:1px solid rgba(245,184,46,.35)}
+.acc-chip b{color:var(--gold);margin-left:2px}
+.acc-list,.acc-how{display:grid;gap:2px;margin-top:6px}
+.acc-it{display:flex;align-items:center;gap:10px;padding:7px 2px;border-top:1px solid rgba(255,255,255,.05)}
+.acc-ic{flex:none;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-size:16px;background:rgba(255,255,255,.05)}
+.acc-t{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
+.acc-t b{font-size:14px}
+.acc-t small{font-size:12px;color:#a79a9c;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.acc-v{flex:none;font:800 16px var(--cond);color:var(--gold)}
+.accedit{display:grid;gap:6px}
+.acc-ed{display:grid;grid-template-columns:1fr 86px;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
+.acc-ed span{display:flex;flex-direction:column;font-size:14px}
+.acc-ed small{font-size:12px;color:var(--muted)}
+.acc-ed input{width:100%;box-sizing:border-box;text-align:right}
+@media(min-width:760px){.accedit{grid-template-columns:1fr 1fr;column-gap:20px}}
+/* Cracker Pass: center tab, raised gold badge on phones */
+nav.tabbar a.mid svg{box-sizing:content-box;width:24px;height:24px;padding:9px;margin-top:-22px;border-radius:50%;background:linear-gradient(160deg,#ffd469,#d99a12);color:#2a1a04;stroke:#2a1a04;fill:rgba(42,26,4,.18);
+  border:3px solid rgba(14,10,12,.95);box-shadow:0 6px 16px rgba(245,184,46,.35)}
+nav.tabbar a.mid{color:var(--gold)}
+nav.tabbar a.mid.on{background:transparent;border-color:transparent}
+nav.tabbar a.mid.on svg{box-shadow:0 0 0 2px rgba(245,184,46,.6),0 6px 18px rgba(245,184,46,.5)}
+@media(min-width:900px){nav.tabbar a.mid svg{width:18px;height:18px;padding:5px;margin-top:0;border-width:0}
+  nav.tabbar a.mid.on{background:var(--tint-gold);border-color:rgba(245,184,46,.45)}}
+/* Pass Leaders */
+.passlb{display:grid;gap:2px}
+.plb-r,.plb-r[href^="#coach/"]{display:flex;align-items:center;gap:10px;padding:9px 6px;border-radius:10px;color:var(--text);text-decoration:none;font-weight:400}
+.plb-r:hover{background:rgba(255,255,255,.04);text-decoration:none}
+.plb-r.me{background:rgba(245,184,46,.08)}
+.plb-r+.plb-r{border-top:1px solid rgba(255,255,255,.06)}
+.plb-n{flex:none;width:22px;text-align:center;font:800 italic 17px var(--cond);color:#8d8183}
+.plb-t{flex:1;min-width:0;display:flex;flex-direction:column}
+.plb-t b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.plb-t small{font-size:11.5px;color:#a79a9c}
+.plb-r .art-ics{flex:none;font-size:15px}
+.plb-v{flex:none;font:800 17px var(--cond);color:var(--gold);min-width:46px;text-align:right}
+.ap-tag{display:block}
+/* Commissioner: pass editor */
+.aegrid{display:grid;grid-template-columns:1fr 1.6fr;gap:10px}
+.aegrid label{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:700}
+.aegrid input{width:100%;min-width:0;box-sizing:border-box}
+@media(max-width:560px){.aegrid{grid-template-columns:1fr}}
+.ae-row{grid-template-columns:58px 54px 1fr auto;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,.06)}
+.ae-row .ae-st{grid-column:2/-1;font-size:13px}
+.ae-at{display:flex;flex-direction:column;line-height:1.15}
+.ae-at b{font-size:11px;color:#a79a9c;font-weight:700}

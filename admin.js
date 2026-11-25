@@ -4,13 +4,14 @@ import {
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum, divOf, oneConference, playbookOf, pbSeason, pbOpen, pbLocked
 , loadAI, kickoffOf, fmtKick
 , reliefPatch, winTotalsSnapshot, winsLockedTeam, postEarlyCcg, earlyCcg, raceSim, AWARD_DEFS, tallyAwards, awardGames, awardGameLabel, awardCoaches, sameName, curWeek, wkName, wkShort, wkOf, phaseName, picksOpen, openerId, firstGameOf
-} from './core.js?v=115';
+, artifactSet, ARTIFACT_TIERS, DEFAULT_ARTIFACTS, artifactPath, ACCOLADES, accVal, accSnapshot
+} from './core.js?v=118';
 // Broadcast scouting nudges the ratings a little, so load it before any lines get posted from here.
 loadAI();
 import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
 
 // Tabs: the weekly job lives on "This Week"; everything else is occasional. Awards only shows when it matters.
-const TABS = () => [['advance', 'This Week'], ['games', 'Scores & Schedule'], ['betting', 'Sportsbook'], ['teams', 'Teams & Coaches'],
+const TABS = () => [['advance', 'This Week'], ['games', 'Scores & Schedule'], ['betting', 'Sportsbook'], ['pass', 'Cracker Pass'], ['teams', 'Teams & Coaches'],
   ...(L().phase === PHASES.CCG || L().phase === PHASES.POST || L().awards?.open ? [['awards', 'Awards']] : []), ['preseason', 'New Season'], ['settings', 'Settings']];
 const ST = { tab: 'advance', desk: 'no', gamesWeek: null, msg: '', step: 1, draft: null, done: null };
 // A reload keeps you where you were: the tab, the week picked on Scores & Schedule, open sections and the scroll
@@ -71,6 +72,12 @@ function sendNowCard() {
 }
 setInterval(() => { if (!document.hidden && ['advance', 'settings'].includes(ST.tab)) loadPushState(); }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) loadPushState(true); });
+// Accolades for the notification job: a compact copy on the league doc, refreshed after scores, advances and awards.
+// The job compares it with what it last saw and tells each account about new accolades and artifacts.
+let accT = 0; const queueAccSnap = () => { clearTimeout(accT); accT = setTimeout(syncAccSnap, 3000); };   // after the database has echoed the change back
+async function syncAccSnap() {
+  try { const snap = accSnapshot(L().season), old = L().accSnap; if (JSON.stringify(old) !== JSON.stringify(snap)) await put('meta', 'league', { accSnap: snap }, true); } catch (e) { console.warn('accolades snapshot', e); }
+}
 function statusBar() {
   const lg = L(), p = projectedAdvance(), ext = lg.advExt || 0, clock = lg.phase === PHASES.REG || lg.phase === PHASES.CCG;
   return `<div class="card adminstatus">
@@ -217,11 +224,11 @@ function alignSnapshot() {
   return changed ? A : null;
 }
 // Re-price every open game, League Champion futures and win totals from all data entered so far.
-async function refreshBooks() { const p = L().phase; if (p === PHASES.REG || p === PHASES.CCG) await batch(boardOps(L().week)); }
+async function refreshBooks() { queueAccSnap(); const p = L().phase; if (p === PHASES.REG || p === PHASES.CCG) await batch(boardOps(L().week)); }
 async function saveScoresAndSettle(games) {
   const { ops, missing } = readScores(games);
   await batch(ops);
-  await batch(settleOps(ops.map(o => o.id)));
+  await batch(settleOps(ops.map(o => o.id))); queueAccSnap();
   return { saved: ops.length, missing };
 }
 
@@ -506,6 +513,24 @@ const views = {
 
   // How the posted lines have held up: every finished game whose line was saved when it was posted.
   // Books Report (bottom of Sportsbook): how the posted lines have held up, for finished games whose line was saved.
+  pass() {
+    // The season's Cracker Pass: its theme, its ten artifacts and what each accolade pays.
+    // Each season gets its own theme and set; a season left unnamed uses the default set.
+    const lg = L(), seasons = [...new Set([lg.season, ...D.wagers.map(w => w.season)])].sort((a, b) => b - a);
+    const se = seasons.includes(+ST.artSeason) ? +ST.artSeason : lg.season, set = artifactSet(se), mine = (lg.artifacts || {})[se] || {}, own = k => (mine.list || [])[k] || {};
+    const users = D.users.filter(u => u.teamId || D.wagers.some(w => w.uid === u.id && w.season === se));
+    const reached = ARTIFACT_TIERS.map((at, k) => users.filter(u => artifactPath(u.id, se).got.length > k).length);
+    return `<div class="card"><div class="row spread"><h2 style="margin:0">Pass Theme</h2>${seasons.length > 1 ? `<select id="artSeason" style="width:auto">${seasons.map(x => `<option value="${x}" ${x === se ? 'selected' : ''}>Season ${seasonNum(x)} · ${x}</option>`).join('')}</select>` : `<b>Season ${seasonNum(se)}</b>`}</div>
+      <p class="muted small">Accolades from games and bets fill each account's pass (and add the same Crackers to their balance). Artifacts unlock on their own at each level. Give each season its own theme; anything left blank uses the default.</p>
+      <div class="aegrid"><label>Theme<input id="artTitle" placeholder="${esc(DEFAULT_ARTIFACTS.title)}" value="${esc(mine.title || '')}" maxlength="40"></label>
+        <label>Tagline <span class="muted small">(optional)</span><input id="artTag" placeholder="One line under the theme" value="${esc(mine.tag || '')}" maxlength="80"></label></div></div>
+      <div class="card"><h2 style="margin-top:0">Artifacts</h2><p class="muted small" style="margin-top:0">An icon (emoji), a name and an optional one-line story for each level. The story shows when a coach taps the artifact and in the unlock pop-up.</p>
+      <div class="artedit">${set.list.map((x, k) => `<div class="ae-row"><span class="ae-at"><b>Lv ${k + 1}</b>${x.at.toLocaleString()}</span><input class="ae-ic" data-ai="${k}" value="${esc(own(k).i || '')}" placeholder="${esc(DEFAULT_ARTIFACTS.list[k].i)}" aria-label="Icon ${k + 1}" maxlength="4"><input class="ae-nm" data-an="${k}" value="${esc(own(k).n || '')}" placeholder="${esc(DEFAULT_ARTIFACTS.list[k].n)}" aria-label="Artifact ${k + 1} name" maxlength="32"><span class="ae-n muted small" title="Coaches who reached it">${reached[k]} 🏅</span><input class="ae-st" data-ad="${k}" value="${esc(own(k).d || '')}" placeholder="Story (optional)" aria-label="Artifact ${k + 1} story" maxlength="120"></div>`).join('')}</div>
+      <div class="row" style="margin-top:10px"><button data-act="saveArtifacts">Save theme &amp; artifacts</button>${set.custom ? '<button class="ghost sm" data-act="saveArtifacts" data-clear="1">Use the default set</button>' : ''}</div></div>
+      <div class="card"><h2 style="margin-top:0">Accolade Values</h2><p class="muted small" style="margin-top:0">Crackers each accolade pays (to the pass and the balance). Set one to 0 to turn it off. Changes apply to the whole season, earlier accolades included.</p>
+      <div class="accedit">${ACCOLADES.map(a => `<div class="acc-ed"><span>${a.i} <b>${esc(a.n)}</b><small>${esc(a.d)}${a.who === 'all' ? ' · anyone' : ''}</small></span><input type="number" min="0" step="5" data-accv="${a.k}" value="${accVal(a.k)}" aria-label="${esc(a.n)} Crackers"></div>`).join('')}</div>
+      <div class="row" style="margin-top:10px"><button data-act="saveAccVals">Save values</button>${Object.keys(lg.accVals || {}).filter(k => lg.accVals[k] != null).length ? '<button class="ghost sm" data-act="saveAccVals" data-clear="1">Back to the defaults</button>' : ''}</div></div>`;
+  },
   books() {
     // Run on demand: a button builds the report from every finished game with a saved line, then a row of chips
     // switches between four charts. The season picker narrows it to one season.
@@ -736,6 +761,19 @@ async function giveRelief() {
   return `${R.given.join(', ')} ${R.given.length === 1 ? 'was' : 'were'} out of Crackers and got 25 relief Crackers.`;
 }
 const ACT = {
+  async saveAccVals(t) {
+    const v = {}; ACCOLADES.forEach(a => { const el = $(`[data-accv="${a.k}"]`), x = el ? Math.max(0, Math.round(+el.value || 0)) : a.v; v[a.k] = t.dataset.clear || x === a.v ? null : x; });
+    await put('meta', 'league', { accVals: v }); queueAccSnap(); flash('Accolade values saved.');
+  },
+  async saveArtifacts(t) {
+    const se = +($('#artSeason')?.value || L().season), all = { ...(L().artifacts || {}) };
+    if (t.dataset.clear) { all[se] = null; await put('meta', 'league', { artifacts: all }); return flash('Back to the default artifact set.'); }
+    const v = sel => ($(sel)?.value || '').trim();
+    const list = ARTIFACT_TIERS.map((_, k) => ({ i: v(`[data-ai="${k}"]`), n: v(`[data-an="${k}"]`), d: v(`[data-ad="${k}"]`) }));
+    const title = v('#artTitle'), tag = v('#artTag');
+    all[se] = !title && !tag && list.every(x => !x.i && !x.n && !x.d) ? null : { title, tag, list };   // null = back to the default names (a merge save can't drop a key)
+    await put('meta', 'league', { artifacts: all }); queueAccSnap(); flash(`Season ${seasonNum(se)} pass saved.`);
+  },
   runBooks() { ST.booksAt = Date.now(); stay(); },
   booksChart(t) { ST.booksChart = t.dataset.c; stay(); },
   async gameLock(t) { const g = D.games.find(x => x.id === t.dataset.g); if (!g) return; await batch([{ op: 'set', col: 'games', id: g.id, data: { locked: !g.locked } }]); await syncWinLocks(); flash(`${team(g.away).abbr} @ ${team(g.home).abbr}: bets ${g.locked ? 'locked' : 'unlocked'}.`); },
@@ -891,7 +929,7 @@ const ACT = {
       Object.assign(H, { champTeam: ccg[w], champCoach: ccg[w + 'Coach'] || team(ccg[w]).coach || 'CPU', champScore: +ccg[w + 'Score'], runnerTeam: ccg[l], runnerCoach: ccg[l + 'Coach'] || team(ccg[l]).coach || 'CPU', runnerScore: +ccg[l + 'Score'] });
     }
     if (!confirm(`Finalize ${s}? This closes awards voting, writes ${s} to History (${aw.length} award${aw.length === 1 ? '' : 's'}) and moves the league to the Postseason.`)) return;
-    await put('history', String(s), H, false);
+    await put('history', String(s), H, false); queueAccSnap();
     await batch(settleFuturesOps(s, ccg ? H.champTeam : null));
     await batch(parlayOps());
     await put('meta', 'league', { phase: PHASES.PRE, pre: false, bettingOpen: false, desk: deskValue(), awards: { ...(lg.awards || {}), open: false, season: s, results: aw } });
@@ -1260,6 +1298,7 @@ document.addEventListener('change', e => {
   if (e.target.id === 'gwSel') { ST.gamesWeek = +e.target.value; render(); }
   if (e.target.id === 'pollWkSel') { ST.pollWk = +e.target.value; render(); }
   if (e.target.id === 'booksSel') { ST.booksSeason = e.target.value; render(); }
+  if (e.target.id === 'artSeason') { ST.artSeason = e.target.value; render(); }
   if (e.target.id === 'gwNew' && e.target.value !== '') { ST.gamesWeek = +e.target.value; render(); }
   if (e.target.dataset.k === 'name' && e.target.closest('[data-team]')) {
     const sel = e.target, tr = sel.closest('tr');
@@ -1279,7 +1318,7 @@ document.addEventListener('change', e => {
       if (L().awards?.open || L().phase === PHASES.CCG || L().phase === PHASES.POST) { try { await loadBallots(true); } catch (e) { console.warn('ballots', e); } }
       try { if (await ensureFutures()) ST.msg = 'Posted lines for upcoming games and League Champion futures odds.'; } catch (e) { ST.msg = 'Could not post futures odds: ' + e.message + ' — check the Firestore rules are the latest version.'; }
       try { await syncWinLocks(); } catch (e) { console.warn('win locks', e); }
-      render(); loadPushState(true);
+      render(); loadPushState(true); queueAccSnap();
     });
   } catch (e) {
     console.error(e);
