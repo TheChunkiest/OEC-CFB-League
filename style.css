@@ -1909,3 +1909,12 @@ nav.tabbar a.mid.on svg{box-shadow:0 0 0 2px rgba(245,184,46,.6),0 6px 18px rgba
 .acc-list,.acc-how{grid-template-columns:minmax(0,1fr)}
 .acc-it{min-width:0;padding-right:4px}
 .acc-t small{white-space:normal}
+/* Cracker Pass header: theme, tagline, season line; Pass Crackers total on the right */
+.ap-head{align-items:center}
+.ap-hd{min-width:0;display:flex;flex-direction:column;gap:3px}
+.ap-title{font-size:22px;line-height:1.05}
+.ap-tag{display:block;font-size:14px;font-style:italic;color:#d8cdce;line-height:1.3}
+.ap-set{font-size:11px;font-weight:700;line-height:1.2;letter-spacing:1.2px;text-transform:uppercase;color:var(--gold);margin-top:2px}
+.ap-won{flex:none;align-items:center;justify-content:center;min-width:78px;padding:8px 10px;border-radius:12px;background:rgba(245,184,46,.08);border:1px solid rgba(245,184,46,.3)}
+.ap-won b{font-size:28px;color:var(--gold)}
+.ap-won small{margin-top:4px;font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;white-space:nowrap;color:#c9bdbf}

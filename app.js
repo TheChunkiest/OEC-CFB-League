@@ -639,7 +639,7 @@ const PAGES = {
       const passSe = [...new Set(D.games.map(g => g.season))].filter(se => se < cur && se >= passStart() && artifactPath(u.id, se).acc.n).sort((a, b) => b - a);
       html += `<h2>Cracker Pass</h2><p class="h2sub">Accolades from games and bets unlock each season's artifacts.</p>${artifactCard(u.id, cur, !!auth.profile && auth.profile.id === u.id)}`;
       if (passSe.length) html += `<div class="card"><h3 style="margin-top:0">Past seasons</h3><div class="artlv">${passSe.map(se => { const A = artifactPath(u.id, se), top = A.got[A.got.length - 1];
-          return `<div class="artlv-r"><b class="artlv-s">S${seasonNum(se)}</b>${top ? `<span class="art-ics">${A.got.map(x => `<span title="${esc(x.n)}">${x.i}</span>`).join('')}</span><span class="artlv-t"><span><b>Level ${A.got.length}</b> of ${A.set.list.length} · ${esc(top.n)}</span><small>${A.won.toLocaleString()} pass Crackers from ${A.acc.n} accolade${A.acc.n === 1 ? '' : 's'} · ${esc(A.set.title)}</small></span>` : `<span class="artlv-t muted">🔒 No artifacts unlocked<small>${A.won.toLocaleString()} pass Crackers</small></span>`}</div>`; }).join('')}</div></div>`;
+          return `<div class="artlv-r"><b class="artlv-s">S${seasonNum(se)}</b>${top ? `<span class="art-ics">${A.got.map(x => `<span title="${esc(x.n)}">${x.i}</span>`).join('')}</span><span class="artlv-t"><span><b>Level ${A.got.length}</b> of ${A.set.list.length} · ${esc(top.n)}</span><small>${A.won.toLocaleString()} Pass Crackers from ${A.acc.n} accolade${A.acc.n === 1 ? '' : 's'} · ${esc(A.set.title)}</small></span>` : `<span class="artlv-t muted">🔒 No artifacts unlocked<small>${A.won.toLocaleString()} Pass Crackers</small></span>`}</div>`; }).join('')}</div></div>`;
     }
     return html;
   },
@@ -647,7 +647,7 @@ const PAGES = {
   pass() {
     // The season's pass: your own progress first, then where everyone in the league stands.
     const L = D.league, s = L.season, me = auth.profile, set = artifactSet(s);
-    let html = me ? artifactCard(me.id, s) : `<section class="card artpath"><div class="ap-head"><div><b class="ap-title">${esc(set.title)}</b><span class="ap-set">Season ${seasonNum(s)} Cracker Pass${set.tag ? ' · ' + esc(set.tag) : ''}</span></div></div>
+    let html = me ? artifactCard(me.id, s) : `<section class="card artpath"><div class="ap-head"><div class="ap-hd"><b class="ap-title">${esc(set.title)}</b>${set.tag ? `<span class="ap-tag">${esc(set.tag)}</span>` : ''}<span class="ap-set">Season ${seasonNum(s)} Cracker Pass</span></div></div>
       <div class="ap-row">${set.list.map(x => `<div class="ap-it"><span class="ap-ic" aria-hidden="true">${x.i}</span><span class="ap-nm">${esc(x.n)}</span><span class="ap-at">${x.at >= 1000 ? x.at / 1000 + 'K' : x.at}</span></div>`).join('')}</div>
       <p class="ap-note"><a href="#account">Log in</a> to earn accolades and unlock artifacts.</p></section>`;
     const ids = new Set([...D.users.filter(u => u.teamId).map(u => u.id), ...D.wagers.filter(w => w.season === s).map(w => w.uid)]);
@@ -783,10 +783,10 @@ function artifactCard(uid, s = D.league.season, own = true) {
   const pct = A.next ? Math.round((A.won - prev) / (A.next.at - prev) * 100) : 100, coach = !!(D.users.find(u => u.id === uid) || {}).teamId;
   const byK = {}; A.acc.list.forEach(a => { (byK[a.k] = byK[a.k] || { a, n: 0, v: 0 }); byK[a.k].n++; byK[a.k].v += a.v; });
   const recent = A.acc.list.slice().reverse().slice(0, 12);
-  return `<section class="card artpath"><div class="ap-head"><div><b class="ap-title">${esc(A.set.title)}</b><span class="ap-set">Season ${seasonNum(s)} Cracker Pass${A.set.tag ? ' · ' + esc(A.set.tag) : ''}</span></div>
-      <div class="ap-won"><b>${A.won.toLocaleString()}</b><small>pass Crackers</small></div></div>
+  return `<section class="card artpath"><div class="ap-head"><div class="ap-hd"><b class="ap-title">${esc(A.set.title)}</b>${A.set.tag ? `<span class="ap-tag">${esc(A.set.tag)}</span>` : ''}<span class="ap-set">Season ${seasonNum(s)} Cracker Pass</span></div>
+      <div class="ap-won"><b>${A.won.toLocaleString()}</b><small>Pass Crackers</small></div></div>
     <div class="ap-row">${A.set.list.map(x => { const on = A.won >= x.at, nx = A.next === x;
-      return `<div class="ap-it${on ? ' on' : ''}${nx ? ' next' : ''}" title="${esc(x.n)}${x.d ? ' — ' + esc(x.d) : ''}: ${x.at.toLocaleString()} pass Crackers"><span class="ap-ic" aria-hidden="true">${on || nx ? x.i : '🔒'}</span><span class="ap-nm">${on || nx ? esc(x.n) : '???'}</span><span class="ap-at">${x.at >= 1000 ? x.at / 1000 + 'K' : x.at}</span></div>`; }).join('')}</div>
+      return `<div class="ap-it${on ? ' on' : ''}${nx ? ' next' : ''}" title="${esc(x.n)}${x.d ? ' — ' + esc(x.d) : ''}: ${x.at.toLocaleString()} Pass Crackers"><span class="ap-ic" aria-hidden="true">${on || nx ? x.i : '🔒'}</span><span class="ap-nm">${on || nx ? esc(x.n) : '???'}</span><span class="ap-at">${x.at >= 1000 ? x.at / 1000 + 'K' : x.at}</span></div>`; }).join('')}</div>
     <div class="ap-bar" aria-hidden="true"><i style="width:${pct}%"></i></div>
     <p class="ap-note">${A.next ? `${own ? 'Earn' : 'Needs'} <b>${A.toNext.toLocaleString()}</b> more to unlock <b>${esc(A.next.i)} ${esc(A.next.n)}</b>.` : `🏆 Every artifact unlocked this season.`} <span class="muted">Accolades fill the pass and add the same Crackers to ${own ? 'your' : 'the'} balance. Losing bets never take pass progress away.</span></p>
     ${A.acc.n ? `<details class="ap-acc"${own ? '' : ' open'}><summary><b>${A.acc.n} accolade${A.acc.n === 1 ? '' : 's'}</b> <span class="muted">· +${A.won.toLocaleString()} Crackers</span></summary>
@@ -798,7 +798,7 @@ function artifactCard(uid, s = D.league.season, own = true) {
 function artifactStrip(uid, s = D.league.season) {
   const A = artifactPath(uid, s), last = A.got[A.got.length - 1], prev = last ? last.at : 0, pct = A.next ? Math.round((A.won - prev) / (A.next.at - prev) * 100) : 100;
   return `<a class="card artstrip" href="#pass"><span class="as-ics">${A.got.length ? A.got.map(x => `<span title="${esc(x.n)}">${x.i}</span>`).join('') : '<span class="muted">🔒</span>'}</span>
-    <span class="as-t"><b>${A.next ? `Next artifact: ${esc(A.next.n)}` : 'Cracker Pass complete'}</b><span class="as-bar"><i style="width:${pct}%"></i></span><small>${A.next ? `${A.toNext.toLocaleString()} more pass Crackers · ${A.got.length} of ${A.set.list.length} unlocked` : `All ${A.set.list.length} artifacts unlocked`}</small></span><span class="go" aria-hidden="true">›</span></a>`;
+    <span class="as-t"><b>${A.next ? `Next artifact: ${esc(A.next.n)}` : 'Cracker Pass complete'}</b><span class="as-bar"><i style="width:${pct}%"></i></span><small>${A.next ? `${A.toNext.toLocaleString()} more Pass Crackers · ${A.got.length} of ${A.set.list.length} unlocked` : `All ${A.set.list.length} artifacts unlocked`}</small></span><span class="go" aria-hidden="true">›</span></a>`;
 }
 // Unlocked artifacts as a row of icons (coach pages, leaderboard).
 const artifactIcons = (uid, s, max = 7) => { const g = artifactPath(uid, s).got; return g.length ? `<span class="art-ics" title="${esc(g.map(x => x.n).join(', '))}">${g.slice(-max).map(x => x.i).join('')}</span>` : ''; };
@@ -812,7 +812,7 @@ function artifactPopup() {
   const fresh = A.got.slice(seen), top = fresh[fresh.length - 1];
   $('#modal').innerHTML = `<div class="modal" data-close="1"><div class="card artpop"><h2>Artifact unlocked</h2>
     <div class="artpop-ic" aria-hidden="true">${top.i}</div><div class="artpop-nm">${esc(top.n)}</div>${top.d ? `<p style="text-align:center;margin:2px 0 0;font-style:italic">${esc(top.d)}</p>` : ''}
-    <p class="muted" style="text-align:center;margin:4px 0 10px">${top.at.toLocaleString()} pass Crackers · ${esc(A.set.title)}${fresh.length > 1 ? `<br>Also unlocked: ${fresh.slice(0, -1).map(x => `${x.i} ${esc(x.n)}`).join(', ')}` : ''}</p>
+    <p class="muted" style="text-align:center;margin:4px 0 10px">${top.at.toLocaleString()} Pass Crackers · ${esc(A.set.title)}${fresh.length > 1 ? `<br>Also unlocked: ${fresh.slice(0, -1).map(x => `${x.i} ${esc(x.n)}`).join(', ')}` : ''}</p>
     ${A.next ? `<p style="text-align:center;margin:0 0 12px">Next up: <b>${esc(A.next.n)}</b> at ${A.next.at.toLocaleString()}</p>` : '<p style="text-align:center;margin:0 0 12px">🏆 That\'s every artifact this season.</p>'}
     <div class="row" style="justify-content:center"><button class="gold" data-close="1">Nice</button><a class="btn ghost" href="#pass" data-close="1">See my pass →</a></div></div></div>`;
 }
