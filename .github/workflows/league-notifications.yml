@@ -366,6 +366,25 @@ jobs:
                            f'{link}#mybets', uids={uid}, tag='bets', default=True)
                     if fin: st['settle'] = max(int(w.get('settledAt') or 0) for w in fin)
                     elif 'settle' not in st: st['settle'] = int(now)
+                    # Accolades and Cracker Pass artifacts: the site keeps a small per-account count on the league doc
+                    # (accSnap). Anyone whose count went up since the last run hears about it once; a new artifact
+                    # level gets its own headline. The highest count seen is kept, so nothing is announced twice.
+                    snap, acur = lg.get('accSnap') or {}, int(lg.get('season') or 0)
+                    if snap.get('season') == acur and isinstance(snap.get('u'), dict):
+                        seen = st.get('acc') if (st.get('acc') or {}).get('season') == acur else None
+                        newseen = {'season': acur, 'u': dict((seen or {}).get('u') or {})}
+                        for uid, v in snap['u'].items():
+                            old = newseen['u'].get(uid) or {}
+                            n, p_, l = int(v.get('n') or 0), int(v.get('p') or 0), int(v.get('l') or 0)
+                            on, op_, ol = int(old.get('n') or 0), int(old.get('p') or 0), int(old.get('l') or 0)
+                            if seen is not None and n > on:
+                                if l > ol and v.get('a'):
+                                    to('accolades', f"🏺 Artifact unlocked: {v.get('a')}", f'Your Cracker Pass hit {p_:,} Crackers. Tap to see it.', f'{link}#pass', uids={uid}, tag='acc', default=True)
+                                else:
+                                    k = n - on
+                                    to('accolades', '🏅 New accolade' if k == 1 else f'🏅 {k} new accolades', f'+{max(0, p_ - op_):,} Crackers to your balance and Cracker Pass.', f'{link}#pass', uids={uid}, tag='acc', default=True)
+                            newseen['u'][uid] = {'n': max(n, on), 'p': max(p_, op_), 'l': max(l, ol)}
+                        st['acc'] = newseen
                     # Final scores: a game is announced once, when its score is first saved (playedAt). Each device
                     # picks the teams it follows (empty list = every game). A big result gets a catchy headline.
                     fsince = int(st.get('final') or now - 6 * 3600e3)   # first run after this was added: look back 6 hours
