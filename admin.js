@@ -4,8 +4,8 @@ import {
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum, divOf, oneConference, playbookOf, pbSeason, pbOpen, pbLocked
 , loadAI, kickoffOf, fmtKick
 , reliefPatch, winTotalsSnapshot, winsLockedTeam, postEarlyCcg, earlyCcg, raceSim, AWARD_DEFS, tallyAwards, awardGames, awardGameLabel, awardCoaches, sameName, curWeek, wkName, wkShort, wkOf, phaseName, picksOpen, openerId, firstGameOf
-, artifactSet, ARTIFACT_TIERS, DEFAULT_ARTIFACTS, artifactPath, ACCOLADES, accVal, accSnapshot
-} from './core.js?v=118';
+, passStart, artifactSet, ARTIFACT_TIERS, DEFAULT_ARTIFACTS, artifactPath, ACCOLADES, accVal, accSnapshot
+} from './core.js?v=119';
 // Broadcast scouting nudges the ratings a little, so load it before any lines get posted from here.
 loadAI();
 import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
@@ -76,7 +76,8 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) load
 // The job compares it with what it last saw and tells each account about new accolades and artifacts.
 let accT = 0; const queueAccSnap = () => { clearTimeout(accT); accT = setTimeout(syncAccSnap, 3000); };   // after the database has echoed the change back
 async function syncAccSnap() {
-  try { const snap = accSnapshot(L().season), old = L().accSnap; if (JSON.stringify(old) !== JSON.stringify(snap)) await put('meta', 'league', { accSnap: snap }, true); } catch (e) { console.warn('accolades snapshot', e); }
+  try { if (!L().passStart) await put('meta', 'league', { passStart: L().season }, true);   // first run: the pass starts this season
+    const snap = accSnapshot(L().season), old = L().accSnap; if (JSON.stringify(old) !== JSON.stringify(snap)) await put('meta', 'league', { accSnap: snap }, true); } catch (e) { console.warn('accolades snapshot', e); }
 }
 function statusBar() {
   const lg = L(), p = projectedAdvance(), ext = lg.advExt || 0, clock = lg.phase === PHASES.REG || lg.phase === PHASES.CCG;
@@ -516,7 +517,7 @@ const views = {
   pass() {
     // The season's Cracker Pass: its theme, its ten artifacts and what each accolade pays.
     // Each season gets its own theme and set; a season left unnamed uses the default set.
-    const lg = L(), seasons = [...new Set([lg.season, ...D.wagers.map(w => w.season)])].sort((a, b) => b - a);
+    const lg = L(), seasons = [...new Set([lg.season, ...D.wagers.map(w => w.season)])].filter(x => x >= passStart()).sort((a, b) => b - a);
     const se = seasons.includes(+ST.artSeason) ? +ST.artSeason : lg.season, set = artifactSet(se), mine = (lg.artifacts || {})[se] || {}, own = k => (mine.list || [])[k] || {};
     const users = D.users.filter(u => u.teamId || D.wagers.some(w => w.uid === u.id && w.season === se));
     const reached = ARTIFACT_TIERS.map((at, k) => users.filter(u => artifactPath(u.id, se).got.length > k).length);

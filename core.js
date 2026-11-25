@@ -1078,7 +1078,12 @@ export const ACCOLADES = [
 export const accVal = k => { const o = (D.league.accVals || {})[k], d = ACCOLADES.find(a => a.k === k); return o != null && o !== '' && !isNaN(+o) ? Math.max(0, Math.round(+o)) : d ? d.v : 0; };
 let accCache = { key: '', out: {} };
 // Every accolade one account earned in a season: { total, n, list: [{ k, i, n, v, at, ref, week }] }, oldest first.
+// The pass began with this season: earlier seasons earn no accolades (and add nothing to old balances).
+// Commissioner Tools saves the first season the pass was live; until then it's the current season.
+export const passStart = () => +(D.league.passStart || D.league.season);
+const NO_ACC = { total: 0, n: 0, list: [] };
 export function accolades(uid, season = D.league.season) {
+  if (+season < passStart()) return NO_ACC;
   const key = [D.games.length, D.wagers.length, D.history.length, D.picks.length, D.gotw.length, D.users.length, JSON.stringify(D.league.accVals || {}), D.league.week, D.league.polls ? Object.keys(D.league.polls).length : 0,
     D.games.reduce((t, g) => t + (g.playedAt || 0), 0), D.wagers.reduce((t, w) => t + (w.settledAt || 0), 0)].join('|');
   if (accCache.key !== key) accCache = { key, out: {} };

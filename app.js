@@ -5,8 +5,8 @@ import {
   gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, wkName, gWeek, champOpen, titleSet, DIAG, storylines, seasonStorylines, RELIEF, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory, legLabel
 , playbookOf, pbSeason, pbText
 , AWARD_DEFS, awardGames, awardGameLabel, awardCoaches
-, curWeek, wkShort, wkOf, phaseName, PICK_DEFS, picksOpen, pickAnswers, loadPicks, pickFacts, OPENER_BOOST, isOpener, coachEdge, canonCoach, plateInk, artifactPath, artifactSet, ARTIFACT_TIERS, accolades, ACCOLADES, accVal
-} from './core.js?v=118';
+, curWeek, wkShort, wkOf, phaseName, PICK_DEFS, picksOpen, pickAnswers, loadPicks, pickFacts, OPENER_BOOST, isOpener, coachEdge, canonCoach, plateInk, passStart, artifactPath, artifactSet, ARTIFACT_TIERS, accolades, ACCOLADES, accVal
+} from './core.js?v=119';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -636,7 +636,7 @@ const PAGES = {
         ${bs.filter(x => x.best).sort((p, q) => q.best.payout - p.best.payout).slice(0, 1).map(x => `<p class="small" style="margin-bottom:0"><span class="muted">Biggest hit (S${seasonNum(x.se)}):</span> <b>${esc(wagerLabel(x.best))}</b> · +${x.best.payout.toLocaleString()} Crackers <button class="sm ghost" data-slip="${esc(x.best.id)}">🧾</button></p>`).join('')}`
         : '<div class="muted">No bets yet.</div>'}</div>`;
       // Cracker Pass: this season's pass in full, then the level reached in every earlier season.
-      const passSe = [...new Set(D.games.map(g => g.season))].filter(se => se < cur && artifactPath(u.id, se).acc.n).sort((a, b) => b - a);
+      const passSe = [...new Set(D.games.map(g => g.season))].filter(se => se < cur && se >= passStart() && artifactPath(u.id, se).acc.n).sort((a, b) => b - a);
       html += `<h2>Cracker Pass</h2><p class="h2sub">Accolades from games and bets unlock each season's artifacts.</p>${artifactCard(u.id, cur, !!auth.profile && auth.profile.id === u.id)}`;
       if (passSe.length) html += `<div class="card"><h3 style="margin-top:0">Past seasons</h3><div class="artlv">${passSe.map(se => { const A = artifactPath(u.id, se), top = A.got[A.got.length - 1];
           return `<div class="artlv-r"><b class="artlv-s">S${seasonNum(se)}</b>${top ? `<span class="art-ics">${A.got.map(x => `<span title="${esc(x.n)}">${x.i}</span>`).join('')}</span><span class="artlv-t"><span><b>Level ${A.got.length}</b> of ${A.set.list.length} · ${esc(top.n)}</span><small>${A.won.toLocaleString()} pass Crackers from ${A.acc.n} accolade${A.acc.n === 1 ? '' : 's'} · ${esc(A.set.title)}</small></span>` : `<span class="artlv-t muted">🔒 No artifacts unlocked<small>${A.won.toLocaleString()} pass Crackers</small></span>`}</div>`; }).join('')}</div></div>`;
