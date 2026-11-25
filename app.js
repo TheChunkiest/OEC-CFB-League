@@ -656,7 +656,7 @@ const PAGES = {
     // The season's pass: your own progress first, then where everyone in the league stands.
     const L = D.league, s = L.season, me = auth.profile, set = artifactSet(s);
     let html = me ? artifactCard(me.id, s) : `<section class="card artpath"><div class="ap-head"><div class="ap-hd"><b class="ap-title">${esc(set.title)}</b>${set.tag ? `<span class="ap-tag">${esc(set.tag)}</span>` : ''}<span class="ap-set">Season ${seasonNum(s)} Cracker Pass</span></div></div>
-      <div class="ap-row">${set.list.map(x => `<div class="ap-it"><span class="ap-ic" aria-hidden="true">${x.i}</span><span class="ap-nm">${esc(x.n)}</span><span class="ap-at">${x.at >= 1000 ? x.at / 1000 + 'K' : x.at}</span></div>`).join('')}</div>
+      <div class="ap-row">${set.list.map((x, k) => `<div class="ap-it${k ? '' : ' next'}"><span class="ap-ic" aria-hidden="true">${k ? '🔒' : x.i}</span><span class="ap-nm">${k ? '???' : esc(x.n)}</span><span class="ap-at">${x.at >= 1000 ? x.at / 1000 + 'K' : x.at}</span></div>`).join('')}</div>
       <p class="ap-note"><a href="#account">Log in</a> to earn accolades and unlock artifacts.</p></section>`;
     const ids = new Set([...D.users.filter(u => u.teamId).map(u => u.id), ...D.wagers.filter(w => w.season === s).map(w => w.uid)]);
     const rows = [...ids].map(id => ({ u: D.users.find(x => x.id === id), A: artifactPath(id, s) })).filter(r => r.u && (r.A.won || r.u.teamId)).sort((a, b) => b.A.won - a.A.won || a.u.name.localeCompare(b.u.name));
