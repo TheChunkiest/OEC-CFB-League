@@ -4,8 +4,8 @@ import {
   orderGroup, divisions, settleOps, grade, profit, wagerLabel, defaultLeague, futuresSnapshot, settleFuturesOps, ensureFutures, boardOps, parlayOps, legsHtml, fmtTime, pollFor, gotwTally, projectedAdvance, fmtAdvance, awardGame, coachOf, seasonNum, divOf, oneConference, playbookOf, pbSeason, pbOpen, pbLocked
 , loadAI, kickoffOf, fmtKick
 , reliefPatch, winTotalsSnapshot, winsLockedTeam, postEarlyCcg, earlyCcg, raceSim, AWARD_DEFS, tallyAwards, awardGames, awardGameLabel, awardCoaches, sameName, curWeek, wkName, wkShort, wkOf, phaseName, picksOpen, openerId, firstGameOf
-, passStart, artifactSet, ARTIFACT_TIERS, DEFAULT_ARTIFACTS, artifactPath, ACCOLADES, accVal, accSnapshot
-} from './core.js?v=119';
+, passStart, recSnapshot, artifactSet, ARTIFACT_TIERS, DEFAULT_ARTIFACTS, artifactPath, ACCOLADES, accVal, accSnapshot
+} from './core.js?v=121';
 // Broadcast scouting nudges the ratings a little, so load it before any lines get posted from here.
 loadAI();
 import { lookupColor, lookupAbbr, lookupProgram, programList } from './programs.js?v=3';
@@ -77,7 +77,8 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) load
 let accT = 0; const queueAccSnap = () => { clearTimeout(accT); accT = setTimeout(syncAccSnap, 3000); };   // after the database has echoed the change back
 async function syncAccSnap() {
   try { if (!L().passStart) await put('meta', 'league', { passStart: L().season }, true);   // first run: the pass starts this season
-    const snap = accSnapshot(L().season), old = L().accSnap; if (JSON.stringify(old) !== JSON.stringify(snap)) await put('meta', 'league', { accSnap: snap }, true); } catch (e) { console.warn('accolades snapshot', e); }
+    const snap = accSnapshot(L().season), old = L().accSnap, rec = recSnapshot();
+    if (JSON.stringify(old) !== JSON.stringify(snap) || JSON.stringify(L().recSnap) !== JSON.stringify(rec)) await put('meta', 'league', { accSnap: snap, recSnap: rec }, true); } catch (e) { console.warn('accolades snapshot', e); }
 }
 function statusBar() {
   const lg = L(), p = projectedAdvance(), ext = lg.advExt || 0, clock = lg.phase === PHASES.REG || lg.phase === PHASES.CCG;

@@ -385,6 +385,17 @@ jobs:
                                     to('accolades', '🏅 New accolade' if k == 1 else f'🏅 {k} new accolades', f'+{max(0, p_ - op_):,} Crackers to your balance and Cracker Pass.', f'{link}#pass', uids={uid}, tag='acc', default=True)
                             newseen['u'][uid] = {'n': max(n, on), 'p': max(p_, op_), 'l': max(l, ol)}
                         st['acc'] = newseen
+                    # Record Book: the site keeps the league's all-time records on the league doc (recSnap). When a
+                    # record's value goes up and a new game, bet, streak or season holds it, everyone hears about it once.
+                    rsnap = lg.get('recSnap') or {}
+                    if isinstance(rsnap, dict) and rsnap:
+                        rseen = st.get('rec')
+                        if isinstance(rseen, dict):
+                            for k, v in rsnap.items():
+                                o = rseen.get(k)
+                                if o and float(v.get('v') or 0) > float(o.get('v') or 0) and str(v.get('id')) != str(o.get('id')):
+                                    to('records', f"📕 Record broken: {v.get('n')}", f"{v.get('d')} (old mark: {o.get('d')}).", f'{link}#history', tag='rec-' + k, default=True)
+                        st['rec'] = {k: {'v': v.get('v'), 'id': v.get('id'), 'd': v.get('d')} for k, v in rsnap.items()}
                     # Final scores: a game is announced once, when its score is first saved (playedAt). Each device
                     # picks the teams it follows (empty list = every game). A big result gets a catchy headline.
                     fsince = int(st.get('final') or now - 6 * 3600e3)   # first run after this was added: look back 6 hours

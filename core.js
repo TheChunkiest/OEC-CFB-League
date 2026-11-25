@@ -1522,6 +1522,79 @@ export function awardGame(h, a) {
   return hits.length === 1 ? hits[0] : null;
 }
 
+/* ---------------- Record Book ---------------- */
+// All-time league records, worked out from games and bets already loaded (no extra reads).
+// cut = { season, week } counts only what happened before that week (used to spot a record that was just broken).
+// Every record keeps "higher is better" in v; a tie never takes a record away from whoever set it first.
+export const RECORDS = [
+  { k: 'pts', g: 'Games', i: '🔥', n: 'Most points in a game' },
+  { k: 'margin', g: 'Games', i: '💥', n: 'Biggest win' },
+  { k: 'combined', g: 'Games', i: '🎆', n: 'Highest-scoring game' },
+  { k: 'title', g: 'Games', i: '🏆', n: 'Closest League Title game' },
+  { k: 'streak', g: 'Coaches', i: '📈', n: 'Longest win streak' },
+  { k: 'season', g: 'Coaches', i: '📅', n: 'Best season record' },
+  { k: 'lwins', g: 'Coaches', i: '🏈', n: 'Most career wins' },
+  { k: 'bank', g: 'Sportsbook', i: '💰', n: 'Best betting season' },
+  { k: 'parlay', g: 'Sportsbook', i: '🧩', n: 'Biggest parlay hit' },
+  { k: 'bigbet', g: 'Sportsbook', i: '💵', n: 'Biggest single-bet win' },
+  { k: 'longshot', g: 'Sportsbook', i: '🚀', n: 'Longest odds to hit' },
+];
+let recCache = { key: '', out: {} };
+const gOrder = g => g.season * 1000 + (g.type === 'ccg' ? 900 : g.type === 'bowl' ? 950 : +g.week || 0);
+export function recordBook(cut) {
+  const key = [D.games.length, D.wagers.length, D.history.length, D.users.length, D.games.reduce((t, g) => t + (g.playedAt || 0), 0), D.wagers.reduce((t, w) => t + (w.settledAt || 0), 0)].join('|');
+  if (recCache.key !== key) recCache = { key, out: {} };
+  const ck = cut ? cut.season + '-' + cut.week : 'all'; if (recCache.out[ck]) return recCache.out[ck];
+  const before = (se, wk) => !cut || se < cut.season || (se === cut.season && (+wk || 0) < cut.week);
+  const games = D.games.filter(g => played(g) && before(g.season, g.type === 'reg' ? g.week : 99)).sort((a, b) => gOrder(a) - gOrder(b));
+  const R = {}, best = (k, v, rec) => { if (R[k] == null || v > R[k].v) R[k] = { k, v, ...rec }; };
+  const when = g => `S${seasonNum(g.season)} · ${gWeek(g)}`, ab = id => team(id).abbr || team(id).name;
+  const coachHref = c => c && c !== 'CPU' && D.users.some(u => u.name === c && u.teamId) ? '#coach/' + slug(c) : '';
+  const who = (g, side) => { const c = coachOf(g, side); return c && c !== 'CPU' ? c : team(g[side]).name; };
+  const score = g => { const hw = +g.homeScore > +g.awayScore, w = hw ? 'home' : 'away', l = hw ? 'away' : 'home'; return { w, l, ws: +g[w + 'Score'], ls: +g[l + 'Score'], txt: `${ab(g[w])} ${g[w + 'Score']}, ${ab(g[l])} ${g[l + 'Score']}` }; };
+  games.filter(g => !g.forfeit).forEach(g => {
+    const x = score(g), href = '#game/' + g.id;
+    ['home', 'away'].forEach(side => best('pts', +g[side + 'Score'], { id: g.id + side, val: `${g[side + 'Score']}`, unit: 'points', who: who(g, side), team: g[side], sub: `${x.txt} · ${when(g)}`, href }));
+    if (x.ws > x.ls) best('margin', x.ws - x.ls, { id: g.id, val: `+${x.ws - x.ls}`, unit: 'points', who: who(g, x.w), team: g[x.w], sub: `${x.txt} · ${when(g)}`, href });
+    best('combined', x.ws + x.ls, { id: g.id, val: `${x.ws + x.ls}`, unit: 'total points', who: `${team(g.away).name} at ${team(g.home).name}`, sub: `${x.txt} · ${when(g)}`, href });
+    if (g.type === 'ccg' && x.ws !== x.ls) best('title', -(x.ws - x.ls), { id: g.id, val: `${x.ws - x.ls}`, unit: x.ws - x.ls === 1 ? 'point' : 'points', who: `${who(g, x.w)} over ${who(g, x.l)}`, team: g[x.w], sub: `${x.txt} · ${when(g)}`, href });
+  });
+  // Seasons from History with no title game on file still count for the closest title game.
+  D.history.filter(h => h.champScore != null && h.runnerScore != null && h.runnerTeam && before(h.season, 99) && !games.some(g => g.type === 'ccg' && g.season === h.season)).forEach(h => {
+    const m = +h.champScore - +h.runnerScore; if (m > 0) best('title', -m, { id: 'h' + h.season, val: `${m}`, unit: m === 1 ? 'point' : 'points', who: `${h.champCoach || team(h.champTeam).name} over ${h.runnerCoach || team(h.runnerTeam).name}`, team: h.champTeam, sub: `${ab(h.champTeam)} ${h.champScore}, ${ab(h.runnerTeam)} ${h.runnerScore} · S${seasonNum(h.season)} · League Title`, href: '' });
+  });
+  // Coaches: streaks, seasons and career wins (league coaches only; forfeits count like the standings do).
+  const by = {};
+  games.forEach(g => ['home', 'away'].forEach(side => { const c = coachOf(g, side); if (!c || c === 'CPU') return; (by[c] = by[c] || []).push({ g, won: (+g[side + 'Score'] > +g[(side === 'home' ? 'away' : 'home') + 'Score']), t: g[side] }); }));
+  Object.entries(by).forEach(([c, list]) => {
+    let run = 0, start = null;
+    list.forEach(x => { if (x.won) { if (!run) start = x.g; run++; best('streak', run, { id: c + start.id, val: `${run}`, unit: 'straight wins', who: c, team: x.t, sub: `${when(start)} → ${when(x.g)}`, href: coachHref(c), ends: x.g }); } else run = 0; });
+    const seas = {}; list.forEach(x => { const o = seas[x.g.season] = seas[x.g.season] || { w: 0, l: 0, t: x.t, last: x.g }; x.won ? o.w++ : o.l++; o.last = x.g; });
+    Object.entries(seas).forEach(([se, o]) => best('season', o.w * 100 - o.l, { id: c + se, val: `${o.w}-${o.l}`, unit: 'record', who: c, team: o.t, sub: `S${seasonNum(+se)} · ${team(o.t).name}`, href: coachHref(c) }));
+    const w = list.filter(x => x.won).length, l = list.length - w;
+    best('lwins', w * 1000 - l, { id: c, val: `${w}`, unit: 'wins', who: c, team: list[list.length - 1].t, sub: `${w}-${l} all-time`, href: coachHref(c) });
+  });
+  // Sportsbook: settled bets only.
+  const nm = w => (D.users.find(u => u.id === w.uid) || {}).name || w.coach || '?';
+  const bets = D.wagers.filter(w => w.status && w.status !== 'open' && w.status !== 'void' && before(w.season, w.week)).sort((a, b) => (a.settledAt || 0) - (b.settledAt || 0));
+  const net = {}; bets.forEach(w => { const k = w.uid + '|' + w.season; net[k] = (net[k] || 0) + (w.payout || 0); });
+  Object.entries(net).forEach(([k, v]) => { const [uid, se] = k.split('|'), u = D.users.find(x => x.id === uid) || {}; if (v > 0) best('bank', v, { id: k, val: `+${v.toLocaleString()}`, unit: 'Crackers', who: u.name || '?', sub: `Season ${seasonNum(+se)} net${+se === D.league.season ? ' so far' : ''}`, href: '' }); });
+  bets.filter(w => w.status === 'won' || w.status === 'cashed').forEach(w => {
+    const href = w.market === 'parlay' || !w.gameId ? '' : '#game/' + w.gameId, sub = `${wagerLabel(w)} · S${seasonNum(w.season)}${w.week ? ' · ' + wkName(w.week, w.season) : ''}`;
+    if (w.market === 'parlay') best('parlay', w.payout || 0, { id: w.id, val: `+${(w.payout || 0).toLocaleString()}`, unit: 'Crackers', who: nm(w), sub, href });
+    else best('bigbet', w.payout || 0, { id: w.id, val: `+${(w.payout || 0).toLocaleString()}`, unit: 'Crackers', who: nm(w), sub, href });
+    if (w.status === 'won' && w.odds > 0) best('longshot', w.odds, { id: w.id, val: fmtOdds(w.odds), unit: 'odds', who: nm(w), sub: `${wagerLabel(w)} · won ${(w.payout || 0).toLocaleString()} · S${seasonNum(w.season)}`, href });
+  });
+  return (recCache.out[ck] = R);
+}
+// The most recent finished game between the same two teams before this one (either side at home).
+export function lastMeeting(g) {
+  const pair = [g.home, g.away].sort().join('|'), at = gOrder(g);
+  return D.games.filter(x => x !== g && x.id !== g.id && played(x) && [x.home, x.away].sort().join('|') === pair && gOrder(x) < at).sort((a, b) => gOrder(b) - gOrder(a))[0] || null;
+}
+// Small copy of the records for the notification job: it announces a record when its value goes up.
+export function recSnapshot() { const R = recordBook(), o = {}; RECORDS.forEach(r => { const x = R[r.k]; if (x) o[r.k] = { v: x.v, id: String(x.id), n: r.n, d: `${x.who} · ${x.val} ${x.unit}` }; }); return o; }
+
 /* ---------------- Storylines ---------------- */
 /* ---------- AI game recaps (moments.json from the Game moments workflow; loaded by app.js) ---------- */
 export const AI = { moms: null, loading: null };
@@ -1757,6 +1830,14 @@ export function storylines() {
     if (justLost && /^W\d+$/.test(st) && +st.slice(1) >= 4) notes.push({ href: '#team/' + t.id, p: 70 + +st.slice(1), title: pk([`${poss(t.name)} ${st.slice(1)}-game win streak is over`, `The streak is dead: ${t.name} finally loses`, `${t.name} comes back to earth`]), body: `${t.coach} had won ${st.slice(1)} straight before last week's loss. Now ${rec(n)}.${nextTxt(t.id) || ''} ${pk(['Is it a blip or a slide?', 'Bounce-back week ahead?', ''])}`.trim() });
     if (justWon && b.w === 0 && b.l >= 3) notes.push({ href: '#team/' + t.id, p: 72, title: `${t.name} is in the win column`, body: `${t.coach} snaps an 0-${b.l} start with the first win of the season.` });
   });
+  // Record Book: a coach or betting record that fell last week (the game records above have their own stories).
+  if (prior.length >= 10) {
+    const rb0 = recordBook({ season: s, week: lw }), rb1 = recordBook({ season: s, week: lw + 1 });
+    RECORDS.filter(r => !['pts', 'margin', 'combined', 'lwins'].includes(r.k)).forEach(r => {
+      const o = rb0[r.k], n = rb1[r.k]; if (!o || !n || n.v <= o.v || n.id === o.id) return;
+      notes.push({ href: n.href || '#history', p: 93, title: `Record broken: ${r.n.toLowerCase().replace('league title', 'League Title')}`, body: `${n.who} set the new mark: ${n.val} ${n.unit} (${n.sub}). The old record was ${o.val} by ${o.who}.` });
+    });
+  }
   // Season-high score.
   const seasonPrior = prior.filter(g => g.season === s);
   if (seasonPrior.length >= 4) {
@@ -1858,8 +1939,8 @@ function shuffle(a, r) { for (let i = a.length - 1; i > 0; i--) { const j = Math
 /* ---------------- Phone notifications ----------------
    The site only registers this device's push token in the `push` collection. Sending happens in the
    GitHub workflow (free Firebase Cloud Messaging), so there is no server to pay for. */
-export const PUSH_PREFS = [['advance', 'League advances & commissioner news'], ['live', 'OEC goes live on YouTube'], ['mygame', 'My game is about to kick off'], ['invites', 'Kickoff invites & replies'], ['bets', 'One of my bets went final'], ['accolades', 'Accolades & artifacts I earn'], ['finals', 'Final scores'], ['league', 'Every league kickoff (reminder to watch)']];
-export const pushDefaults = () => ({ advance: true, live: true, mygame: true, invites: true, bets: true, accolades: true, finals: true, finalTeams: [], league: false });
+export const PUSH_PREFS = [['advance', 'League advances & commissioner news'], ['live', 'OEC goes live on YouTube'], ['mygame', 'My game is about to kick off'], ['invites', 'Kickoff invites & replies'], ['bets', 'One of my bets went final'], ['accolades', 'Accolades & artifacts I earn'], ['records', 'A league record is broken'], ['finals', 'Final scores'], ['league', 'Every league kickoff (reminder to watch)']];
+export const pushDefaults = () => ({ advance: true, live: true, mygame: true, invites: true, bets: true, accolades: true, records: true, finals: true, finalTeams: [], league: false });
 export const pushLocal = () => { try { return JSON.parse(localStorage.getItem('oecPush') || 'null'); } catch (e) { return null; } };
 const pushSave = v => { try { v ? localStorage.setItem('oecPush', JSON.stringify(v)) : localStorage.removeItem('oecPush'); } catch (e) { } };
 export const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;

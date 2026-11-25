@@ -5,8 +5,8 @@ import {
   gotwTally, coachStats, onLiveChange, vary, mascotOf, cashOutValue, CASHOUT_SHARE, coachSeasons, coachStops, awardGame, seasonPlaces, ordinal, kickoffOf, kickoffInvite, canSchedule, pendingInvites, invitesFor, fmtKick, KICK_SLOTS, projectedAdvance, fmtAdvance, wkName, gWeek, champOpen, titleSet, DIAG, storylines, seasonStorylines, RELIEF, seasonNum, futuresBoard, futuresOpen, futuresPosted, ensureFutures, friendlyError, refreshLive, juiceOf, nowUpto, gotwGameId, boostFor, winProfit, GOTW_BOOST, MAX_LEGS, parlayOdds, parlayProfit, winsBoard, winsPosted, legsHtml, bettors, isSpectator, titleOut, CCG_BOOST, boostName, divOf, oneConference, GAME_MARKETS, lineVal, AI, aiRecap, loadAI, teamPlayers, teamScouting, playerName, fmtTime, profit, refreshWagers, selKey, rankName, rankOf, ownGame, ownLeg, OWN_BET_MSG, freshGames, ratings, powerRankings, lastPlayedWeek, clinchScenarios, winHistory, legLabel
 , playbookOf, pbSeason, pbText
 , AWARD_DEFS, awardGames, awardGameLabel, awardCoaches
-, curWeek, wkShort, wkOf, phaseName, PICK_DEFS, picksOpen, pickAnswers, loadPicks, pickFacts, OPENER_BOOST, isOpener, coachEdge, canonCoach, plateInk, passStart, artifactPath, artifactSet, ARTIFACT_TIERS, accolades, ACCOLADES, accVal
-} from './core.js?v=119';
+, curWeek, wkShort, wkOf, phaseName, PICK_DEFS, picksOpen, pickAnswers, loadPicks, pickFacts, OPENER_BOOST, isOpener, coachEdge, canonCoach, plateInk, passStart, RECORDS, recordBook, lastMeeting, artifactPath, artifactSet, ARTIFACT_TIERS, accolades, ACCOLADES, accVal
+} from './core.js?v=121';
 import { lookupStadium } from './programs.js?v=3';
 
 const DEFAULT_RULES = ["Cloud dynasty with active rosters and cross-play", "All-American difficulty with custom sliders", "10-minute quarters with 17-second accelerated clock", "League advances every 3 days; 24 hours can be added for user games if needed", "League commissioner is Chunky and league admin is Clay", "All communication happens in the league Discord"];
@@ -198,6 +198,14 @@ function featureCard(g, { ribbon, note = '' } = {}) {
 // Neutral-site games get none.
 const sideLbl = (g, side) => g.neutral ? '' : `<span class="sidelbl ${side}">${side === 'home' ? 'HOME' : 'AWAY'}</span>`;
 const teamPlate = (t, cls = '') => `<i class="plate ${cls}" style="background:${esc(teamColor(t))};color:${plateInk(teamColor(t))}">${esc(t.abbr || (t.name || '').slice(0, 4).toUpperCase())}</i>`;
+// "Last meeting" flashback on upcoming game cards: the score of the last time these two teams played.
+function lastMeetLine(g) {
+  const x = lastMeeting(g); if (!x) return '';
+  const hw = +x.homeScore > +x.awayScore, w = hw ? 'home' : 'away', l = hw ? 'away' : 'home', ab = id => esc(team(id).abbr || team(id).name);
+  const when = x.season === g.season ? gWeek(x) : `S${seasonNum(x.season)} ${gWeek(x)}`;
+  const score = x.forfeit ? `${ab(x[w])} by forfeit` : `<b>${ab(x[w])} ${x[w + 'Score']}</b>, ${ab(x[l])} ${x[l + 'Score']}`;
+  return `<div class="buglast"><span aria-hidden="true">↺</span> Last meeting: ${score} <span class="muted">(${esc(when)})</span></div>`;
+}
 function gameCard(g, opts = {}) {
   const h = team(g.home), a = team(g.away), done = played(g), l = lineOf(g), p = winPct(g, l);
   const hw = done && +g.homeScore > +g.awayScore, aw = done && !hw, champ = g.type === 'ccg';
@@ -226,7 +234,7 @@ function gameCard(g, opts = {}) {
     ${strip.length || tags ? `<div class="bugstrip">${strip.join('')}${tags}</div>` : ''}
     ${row(a, 'away', ca, aw)}${row(h, 'home', ch, hw)}
     ${!done && p ? `<div class="bugbar" style="background:${esc(teamColor(h))}"><i style="width:${p.a}%;background:${esc(teamColor(a))}"></i></div>` : ''}
-    <div class="bugfoot"><span>${foot}${done && videoOf(g) ? ' · <span class="vidtag">▶ Broadcast</span>' : ''}</span><span class="bugopen">${done ? 'Recap' : 'Preview'} ›</span></div>${opts.extra || ''}</div>`;
+    ${done ? '' : lastMeetLine(g)}<div class="bugfoot"><span>${foot}${done && videoOf(g) ? ' · <span class="vidtag">▶ Broadcast</span>' : ''}</span><span class="bugopen">${done ? 'Recap' : 'Preview'} ›</span></div>${opts.extra || ''}</div>`;
 }
 const sortTh = (st, key, label, cls = '', tbl = '') => `<th data-sort="${key}"${tbl ? ` data-st="${tbl}"` : ''} class="${cls}${st.key === key ? ' sorted' : ''}">${label}${st.key === key ? (st.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
 function sortRows(rows, st, getters) {
@@ -733,6 +741,7 @@ const PAGES = {
       return g ? `<a class="champrow" href="#game/${esc(g.id)}" style="--wc:${esc(teamColor(W))}">${inner}</a>` : `<div class="champrow" style="--wc:${esc(teamColor(W))}">${inner}</div>`;
     };
     return PAGES.teamsGrid() + `<h2>League Champions</h2><p class="h2sub">Every League Title game winner. Tap one for the game.</p><div class="champlist">${H.length ? H.map(champRow).join('') : '<div class="card muted">No completed seasons yet.</div>'}</div>
+      ${recordBookHtml()}
       ${seasonAwardsCard(H)}
       ${coachBoard()}
       ${carousel(C)}`;
@@ -1912,6 +1921,15 @@ function awardRow(h, a) {
   return `<div class="aw-it"><span class="aw-ic" aria-hidden="true">${awardIcon(a.award)}</span><span class="aw-t"><span class="aw-name">${esc(a.award)}</span><span class="aw-win">${who}</span></span></div>`;
 }
 const awardsTable = h => `<div class="aw-list">${h.awards.map(a => awardRow(h, a)).join('')}</div>`;
+// League Record Book (History): all-time marks for games, coaches and the Sportsbook. Each one opens its game or coach.
+function recordBookHtml() {
+  const R = recordBook(), groups = [...new Set(RECORDS.map(r => r.g))];
+  const row = r => { const x = R[r.k]; if (!x) return '';
+    const body = `<span class="rb-ic" aria-hidden="true">${r.i}</span><span class="rb-t"><small>${esc(r.n)}</small><b>${esc(x.who)}</b><span>${esc(x.sub)}</span></span><span class="rb-v"><b>${esc(x.val)}</b><small>${esc(x.unit)}</small></span>`;
+    return x.href ? `<a class="rb-r" href="${esc(x.href)}">${body}</a>` : `<div class="rb-r">${body}</div>`; };
+  const cards = groups.map(gr => { const rows = RECORDS.filter(r => r.g === gr).map(row).join(''); return rows ? `<div class="card rbook"><h3>${esc(gr)}</h3>${rows}</div>` : ''; }).join('');
+  return cards ? `<h2>Record Book</h2><p class="h2sub">All-time league records. Tap one for the game or the coach.</p><div class="rbgrid">${cards}</div>` : '';
+}
 function seasonAwardsCard(H) {
   const hs = H.filter(h => (h.awards || []).length); if (!hs.length) return '';
   const h = hs.find(x => x.season === +UI.awSeason) || hs[0];
