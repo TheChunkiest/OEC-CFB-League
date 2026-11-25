@@ -1,15 +1,5 @@
 {
- "live": true,
- "videoId": "KlItECjecV4",
- "url": "https://www.youtube.com/watch?v=KlItECjecV4",
- "title": "S4, W1: ILL @ #10 PUR",
- "streams": [
-  {
-   "videoId": "KlItECjecV4",
-   "url": "https://www.youtube.com/watch?v=KlItECjecV4",
-   "title": "S4, W1: ILL @ #10 PUR"
-  }
- ],
+ "live": false,
  "notified": "KlItECjecV4",
  "notifiedIds": [
   "mkzu1AxNdmE",
@@ -22,6 +12,5 @@
   "RpQ60P21CgA",
   "4oO3fcQVaUY",
   "KlItECjecV4"
- ],
- "checkedAt": 1795578696725
+ ]
 }
