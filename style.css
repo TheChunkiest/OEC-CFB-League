@@ -1938,3 +1938,14 @@ a.rb-r:hover{text-decoration:none;background:rgba(255,255,255,.03)}
 .rb-v b{font:800 22px var(--cond);color:var(--gold);font-variant-numeric:tabular-nums;white-space:nowrap}
 .rb-v small{margin-top:3px;font-size:10px;color:#a79a9c;text-align:right}
 .rb-r[href^="#coach/"]{display:flex;text-decoration:none;font-weight:400;margin:0;padding:10px 2px}
+/* Finished-game footer: status line, then result chips */
+.bugfoot.done{align-items:flex-end}
+.bugfoot .bf-l{display:flex;flex-direction:column;gap:6px;min-width:0}
+.bf-st{font-size:10.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#a79a9c}
+.bf-chips{display:flex;flex-wrap:wrap;gap:5px}
+.bf-chip{display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);font-size:11.5px;color:#c9bdbf;white-space:nowrap}
+.bf-chip b{color:var(--text);font-weight:700}
+.bf-chip.vid{color:#ff8a8a;border-color:rgba(255,107,107,.3);background:rgba(255,107,107,.08);font-weight:700}
+.bugopen,.card.game.bug:hover .bugopen{text-decoration:none}
+.bf-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bf-vid{font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#ff8a8a;padding:2px 7px;border-radius:999px;background:rgba(255,107,107,.1);border:1px solid rgba(255,107,107,.3)}

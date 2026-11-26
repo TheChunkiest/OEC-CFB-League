@@ -224,17 +224,22 @@ function gameCard(g, opts = {}) {
     return `<div class="bugrow${done ? (won ? ' w' : ' l') : ''}">${sideLbl(g, side)}${teamPlate(t)}<span class="bugteam"><b>${rk ? `<span class="rk">#${rk}</span> ` : ''}${esc(t.name)}</b><span>${coach && coach !== 'CPU' ? 'Coach ' + esc(coach) : 'CPU'}</span></span>${right}</div>`;
   };
   let foot = '';
-  if (done && g.forfeit) foot = `${esc(gWeek(g))} · Final · forfeit win`;
+  // Finished games: "Week 1 · Final" on top, then small result chips (spread, total, broadcast) that wrap cleanly.
+  const chip2 = (t, cls = '') => `<span class="bf-chip${cls}">${t}</span>`;
+  let chips = [];
+  if (done && g.forfeit) chips.push(chip2('Forfeit win'));
   else if (done && l && l.spread != null) {
     const m = +g.homeScore - +g.awayScore + l.spread, fav = l.spread <= 0 ? g.home : g.away, tot = +g.homeScore + +g.awayScore;
-    foot = `${esc(gWeek(g))} · Final · ${l.spread === 0 ? 'PK' : esc(team(fav).abbr) + ' ' + fmtLine(-Math.abs(l.spread))} ${m === 0 ? 'pushed' : esc((m > 0 ? h : a).abbr) + ' covered'} · ${tot > l.total ? 'Over' : tot < l.total ? 'Under' : 'Push'} ${l.total}`;
-  } else if (done) foot = `${esc(gWeek(g))} · Final`;
+    chips.push(chip2(`${l.spread === 0 ? 'PK' : esc(team(fav).abbr) + ' ' + fmtLine(-Math.abs(l.spread))} · <b>${m === 0 ? 'Push' : esc((m > 0 ? h : a).abbr) + ' covers'}</b>`));
+    if (l.total != null) chips.push(chip2(`O/U ${l.total} · <b>${tot > l.total ? 'Over' : tot < l.total ? 'Under' : 'Push'}</b>`));
+  }
+  if (done) foot = `<span class="bf-top"><span class="bf-st">${esc(gWeek(g))} · Final</span>${videoOf(g) ? '<span class="bf-vid">▶ Broadcast</span>' : ''}</span>${chips.length ? `<span class="bf-chips">${chips.join('')}</span>` : ''}`;
   else { const ko = kickoffOf(g); foot = `${esc(gWeek(g))} · ${ko ? '🕗 ' + esc(fmtKick(ko, true)) : 'Kickoff not set'}${l && l.total != null ? ` · O/U ${l.total}` : ''}${l && !g.lines ? ' · projected' : ''}`; }
   return `<div class="card game bug clickable${opts.gotw || champ ? ' gotw' : ''}${mine ? ' mine' : ''}" data-game="${esc(g.id)}">${champ ? `<span class="ribbon">${champRibbon()}</span>` : opts.gotw ? '<span class="ribbon">★ Game of the Week</span>' : ''}
     ${strip.length || tags ? `<div class="bugstrip">${strip.join('')}${tags}</div>` : ''}
     ${row(a, 'away', ca, aw)}${row(h, 'home', ch, hw)}
     ${!done && p ? `<div class="bugbar" style="background:${esc(teamColor(h))}"><i style="width:${p.a}%;background:${esc(teamColor(a))}"></i></div>` : ''}
-    ${done ? '' : lastMeetLine(g)}<div class="bugfoot"><span>${foot}${done && videoOf(g) ? ' · <span class="vidtag">▶ Broadcast</span>' : ''}</span><span class="bugopen">${done ? 'Recap' : 'Preview'} ›</span></div>${opts.extra || ''}</div>`;
+    ${done ? '' : lastMeetLine(g)}<div class="bugfoot${done ? ' done' : ''}"><span class="bf-l">${foot}</span><span class="bugopen">${done ? 'Recap' : 'Preview'} ›</span></div>${opts.extra || ''}</div>`;
 }
 const sortTh = (st, key, label, cls = '', tbl = '') => `<th data-sort="${key}"${tbl ? ` data-st="${tbl}"` : ''} class="${cls}${st.key === key ? ' sorted' : ''}">${label}${st.key === key ? (st.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
 function sortRows(rows, st, getters) {
